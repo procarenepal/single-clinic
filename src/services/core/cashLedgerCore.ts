@@ -181,6 +181,55 @@ export function shareOfInvoiceForKind(
 }
 
 /**
+ * How much of an invoice's collected money came out of the patient's
+ * wallet — i.e. how much a cancellation must put back there.
+ *
+ * The invoice's top-level `paymentMethod` is overwritten by every payment
+ * with that payment's method, so after a mixed payment it names only the
+ * LAST one. The front-office model produces mixed payments as its normal
+ * shape — NPR 500 from the wallet deposit, NPR 65 cash for the tax — and
+ * the old refund logic keyed on that single field and refunded the whole
+ * paidAmount. Wallet-then-cash ended as "cash": cancel refunded nothing
+ * and the patient lost the deposit. Cash-then-wallet ended as "wallet":
+ * cancel pushed 565 into the wallet, turning 65 of cash into store credit.
+ *
+ * paymentHistory records each payment with its own method; summing the
+ * wallet-funded entries is the only correct answer. The legacy fallback
+ * exists for invoices written before paymentHistory was kept, and is
+ * capped at paidAmount so a doubled history line can never refund more
+ * than was ever collected.
+ */
+export function walletRefundableAmount(invoice: {
+  paidAmount?: number | null;
+  paymentMethod?: string | null;
+  paymentHistory?: Array<{ amount?: number | null; method?: string | null }> | null;
+}): number {
+  const paid = Math.max(0, invoice.paidAmount || 0);
+
+  if (paid <= 0) return 0;
+
+  const history = invoice.paymentHistory || [];
+
+  if (history.length === 0) {
+    // Pre-history invoice: the single method is all we know.
+    return (invoice.paymentMethod || "").toLowerCase() === WALLET_METHOD
+      ? paid
+      : 0;
+  }
+
+  let fromWallet = 0;
+
+  for (const event of history) {
+    const amount = event.amount || 0;
+
+    if (amount <= 0) continue;
+    if ((event.method || "").toLowerCase() === WALLET_METHOD) fromWallet += amount;
+  }
+
+  return Math.min(fromWallet, paid);
+}
+
+/**
  * Money sitting in wallets that has not yet been turned into an invoice.
  *
  * This is the clinic's real exposure from the deposit model: cash taken for

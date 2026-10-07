@@ -24,6 +24,7 @@ import { calculateTaxBreakdown } from "../utils/taxEngine";
 
 import { patientService } from "./patientService";
 import { walletService } from "./walletService";
+import { walletRefundableAmount } from "./core/cashLedgerCore";
 import { navigationService } from "./navigationService";
 import {
   isRecordLocked,
@@ -175,7 +176,14 @@ async function refundWalletIfApplicable(
   reason: string,
   createdBy: string,
 ): Promise<void> {
-  if (billing.paymentMethod !== "wallet" || !(billing.paidAmount > 0)) {
+  // Only the wallet-funded portion goes back to the wallet. The top-level
+  // paymentMethod names only the LAST payment's method, so after the
+  // front office's normal mixed payment (deposit from wallet, tax
+  // remainder in cash) it said "cash" and this refunded nothing — the
+  // patient lost the deposit. See walletRefundableAmount.
+  const refundable = walletRefundableAmount(billing);
+
+  if (refundable <= 0) {
     return;
   }
 
@@ -183,7 +191,7 @@ async function refundWalletIfApplicable(
     await walletService.refundFunds(
       billing.patientId,
       billing.clinicId,
-      billing.paidAmount,
+      refundable,
       billing.id,
       reason,
       createdBy,

@@ -24,6 +24,7 @@ import { referralCommissionService } from "./referralCommissionService";
 import { expertCommissionService } from "./expertCommissionService";
 import { staffCommissionService } from "./staffCommissionService";
 import { walletService } from "./walletService";
+import { walletRefundableAmount } from "./core/cashLedgerCore";
 import {
   isRecordLocked,
   assertFinancialFieldsUnlocked,
@@ -85,7 +86,13 @@ async function refundWalletIfApplicable(
   reason: string,
   createdBy: string,
 ): Promise<void> {
-  if (billing.paymentMethod !== "wallet" || !(billing.paidAmount > 0)) {
+  // Same rule as appointmentBillingService: refund only what the wallet
+  // actually funded, read from paymentHistory, not the top-level method.
+  const refundable = walletRefundableAmount(billing);
+
+  // A pathology invoice may have no patient record behind it (walk-in);
+  // there is no wallet to refund into in that case.
+  if (refundable <= 0 || !billing.patientId) {
     return;
   }
 
@@ -93,7 +100,7 @@ async function refundWalletIfApplicable(
     await walletService.refundFunds(
       billing.patientId,
       billing.clinicId,
-      billing.paidAmount,
+      refundable,
       billing.id,
       reason,
       createdBy,

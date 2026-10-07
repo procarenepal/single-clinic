@@ -5,7 +5,109 @@ import {
   computeUnappliedDeposits,
   splitRevenueByLineKind,
   shareOfInvoiceForKind,
+  walletRefundableAmount,
 } from "../cashLedgerCore";
+
+describe("walletRefundableAmount", () => {
+  it("refunds only the wallet part of a wallet-then-cash visit", () => {
+    // The normal front-office shape: NPR 500 deposit applied from the
+    // wallet, NPR 65 tax remainder paid in cash. The old logic keyed on
+    // the top-level method — "cash", the last one — and refunded nothing,
+    // so the patient lost the deposit on cancel.
+    expect(
+      walletRefundableAmount({
+        paidAmount: 565,
+        paymentMethod: "cash",
+        paymentHistory: [
+          { amount: 500, method: "wallet" },
+          { amount: 65, method: "cash" },
+        ],
+      }),
+    ).toBe(500);
+  });
+
+  it("refunds only the wallet part of a cash-then-wallet visit", () => {
+    // Reverse order: top-level method ended as "wallet" and the old logic
+    // refunded all 565 into the wallet — 65 of cash became store credit.
+    expect(
+      walletRefundableAmount({
+        paidAmount: 565,
+        paymentMethod: "wallet",
+        paymentHistory: [
+          { amount: 65, method: "cash" },
+          { amount: 500, method: "wallet" },
+        ],
+      }),
+    ).toBe(500);
+  });
+
+  it("refunds everything when the whole invoice was wallet-funded", () => {
+    expect(
+      walletRefundableAmount({
+        paidAmount: 791,
+        paymentMethod: "wallet",
+        paymentHistory: [{ amount: 791, method: "wallet" }],
+      }),
+    ).toBe(791);
+  });
+
+  it("refunds nothing when no payment came from the wallet", () => {
+    expect(
+      walletRefundableAmount({
+        paidAmount: 565,
+        paymentMethod: "cash",
+        paymentHistory: [{ amount: 565, method: "cash" }],
+      }),
+    ).toBe(0);
+  });
+
+  it("falls back to the single method for an invoice written before paymentHistory existed", () => {
+    expect(
+      walletRefundableAmount({ paidAmount: 300, paymentMethod: "wallet" }),
+    ).toBe(300);
+    expect(
+      walletRefundableAmount({ paidAmount: 300, paymentMethod: "cash" }),
+    ).toBe(0);
+    expect(
+      walletRefundableAmount({ paidAmount: 300, paymentMethod: "wallet", paymentHistory: [] }),
+    ).toBe(300);
+  });
+
+  it("never refunds more than was actually paid", () => {
+    // A doubled history line must not mint money.
+    expect(
+      walletRefundableAmount({
+        paidAmount: 500,
+        paymentHistory: [
+          { amount: 500, method: "wallet" },
+          { amount: 500, method: "wallet" },
+        ],
+      }),
+    ).toBe(500);
+  });
+
+  it("treats method casing consistently and ignores non-positive lines", () => {
+    expect(
+      walletRefundableAmount({
+        paidAmount: 100,
+        paymentHistory: [
+          { amount: 100, method: "WALLET" },
+          { amount: 0, method: "wallet" },
+          { amount: -20, method: "wallet" },
+        ],
+      }),
+    ).toBe(100);
+  });
+
+  it("is zero for an unpaid invoice regardless of history", () => {
+    expect(
+      walletRefundableAmount({
+        paidAmount: 0,
+        paymentHistory: [{ amount: 500, method: "wallet" }],
+      }),
+    ).toBe(0);
+  });
+});
 
 describe("shareOfInvoiceForKind", () => {
   it("attributes a payment in proportion to the kind's share", () => {
