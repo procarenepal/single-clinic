@@ -2,20 +2,56 @@ import {
   collection,
   doc,
   getDocs,
-  addDoc,
   query,
   where,
   Timestamp,
-  updateDoc,
   increment,
   runTransaction,
+  type Transaction,
+  type DocumentSnapshot,
+  type DocumentData,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
 import { WalletTransaction } from "../types/models";
 
-const WALLET_TRANSACTIONS_COLLECTION = "walletTransactions";
-const PATIENTS_COLLECTION = "patients";
+/**
+ * Exported so a billing service can deduct from the wallet INSIDE its own
+ * payment transaction — invoice, patient balance and ledger row commit
+ * together or not at all. The alternative, deducting after the invoice
+ * write and "compensating" on failure, left a {method:"wallet"} payment
+ * event in paymentHistory that the compensation never removed: the
+ * invoice then claimed a wallet payment that never happened, and a later
+ * cancellation would refund it.
+ */
+export const WALLET_TRANSACTIONS_COLLECTION = "walletTransactions";
+export const PATIENTS_COLLECTION = "patients";
+
+/** The ledger row a wallet deduction writes; shared with in-transaction callers. */
+export function buildWalletDeductionRow(input: {
+  patientId: string;
+  clinicId: string;
+  amount: number;
+  referenceId: string;
+  referenceType: "invoice" | "package";
+  notes: string;
+  createdBy: string;
+  now: Date;
+}): Omit<WalletTransaction, "id"> & { createdAt: Date } {
+  return {
+    patientId: input.patientId,
+    clinicId: input.clinicId,
+    branchId: input.clinicId,
+    type: "deduction",
+    amount: input.amount,
+    referenceId: input.referenceId,
+    referenceType: input.referenceType,
+    notes: input.notes,
+    createdAt: input.now,
+    createdBy: input.createdBy,
+  };
+}
+
 
 export const walletService = {
   /**
@@ -37,8 +73,17 @@ export const walletService = {
   ): Promise<string> {
     try {
       const now = new Date();
+      const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
+      const transactionRef = doc(collection(db, WALLET_TRANSACTIONS_COLLECTION));
 
-      // 1. Record the transaction
+      // The ledger row and the balance move together or not at all. This
+      // used to be two separate writes — addDoc the row, then updateDoc the
+      // balance — so a failure between them left a deposit on record that
+      // the balance didn't reflect, and a retry of the whole call would
+      // then record the deposit twice. deductFunds has been a single
+      // transaction since the deposit model landed; the deposit side of
+      // the same ledger was the one left behind. Front-office cash enters
+      // the system through exactly this method, so the window mattered.
       const transaction: Omit<WalletTransaction, "id"> = {
         patientId,
         clinicId,
@@ -53,23 +98,24 @@ export const walletService = {
         ...(referenceType ? { referenceType } : {}),
       };
 
-      const docRef = await addDoc(
-        collection(db, WALLET_TRANSACTIONS_COLLECTION),
-        {
+      await runTransaction(db, async (dbTransaction) => {
+        const patientSnap = await dbTransaction.get(patientRef);
+
+        if (!patientSnap.exists()) {
+          throw new Error("Patient not found");
+        }
+
+        dbTransaction.set(transactionRef, {
           ...transaction,
           createdAt: Timestamp.fromDate(now),
-        },
-      );
-
-      // 2. Update the patient's wallet balance
-      const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
-
-      await updateDoc(patientRef, {
-        walletBalance: increment(amount),
-        updatedAt: Timestamp.now(),
+        });
+        dbTransaction.update(patientRef, {
+          walletBalance: increment(amount),
+          updatedAt: Timestamp.now(),
+        });
       });
 
-      return docRef.id;
+      return transactionRef.id;
     } catch (error) {
       console.error("Error adding funds to wallet:", error);
       throw error;
@@ -94,62 +140,89 @@ export const walletService = {
     referenceType: "invoice" | "package" = "invoice",
   ): Promise<string> {
     try {
-      const now = new Date();
       const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
-      const transactionRef = doc(collection(db, WALLET_TRANSACTIONS_COLLECTION));
 
       // The balance check + decrement must be atomic — two concurrent
-      // deductions for the same patient (e.g. two invoices paid via wallet
-      // at nearly the same moment, or the double-payment race in
-      // appointmentBillingService.recordPayment) could otherwise both read
-      // the same pre-deduction balance, both pass the sufficiency check,
-      // and both apply increment(-amount), driving the balance negative.
-      // Mirrors the same pattern already used correctly in
-      // patientPackageService's session-consumption transaction.
-      await runTransaction(db, async (dbTransaction) => {
+      // deductions for the same patient could otherwise both read the same
+      // pre-deduction balance, both pass the sufficiency check, and both
+      // apply increment(-amount), driving the balance negative. The body is
+      // deductFundsInTransaction so a billing service can run the very same
+      // deduction inside ITS transaction instead of after it.
+      return await runTransaction(db, async (dbTransaction) => {
         const patientSnap = await dbTransaction.get(patientRef);
 
-        if (!patientSnap.exists()) {
-          throw new Error("Patient not found");
-        }
-
-        const patientData = patientSnap.data();
-        const currentBalance = patientData.walletBalance || 0;
-
-        if (currentBalance < amount) {
-          throw new Error("Insufficient wallet balance");
-        }
-
-        const transactionData: Omit<WalletTransaction, "id"> = {
+        return walletService.deductFundsInTransaction(dbTransaction, patientSnap, {
           patientId,
           clinicId,
-          branchId: clinicId,
-          type: "deduction",
           amount,
           referenceId: invoiceId,
           referenceType,
           notes,
-          createdAt: now,
           createdBy,
-        };
-
-        dbTransaction.set(transactionRef, {
-          ...transactionData,
-          createdAt: Timestamp.fromDate(now),
-        });
-
-        dbTransaction.update(patientRef, {
-          // Increment with a negative value to deduct
-          walletBalance: increment(-amount),
-          updatedAt: Timestamp.now(),
+          now: new Date(),
         });
       });
-
-      return transactionRef.id;
     } catch (error) {
       console.error("Error deducting funds from wallet:", error);
       throw error;
     }
+  },
+
+  /**
+   * Deducts from a wallet INSIDE a transaction the caller owns, so the
+   * invoice write, the balance move and the ledger row commit together or
+   * not at all.
+   *
+   * This exists because both billing services used to deduct AFTER their
+   * own payment transaction and "compensate" by reverting the invoice if
+   * the deduction failed — and the compensation never removed the
+   * {method:"wallet"} event already written into paymentHistory. The
+   * invoice then recorded a wallet payment that never happened, which a
+   * later cancellation would refund. With the deduction in the same
+   * transaction there is nothing to compensate.
+   *
+   * Firestore requires every read in a transaction to precede every write,
+   * so the caller does transaction.get(patientRef) in its read phase and
+   * passes the snapshot; this method only checks and writes. Returns the
+   * new ledger row's id.
+   */
+  deductFundsInTransaction(
+    transaction: Transaction,
+    patientSnap: DocumentSnapshot<DocumentData>,
+    input: {
+      patientId: string;
+      clinicId: string;
+      amount: number;
+      referenceId: string;
+      referenceType: "invoice" | "package";
+      notes: string;
+      createdBy: string;
+      now: Date;
+    },
+  ): string {
+    if (!patientSnap.exists()) {
+      throw new Error("Patient not found");
+    }
+
+    const currentBalance = patientSnap.data()?.walletBalance || 0;
+
+    if (currentBalance < input.amount) {
+      throw new Error("Insufficient wallet balance");
+    }
+
+    const transactionRef = doc(collection(db, WALLET_TRANSACTIONS_COLLECTION));
+    const row = buildWalletDeductionRow(input);
+
+    transaction.set(transactionRef, {
+      ...row,
+      createdAt: Timestamp.fromDate(input.now),
+    });
+    transaction.update(patientSnap.ref, {
+      walletBalance: increment(-input.amount),
+      updatedAt: Timestamp.now(),
+    });
+
+    return transactionRef.id;
   },
 
   /**
@@ -168,7 +241,12 @@ export const walletService = {
   ): Promise<string> {
     try {
       const now = new Date();
+      const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
+      const transactionRef = doc(collection(db, WALLET_TRANSACTIONS_COLLECTION));
 
+      // Same reasoning as addFunds: row and balance in one transaction. A
+      // refund is what a cancellation puts back, so a half-applied one is
+      // a patient told their money was returned when it wasn't.
       const transaction: Omit<WalletTransaction, "id"> = {
         patientId,
         clinicId,
@@ -181,22 +259,24 @@ export const walletService = {
         createdBy,
       };
 
-      const docRef = await addDoc(
-        collection(db, WALLET_TRANSACTIONS_COLLECTION),
-        {
+      await runTransaction(db, async (dbTransaction) => {
+        const patientSnap = await dbTransaction.get(patientRef);
+
+        if (!patientSnap.exists()) {
+          throw new Error("Patient not found");
+        }
+
+        dbTransaction.set(transactionRef, {
           ...transaction,
           createdAt: Timestamp.fromDate(now),
-        },
-      );
-
-      const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
-
-      await updateDoc(patientRef, {
-        walletBalance: increment(amount),
-        updatedAt: Timestamp.now(),
+        });
+        dbTransaction.update(patientRef, {
+          walletBalance: increment(amount),
+          updatedAt: Timestamp.now(),
+        });
       });
 
-      return docRef.id;
+      return transactionRef.id;
     } catch (error) {
       console.error("Error refunding funds to wallet:", error);
       throw error;

@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  addDoc,
   setDoc,
   updateDoc,
   query,
@@ -24,8 +23,9 @@ import { doctorCommissionService } from "./doctorCommissionService";
 import { referralCommissionService } from "./referralCommissionService";
 import { expertCommissionService } from "./expertCommissionService";
 import { staffCommissionService } from "./staffCommissionService";
-import { walletService } from "./walletService";
-import { walletRefundableAmount } from "./core/cashLedgerCore";
+import { walletService, PATIENTS_COLLECTION } from "./walletService";
+import { walletRefundableAmount, WALLET_METHOD } from "./core/cashLedgerCore";
+import { applyPayment } from "./core/paymentApplicationCore";
 import {
   isRecordLocked,
   assertFinancialFieldsUnlocked,
@@ -1039,172 +1039,103 @@ export const pathologyBillingService = {
         throw new Error("Billing record not found");
       }
 
-      if (billing.paymentStatus === "paid" && paymentAmount > 0) {
-        console.warn(
-          `Attempted to record payment on already paid pathology invoice: ${id}`,
-        );
-        throw new Error("This invoice is already fully paid.");
-      }
-
-      // Rounded to 2 decimals throughout — matches this app's established
-      // IRD monetary convention (see taxEngine.ts). Without this, floating-
-      // point drift from earlier arithmetic (e.g. 497.00000000000006) can
-      // make a fully-paid invoice fail the newPaidAmount >= newTotalAmount
-      // check below and get stuck showing "PARTIAL" forever despite the
-      // displayed paid/total amounts looking identical.
-      const round2 = (n: number) => Math.round(n * 100) / 100;
-      const newTotalAmount = round2(
-        Math.max(0, billing.totalAmount - discountAmount),
-      );
-      const newDiscountAmount = round2(
-        (billing.discountAmount || 0) + discountAmount,
-      );
-      const newPaidAmount = round2((billing.paidAmount || 0) + paymentAmount);
-      const newBalanceAmount = round2(
-        Math.max(0, newTotalAmount - newPaidAmount),
-      );
-
-      let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
-
-      if (newPaidAmount >= newTotalAmount) {
-        paymentStatus = "paid";
-      } else if (newPaidAmount > 0) {
-        paymentStatus = "partial";
-      }
-
-      // Create payment event
-      const paymentEvent = {
-        id: Math.random().toString(36).substring(2, 9),
-        amount: paymentAmount,
-        method: paymentMethod,
-        reference: paymentReference || "",
-        notes: paymentNotes || "",
-        date: new Date(),
-        recordedBy: recordedBy || "system",
-      };
-
-      const paymentHistory = billing.paymentHistory || [];
-
-      paymentHistory.push(paymentEvent);
-
-      // Prepare update data, only including non-empty optional fields
-      const updateData: Partial<PathologyBilling> = {
-        totalAmount: newTotalAmount,
-        discountAmount: newDiscountAmount,
-        paidAmount: newPaidAmount,
-        balanceAmount: newBalanceAmount,
-        paymentStatus,
-        paymentMethod,
-        paymentDate: new Date(),
-        paymentHistory,
-      };
-
-      // Only include paymentReference if it's not empty
-      if (paymentReference && paymentReference.trim() !== "") {
-        updateData.paymentReference = paymentReference.trim();
-      }
-
-      // Only include paymentNotes if it's not empty
-      if (paymentNotes && paymentNotes.trim() !== "") {
-        updateData.paymentNotes = paymentNotes.trim();
-      }
-
-      // Atomically claim this payment: re-read, re-check, write, in one
-      // transaction. This used to be a plain read-modify-write through
-      // updateBilling, so two payments recorded at once on the same lab
-      // invoice — a double-click, a retried request, two counters — both
-      // read the same paidAmount, both added to it, and the second write
-      // silently overwrote the first. One real payment went missing.
-      // appointmentBillingService has guarded this since the deposit
-      // model landed; pathology never did. The lock guard runs inside the
-      // transaction too, since bypassing updateBilling must not bypass
-      // the filed-invoice rule it enforces.
+      const isWallet = paymentMethod.toLowerCase() === WALLET_METHOD;
+      const actor = recordedBy || auth.currentUser?.uid || "system";
       const billingRef = doc(db, PATHOLOGY_BILLING_COLLECTION, id);
 
-      await runTransaction(db, async (transaction) => {
+      // A walk-in lab invoice has no patient record and therefore no
+      // wallet. Refuse before opening the transaction — a caller error,
+      // not a case to half-apply and then unwind.
+      if (isWallet && !billing.patientId) {
+        throw new Error(
+          "Wallet payment needs a registered patient; this invoice has none.",
+        );
+      }
+
+      // One transaction for the invoice, the patient's balance and the
+      // wallet ledger row. Two things this shape rules out, both found by
+      // review of the previous version:
+      //
+      // 1. The new paid amount is computed from the snapshot THIS
+      //    transaction reads, not from `billing` read above. Computing it
+      //    outside and writing it inside meant the transaction only
+      //    guarded the fully-paid case: two concurrent partial payments
+      //    both passed that check and the second overwrote the first —
+      //    the lost update the transaction existed to prevent.
+      // 2. A wallet deduction happens inside, not after with a
+      //    "compensating revert". The revert never removed the
+      //    {method:"wallet"} event already in paymentHistory, so a failed
+      //    deduction left the invoice claiming a wallet payment that never
+      //    happened, which a later cancellation would then refund.
+      //
+      // Firestore requires every read before any write, hence the order.
+      const applied = await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(billingRef);
 
         if (!snap.exists()) {
           throw new Error("Billing record not found");
         }
 
+        const patientSnap = isWallet
+          ? await transaction.get(doc(db, PATIENTS_COLLECTION, billing.patientId!))
+          : null;
+
         const current = { id: snap.id, ...snap.data() } as PathologyBilling;
 
-        if (current.paymentStatus === "paid" && paymentAmount > 0) {
-          throw new Error("This invoice is already fully paid.");
-        }
+        const result = applyPayment(current as any, {
+          amount: paymentAmount,
+          method: paymentMethod,
+          discountAmount,
+          reference: paymentReference,
+          notes: paymentNotes,
+          recordedBy: actor,
+          eventId: crypto.randomUUID(),
+          now: new Date(),
+        });
 
+        // The filed-invoice rule runs here, since bypassing updateBilling
+        // must not bypass what it enforces.
         assertFinancialFieldsUnlocked(
           current,
-          updateData,
+          result.updateData,
           isRecordLocked(current, ["paid"]),
           PATHOLOGY_LOCK_GUARD,
         );
 
+        if (isWallet && patientSnap) {
+          walletService.deductFundsInTransaction(transaction, patientSnap, {
+            patientId: billing.patientId!,
+            clinicId: billing.clinicId,
+            amount: paymentAmount,
+            referenceId: id,
+            referenceType: "invoice",
+            notes: paymentNotes || `Paid Lab Invoice ${billing.invoiceNumber || "Draft"}`,
+            createdBy: actor,
+            now: result.event.date,
+          });
+        }
+
         transaction.update(billingRef, {
-          ...updateData,
-          paymentDate: Timestamp.fromDate(updateData.paymentDate as Date),
-          paymentHistory: paymentHistory.map((e) => ({
+          ...result.updateData,
+          paymentDate: Timestamp.fromDate(result.updateData.paymentDate),
+          paymentHistory: result.updateData.paymentHistory.map((e) => ({
             ...e,
             date: e.date instanceof Date ? Timestamp.fromDate(e.date) : e.date,
           })),
           updatedAt: Timestamp.now(),
         });
-      });
 
-      // A wallet payment must actually leave the wallet. This method
-      // accepted "wallet" as a label and deducted nothing — the invoice
-      // showed paid-by-wallet while the patient's balance never moved.
-      // Deduct only after the claim above succeeds, so only the winner of
-      // a concurrent race reaches here; deductFunds is itself transactional
-      // and refuses to overdraw. A walk-in lab invoice has no patient
-      // record and therefore no wallet — that is a caller error, not a
-      // case to silently accept.
-      if (paymentMethod === "wallet") {
-        if (!billing.patientId) {
-          await updateDoc(billingRef, {
-            totalAmount: billing.totalAmount,
-            discountAmount: billing.discountAmount || 0,
-            paidAmount: billing.paidAmount,
-            balanceAmount: billing.balanceAmount,
-            paymentStatus: billing.paymentStatus,
-            updatedAt: Timestamp.now(),
-          });
-          throw new Error(
-            "Wallet payment needs a registered patient; this invoice has none.",
-          );
-        }
-        try {
-          await walletService.deductFunds(
-            billing.patientId,
-            billing.clinicId,
-            paymentAmount,
-            id,
-            paymentNotes || `Paid Lab Invoice ${billing.invoiceNumber || "Draft"}`,
-            recordedBy || auth.currentUser?.uid || "system",
-          );
-        } catch (walletError) {
-          // Compensate: revert the claim so the invoice doesn't look paid
-          // when no funds were collected.
-          await updateDoc(billingRef, {
-            totalAmount: billing.totalAmount,
-            discountAmount: billing.discountAmount || 0,
-            paidAmount: billing.paidAmount,
-            balanceAmount: billing.balanceAmount,
-            paymentStatus: billing.paymentStatus,
-            updatedAt: Timestamp.now(),
-          });
-          throw walletError;
-        }
-      }
+        return result;
+      });
 
       // Create commissions for referring sources — strictly on the
       // unpaid/partial -> paid transition (never re-fires on an already-paid
       // invoice, and never fires on finalize/draft), matching
-      // appointmentBillingService.recordPayment's timing.
+      // appointmentBillingService.recordPayment's timing. becamePaid is
+      // decided from the snapshot the transaction read, so a concurrent
+      // loser never gets here claiming the edge.
       if (
-        paymentStatus === "paid" &&
-        billing.paymentStatus !== "paid" &&
+        applied.becamePaid &&
         billing.referringDoctors &&
         billing.referringDoctors.length > 0
       ) {
@@ -1240,12 +1171,10 @@ export const pathologyBillingService = {
         }
       }
 
-      // Auto-create follow-up if paid
-      if (
-        paymentStatus === "paid" &&
-        billing.status !== "paid" &&
-        billing.patientId
-      ) {
+      // Auto-create follow-up on the same paid edge. The old condition
+      // compared `billing.status` (the document lifecycle) against "paid",
+      // a value it never holds — it was effectively "whenever paid".
+      if (applied.becamePaid && billing.patientId) {
         try {
           const { followupService } = await import("./followupService");
           const { patientService } = await import("./patientService");

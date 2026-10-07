@@ -22,9 +22,9 @@ import {
 } from "../types/models";
 import { calculateTaxBreakdown } from "../utils/taxEngine";
 
-import { patientService } from "./patientService";
-import { walletService } from "./walletService";
-import { walletRefundableAmount } from "./core/cashLedgerCore";
+import { walletService, PATIENTS_COLLECTION } from "./walletService";
+import { walletRefundableAmount, WALLET_METHOD } from "./core/cashLedgerCore";
+import { applyPayment } from "./core/paymentApplicationCore";
 import { navigationService } from "./navigationService";
 import {
   isRecordLocked,
@@ -1278,152 +1278,83 @@ export const appointmentBillingService = {
         throw new Error("Billing record not found");
       }
 
-      if (billing.paymentStatus === "paid" && paymentAmount > 0) {
-        console.warn(
-          `Attempted to record payment on already paid invoice: ${id}`,
-        );
-        throw new Error("This invoice is already fully paid.");
-      }
-
-      if (discountAmount > 0 && isBillingLocked(billing)) {
-        throw new Error(
-          "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead.",
-        );
-      }
-
-      // Handle discount — rounded to 2 decimals throughout, matching this
-      // app's established IRD monetary convention (see taxEngine.ts).
-      // Without this, floating-point drift from earlier arithmetic (e.g.
-      // 497.00000000000006) can make a fully-paid invoice fail the
-      // newPaidAmount >= newTotalAmount check below and get stuck showing
-      // "PARTIAL" forever despite the displayed paid/total amounts looking
-      // identical (see the identical fix in pathologyBillingService.recordPayment).
-      const round2 = (n: number) => Math.round(n * 100) / 100;
-      const newTotalAmount = round2(
-        Math.max(0, billing.totalAmount - discountAmount),
-      );
-      const newMainDiscountAmount = round2(
-        (billing.mainDiscountAmount || 0) + discountAmount,
-      );
-      const newTotalDiscountAmount = round2(
-        (billing.discountAmount || 0) + discountAmount,
-      );
-
-      const newPaidAmount = round2(billing.paidAmount + paymentAmount);
-      const newBalanceAmount = round2(
-        Math.max(0, newTotalAmount - newPaidAmount),
-      );
-
-      let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
-
-      if (newPaidAmount >= newTotalAmount) {
-        paymentStatus = "paid";
-      } else if (newPaidAmount > 0) {
-        paymentStatus = "partial";
-      }
-
-      // Prepare update data, only including non-empty optional fields
-      const updateData: Partial<AppointmentBilling> = {
-        totalAmount: newTotalAmount,
-        mainDiscountAmount: newMainDiscountAmount,
-        discountAmount: newTotalDiscountAmount,
-        paidAmount: newPaidAmount,
-        balanceAmount: newBalanceAmount,
-        paymentStatus,
-        paymentMethod,
-        paymentDate: new Date(),
-      };
-
-      const newPaymentEvent: any = {
-        id: crypto.randomUUID(),
-        amount: paymentAmount,
-        method: paymentMethod,
-        date: new Date(),
-        recordedBy: auth.currentUser?.uid || "system",
-      };
-
-      if (paymentReference && paymentReference.trim() !== "") {
-        newPaymentEvent.reference = paymentReference.trim();
-        updateData.paymentReference = paymentReference.trim();
-      }
-
-      // Only include paymentNotes if it's not empty
-      if (paymentNotes && paymentNotes.trim() !== "") {
-        newPaymentEvent.notes = paymentNotes.trim();
-        updateData.paymentNotes = paymentNotes.trim();
-      }
-
-      updateData.paymentHistory = [
-        ...(billing.paymentHistory || []),
-        newPaymentEvent,
-      ];
-
-      // Atomically claim this payment (re-check + write in one
-      // transaction) before any side effects — two concurrent calls
-      // (double-click, a retried network request) could otherwise both
-      // pass the non-atomic "already paid" check above and both proceed
-      // to deduct the wallet and create commissions for a single real
-      // payment. Only one of two racing transactions can win; the loser
-      // throws the same "already fully paid" error instead of silently
-      // double-processing.
+      const isWallet = paymentMethod.toLowerCase() === WALLET_METHOD;
+      const actor = auth.currentUser?.uid || "system";
       const billingRef = doc(db, APPOINTMENT_BILLING_COLLECTION, id);
 
-      await runTransaction(db, async (transaction) => {
+      if (isWallet && !billing.patientId) {
+        throw new Error(
+          "Wallet payment needs a registered patient; this invoice has none.",
+        );
+      }
+
+      // One transaction for the invoice, the patient's balance and the
+      // wallet ledger row. See pathologyBillingService.recordPayment for
+      // the two defects this shape closes — the stale pre-transaction
+      // amount that let concurrent partial payments overwrite each other,
+      // and the post-transaction wallet deduction whose "compensating
+      // revert" left a phantom wallet event in paymentHistory. Both were
+      // true of this method as well.
+      const applied = await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(billingRef);
 
         if (!snap.exists()) {
           throw new Error("Billing record not found");
         }
 
-        const current = snap.data() as AppointmentBilling;
+        const patientSnap = isWallet
+          ? await transaction.get(doc(db, PATIENTS_COLLECTION, billing.patientId))
+          : null;
 
-        if (current.paymentStatus === "paid" && paymentAmount > 0) {
-          throw new Error("This invoice is already fully paid.");
+        const current = { id: snap.id, ...snap.data() } as AppointmentBilling;
+
+        // A checkout discount changes the total, which a filed invoice
+        // cannot do. Judged on the transaction's own snapshot.
+        if (discountAmount > 0 && isBillingLocked(current)) {
+          throw new Error(
+            "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead.",
+          );
+        }
+
+        const result = applyPayment(current as any, {
+          amount: paymentAmount,
+          method: paymentMethod,
+          discountAmount,
+          reference: paymentReference,
+          notes: paymentNotes,
+          recordedBy: actor,
+          eventId: crypto.randomUUID(),
+          now: new Date(),
+          trackMainDiscount: true,
+        });
+
+        if (isWallet && patientSnap) {
+          walletService.deductFundsInTransaction(transaction, patientSnap, {
+            patientId: billing.patientId,
+            clinicId: billing.clinicId,
+            amount: paymentAmount,
+            referenceId: id,
+            referenceType: "invoice",
+            notes: paymentNotes || `Paid Invoice ${billing.invoiceNumber || "Draft"}`,
+            createdBy: actor,
+            now: result.event.date,
+          });
         }
 
         transaction.update(billingRef, {
-          ...updateData,
+          ...result.updateData,
+          paymentDate: Timestamp.fromDate(result.updateData.paymentDate),
+          paymentHistory: result.updateData.paymentHistory.map((e) => ({
+            ...e,
+            date: e.date instanceof Date ? Timestamp.fromDate(e.date) : e.date,
+          })),
           updatedAt: Timestamp.now(),
         });
+
+        return result;
       });
 
-      // If paying via wallet, verify balance and deduct funds — after the
-      // claim above succeeds, so only the winner of a concurrent race
-      // reaches here. deductFunds is itself transactional (see
-      // walletService.ts), so the balance check/decrement can't go
-      // negative under concurrent wallet payments either.
-      if (paymentMethod === "wallet") {
-        try {
-          const patient = await patientService.getPatientById(
-            billing.patientId,
-          );
-
-          if (!patient || (patient.walletBalance || 0) < paymentAmount) {
-            throw new Error("Insufficient wallet balance");
-          }
-          await walletService.deductFunds(
-            billing.patientId,
-            billing.clinicId,
-            paymentAmount,
-            id,
-            paymentNotes || `Paid Invoice ${billing.invoiceNumber || "Draft"}`,
-            auth.currentUser?.uid || "system",
-          );
-        } catch (walletError) {
-          // Compensate: revert the claim above so the invoice doesn't end
-          // up looking paid when no funds were actually collected.
-          await updateDoc(billingRef, {
-            totalAmount: billing.totalAmount,
-            mainDiscountAmount: billing.mainDiscountAmount || 0,
-            discountAmount: billing.discountAmount || 0,
-            paidAmount: billing.paidAmount,
-            balanceAmount: billing.balanceAmount,
-            paymentStatus: billing.paymentStatus,
-            updatedAt: Timestamp.now(),
-          });
-          throw walletError;
-        }
-      }
+      const paymentStatus = applied.updateData.paymentStatus;
 
       // Also find and update the associated appointment in the appointments collection
       try {
@@ -1517,8 +1448,11 @@ export const appointmentBillingService = {
         );
       }
 
-      // Auto-create follow-up and commissions if fully paid
-      if (paymentStatus === "paid" && billing.paymentStatus !== "paid") {
+      // Auto-create follow-up and commissions on the unpaid/partial -> paid
+      // edge. becamePaid is decided from the snapshot the transaction read,
+      // so a concurrent loser never reaches here claiming the edge — the
+      // old comparison against the pre-transaction `billing` could.
+      if (applied.becamePaid) {
         // 1. Follow-up Logic
         if (billing.patientId) {
           try {

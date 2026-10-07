@@ -238,6 +238,13 @@ describe("refundUnusedSessions — happy path", () => {
       exists: () => true,
       data: () => ({ walletCreditAmount: 3000 }),
     });
+    // Third getDoc — refundFunds now reads the patient inside its
+    // transaction before crediting, so the row and the balance move
+    // together or not at all.
+    getDocMock.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ walletBalance: 0 }),
+    });
 
     await patientPackageService.refundUnusedSessions(
       "pkg_1",
@@ -246,21 +253,24 @@ describe("refundUnusedSessions — happy path", () => {
       "staff_1",
     );
 
-    // addDoc for the wallet transaction
-    expect(addDocMock).toHaveBeenCalledTimes(1);
-    const txn = addDocMock.mock.calls[0][1];
+    // The wallet transaction is written inside refundFunds' transaction
+    // (transaction.set), never via addDoc any more.
+    expect(addDocMock).not.toHaveBeenCalled();
+
+    // Three transaction/updateDoc writes, in order: the wallet ledger row
+    // (set), the patient balance increment, then the package status update.
+    expect(updateDocMock).toHaveBeenCalledTimes(3);
+    const txn = updateDocMock.mock.calls[0][1];
 
     expect(txn.type).toBe("refund");
     expect(txn.amount).toBe(1200);
     expect(txn.referenceId).toBe("pkg_1");
 
-    // Two updateDoc calls: patient wallet balance increment, package status update
-    expect(updateDocMock).toHaveBeenCalledTimes(2);
-    const balanceUpdate = updateDocMock.mock.calls[0][1];
+    const balanceUpdate = updateDocMock.mock.calls[1][1];
 
     expect(balanceUpdate.walletBalance).toEqual({ __increment: 1200 });
 
-    const pkgUpdate = updateDocMock.mock.calls[1][1];
+    const pkgUpdate = updateDocMock.mock.calls[2][1];
 
     expect(pkgUpdate.status).toBe("refunded");
     expect(pkgUpdate.refundedAmount).toBe(1200);
@@ -309,6 +319,12 @@ describe("refundUnusedSessions — guard conditions", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 describe("walletService.refundFunds", () => {
   it("records a refund-typed transaction and credits the wallet balance", async () => {
+    // refundFunds reads the patient inside its transaction before writing.
+    getDocMock.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ walletBalance: 100 }),
+    });
+
     await walletService.refundFunds(
       "pat_1",
       "clinic_1",
@@ -318,17 +334,34 @@ describe("walletService.refundFunds", () => {
       "staff_1",
     );
 
-    expect(addDocMock).toHaveBeenCalledTimes(1);
-    const txn = addDocMock.mock.calls[0][1];
+    // Row and balance are written in one transaction — set then update —
+    // never via addDoc. Both route to updateDocMock in this harness.
+    expect(addDocMock).not.toHaveBeenCalled();
+    expect(updateDocMock).toHaveBeenCalledTimes(2);
+
+    const txn = updateDocMock.mock.calls[0][1];
 
     expect(txn.type).toBe("refund");
     expect(txn.amount).toBe(800);
     expect(txn.referenceId).toBe("pkg_1");
 
-    expect(updateDocMock).toHaveBeenCalledTimes(1);
-    expect(updateDocMock.mock.calls[0][1].walletBalance).toEqual({
+    expect(updateDocMock.mock.calls[1][1].walletBalance).toEqual({
       __increment: 800,
     });
+  });
+
+  it("refuses to credit a patient that does not exist", async () => {
+    // A refund into a missing patient document used to go through as a
+    // dangling ledger row plus a failed balance update. Now the transaction
+    // refuses before writing anything.
+    getDocMock.mockResolvedValueOnce({ exists: () => false });
+
+    await expect(
+      walletService.refundFunds("ghost", "clinic_1", 50, "pkg_1", "x", "staff_1"),
+    ).rejects.toThrow("Patient not found");
+
+    expect(addDocMock).not.toHaveBeenCalled();
+    expect(updateDocMock).not.toHaveBeenCalled();
   });
 });
 
