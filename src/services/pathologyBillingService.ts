@@ -8,6 +8,7 @@ import {
   updateDoc,
   query,
   where,
+  runTransaction,
   Timestamp,
 } from "firebase/firestore";
 
@@ -38,6 +39,49 @@ import {
 
 const PATHOLOGY_BILLING_COLLECTION = "pathologyBilling";
 const PATHOLOGY_BILLING_SETTINGS_COLLECTION = "pathologyBillingSettings";
+
+/**
+ * What may change on a finalized or IRD-synced pathology invoice. Shared
+ * by updateBilling and by recordPayment's transaction, so the two write
+ * paths cannot drift apart on what "locked" means.
+ *
+ * Numeric fields are compared with undefined/null normalized to 0 —
+ * otherwise re-sending an unchanged-but-previously-unset field (e.g.
+ * discountAmount: 0 when the existing record has it as undefined) reads
+ * as a "change" and wrongly blocks a legitimate, purely non-financial
+ * update like recording a payment. Clause ट covers "any data" (कुनैपनि
+ * तथ्याङ्क), not just financial fields — patient identity, doctor, dates
+ * etc. must also be frozen once finalized/synced. Only system-driven
+ * bookkeeping fields (payment recording, IRD sync retries,
+ * cancellation/credit-note linkage) may still change post-finalization.
+ */
+const PATHOLOGY_LOCK_GUARD = {
+  financialKeys: ["totalAmount", "subtotal", "taxAmount", "discountAmount"],
+  allowlist: [
+    "paidAmount",
+    "balanceAmount",
+    "paymentStatus",
+    "paymentMethod",
+    "paymentDate",
+    "paymentReference",
+    "paymentNotes",
+    "paymentHistory",
+    "printCount",
+    "irdSynced",
+    "irdSyncDate",
+    "cbmsResponseCode",
+    "status",
+    "hasCreditNote",
+    "finalizedBy",
+    "finalizedAt",
+  ],
+  financialErrorMessage:
+    "IRD Tax Compliance Error: Financial fields of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
+  notesErrorMessage:
+    "IRD Tax Compliance Error: Notes on a finalized or IRD-synced pathology invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
+  dataErrorMessage:
+    "IRD Tax Compliance Error: Data of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
+};
 
 /**
  * Reverse every doctor/referral-partner commission tied to a pathology
@@ -581,43 +625,14 @@ export const pathologyBillingService = {
         // together.
         const isFinalized = isRecordLocked(existingData, ["paid"]);
 
-        // Numeric fields are compared with undefined/null normalized to 0 —
-        // otherwise re-sending an unchanged-but-previously-unset field (e.g.
-        // discountAmount: 0 when the existing record has it as undefined)
-        // reads as a "change" and wrongly blocks a legitimate, purely
-        // non-financial update like recording a payment. Clause ट covers
-        // "any data" (कुनैपनि तथ्याङ्क), not just financial fields — patient
-        // identity, doctor, dates etc. must also be frozen once
-        // finalized/synced. Only system-driven bookkeeping fields (payment
-        // recording, IRD sync retries, cancellation/credit-note linkage) may
-        // still change post-finalization.
-        assertFinancialFieldsUnlocked(existingData, billingData, isFinalized, {
-          financialKeys: ["totalAmount", "subtotal", "taxAmount", "discountAmount"],
-          allowlist: [
-            "paidAmount",
-            "balanceAmount",
-            "paymentStatus",
-            "paymentMethod",
-            "paymentDate",
-            "paymentReference",
-            "paymentNotes",
-            "paymentHistory",
-            "printCount",
-            "irdSynced",
-            "irdSyncDate",
-            "cbmsResponseCode",
-            "status",
-            "hasCreditNote",
-            "finalizedBy",
-            "finalizedAt",
-          ],
-          financialErrorMessage:
-            "IRD Tax Compliance Error: Financial fields of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
-          notesErrorMessage:
-            "IRD Tax Compliance Error: Notes on a finalized or IRD-synced pathology invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
-          dataErrorMessage:
-            "IRD Tax Compliance Error: Data of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
-        });
+        // What may change on a locked invoice is defined once, on
+        // PATHOLOGY_LOCK_GUARD, and shared with recordPayment's transaction.
+        assertFinancialFieldsUnlocked(
+          existingData,
+          billingData,
+          isFinalized,
+          PATHOLOGY_LOCK_GUARD,
+        );
       }
 
       // Recursive function to remove undefined values from objects and arrays
@@ -1094,7 +1109,94 @@ export const pathologyBillingService = {
         updateData.paymentNotes = paymentNotes.trim();
       }
 
-      await this.updateBilling(id, updateData);
+      // Atomically claim this payment: re-read, re-check, write, in one
+      // transaction. This used to be a plain read-modify-write through
+      // updateBilling, so two payments recorded at once on the same lab
+      // invoice — a double-click, a retried request, two counters — both
+      // read the same paidAmount, both added to it, and the second write
+      // silently overwrote the first. One real payment went missing.
+      // appointmentBillingService has guarded this since the deposit
+      // model landed; pathology never did. The lock guard runs inside the
+      // transaction too, since bypassing updateBilling must not bypass
+      // the filed-invoice rule it enforces.
+      const billingRef = doc(db, PATHOLOGY_BILLING_COLLECTION, id);
+
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(billingRef);
+
+        if (!snap.exists()) {
+          throw new Error("Billing record not found");
+        }
+
+        const current = { id: snap.id, ...snap.data() } as PathologyBilling;
+
+        if (current.paymentStatus === "paid" && paymentAmount > 0) {
+          throw new Error("This invoice is already fully paid.");
+        }
+
+        assertFinancialFieldsUnlocked(
+          current,
+          updateData,
+          isRecordLocked(current, ["paid"]),
+          PATHOLOGY_LOCK_GUARD,
+        );
+
+        transaction.update(billingRef, {
+          ...updateData,
+          paymentDate: Timestamp.fromDate(updateData.paymentDate as Date),
+          paymentHistory: paymentHistory.map((e) => ({
+            ...e,
+            date: e.date instanceof Date ? Timestamp.fromDate(e.date) : e.date,
+          })),
+          updatedAt: Timestamp.now(),
+        });
+      });
+
+      // A wallet payment must actually leave the wallet. This method
+      // accepted "wallet" as a label and deducted nothing — the invoice
+      // showed paid-by-wallet while the patient's balance never moved.
+      // Deduct only after the claim above succeeds, so only the winner of
+      // a concurrent race reaches here; deductFunds is itself transactional
+      // and refuses to overdraw. A walk-in lab invoice has no patient
+      // record and therefore no wallet — that is a caller error, not a
+      // case to silently accept.
+      if (paymentMethod === "wallet") {
+        if (!billing.patientId) {
+          await updateDoc(billingRef, {
+            totalAmount: billing.totalAmount,
+            discountAmount: billing.discountAmount || 0,
+            paidAmount: billing.paidAmount,
+            balanceAmount: billing.balanceAmount,
+            paymentStatus: billing.paymentStatus,
+            updatedAt: Timestamp.now(),
+          });
+          throw new Error(
+            "Wallet payment needs a registered patient; this invoice has none.",
+          );
+        }
+        try {
+          await walletService.deductFunds(
+            billing.patientId,
+            billing.clinicId,
+            paymentAmount,
+            id,
+            paymentNotes || `Paid Lab Invoice ${billing.invoiceNumber || "Draft"}`,
+            recordedBy || auth.currentUser?.uid || "system",
+          );
+        } catch (walletError) {
+          // Compensate: revert the claim so the invoice doesn't look paid
+          // when no funds were collected.
+          await updateDoc(billingRef, {
+            totalAmount: billing.totalAmount,
+            discountAmount: billing.discountAmount || 0,
+            paidAmount: billing.paidAmount,
+            balanceAmount: billing.balanceAmount,
+            paymentStatus: billing.paymentStatus,
+            updatedAt: Timestamp.now(),
+          });
+          throw walletError;
+        }
+      }
 
       // Create commissions for referring sources — strictly on the
       // unpaid/partial -> paid transition (never re-fires on an already-paid
