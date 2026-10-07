@@ -893,6 +893,14 @@ export const pathologyBillingService = {
       throw new Error("Invoice not found");
     }
 
+    // Same rule as appointmentBillingService.cancelBilling: a filed invoice
+    // can only be reversed by Credit Note, never withdrawn.
+    if (billing.irdSynced === true) {
+      throw new Error(
+        `Invoice ${billing.invoiceNumber} has already been filed with IRD and cannot be cancelled. Issue a Credit Note to reverse it.`,
+      );
+    }
+
     if ((billing as any).javaInvoiceId) {
       const { billingApi } = await import("./api/billingApi");
 

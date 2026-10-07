@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -44,6 +45,51 @@ public class InvoiceCreationService {
     @Transactional
     public Invoice createFromRequest(InvoiceRequestDto request, String clinicId, String userUid) {
         return createFromRequest(request, clinicId, userUid, null);
+    }
+
+    /**
+     * Largest tolerated gap between the client's stated total and the sum of
+     * its own parts. One rupee covers rounding of a per-line tax split to
+     * two decimals; anything beyond it is a wrong split, not rounding.
+     */
+    static final BigDecimal AMOUNT_TOLERANCE = BigDecimal.ONE;
+
+    /**
+     * Rejects an invoice whose taxable + exempt + tax does not equal its
+     * total.
+     *
+     * This ledger is what CBMS is filed from, and it used to accept whatever
+     * split the browser computed — the four amounts were stored verbatim
+     * with no check that they described the same number. That is how 21
+     * invoices reached IRD with the right total and tax but the wrong
+     * taxable/exempt base, and nothing stood in the way of it happening
+     * again. CBMS has no amend operation, so a wrong split that gets filed
+     * can only be corrected by credit-note-and-reissue; refusing it here is
+     * the only cheap place to stop it.
+     *
+     * Null amounts are treated as zero rather than rejected: a fully-exempt
+     * sale legitimately carries no taxable amount and no tax. Negative
+     * totals (credit notes) satisfy the same identity with the sign
+     * flipped, so no special case is needed.
+     */
+    static void validateAmountsSum(InvoiceRequestDto request) {
+        BigDecimal total = nz(request.getTotalAmount());
+        BigDecimal parts = nz(request.getTaxableAmount())
+                .add(nz(request.getExemptAmount()))
+                .add(nz(request.getTaxAmount()));
+        BigDecimal gap = total.subtract(parts).abs();
+
+        if (gap.compareTo(AMOUNT_TOLERANCE) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, String.format(
+                    "Invoice amounts do not reconcile: taxable %s + exempt %s + tax %s = %s, but total is %s (gap %s). "
+                    + "The split must sum to the total before it can be filed.",
+                    nz(request.getTaxableAmount()), nz(request.getExemptAmount()), nz(request.getTaxAmount()),
+                    parts, total, gap));
+        }
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     /**
@@ -87,6 +133,8 @@ public class InvoiceCreationService {
         invoice.setFirebasePatientId(request.getFirebasePatientId());
         invoice.setBuyerName(request.getBuyerName());
         invoice.setBuyerPan(request.getBuyerPan());
+
+        validateAmountsSum(request);
 
         invoice.setTotalAmount(request.getTotalAmount());
         invoice.setTaxableAmount(request.getTaxableAmount());

@@ -97,15 +97,18 @@ export const retryIrdSync = async (
       return { success: false, message: "Invoice not found." };
     }
 
-    // Ensure it's finalized (or paid for pharmacy)
-    if (invoiceType === "pharmacy" && invoiceData.paymentStatus !== "paid") {
-      return { success: false, message: "Pharmacy invoice is not fully paid." };
-    } else if (
-      invoiceType !== "pharmacy" &&
-      invoiceData.status !== "finalized" &&
-      invoiceData.status !== "paid"
-    ) {
-      return { success: false, message: "Invoice is not finalized." };
+    // Retry is for an invoice that exists but has not reached IRD. That is
+    // the only precondition. This used to gate on `status` being
+    // "finalized" or "paid" — but nothing in the real flow advances
+    // `status` (every creation path writes "draft", and "paid" is a
+    // paymentStatus value that `status` never holds), so every live invoice
+    // failed this check and the retry button on five screens and two
+    // reports could never succeed. The pharmacy branch additionally
+    // required full payment, which meant an unpaid pharmacy sale could
+    // never be filed at all — filing is a tax obligation on the sale, not
+    // on its collection.
+    if (invoiceData.irdSynced === true) {
+      return { success: false, message: "Invoice is already synced with IRD." };
     }
 
     const clinicSettings =

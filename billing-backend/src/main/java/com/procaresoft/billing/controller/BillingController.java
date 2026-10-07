@@ -327,6 +327,16 @@ public class BillingController {
             if (!invoice.isActive()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Invoice is already cancelled");
             }
+            // Once an invoice has reached CBMS it cannot be withdrawn — IRD
+            // has no cancel operation, only credit-note-and-reissue. Letting
+            // this ledger mark it inactive would leave our record saying
+            // "cancelled" while IRD's says "sold", a divergence nothing can
+            // reconcile. Refuse, and let the client offer a Credit Note.
+            if (invoice.isIrdSynced()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Invoice " + invoice.getInvoiceNumber() + " has already been filed with IRD and cannot be cancelled. "
+                        + "Issue a Credit Note to reverse it.");
+            }
 
             invoice.setActive(false);
             Invoice saved = invoiceRepository.save(invoice);

@@ -2269,6 +2269,16 @@ export const appointmentBillingService = {
       throw new Error("Invoice not found");
     }
 
+    // A filed invoice cannot be withdrawn from IRD — CBMS has no cancel,
+    // only credit-note-and-reissue. The backend now refuses this too; the
+    // check here fails fast before any ledger call, with the right action
+    // named, instead of surfacing a 409 from Java after the fact.
+    if (billing.irdSynced === true) {
+      throw new Error(
+        `Invoice ${billing.invoiceNumber} has already been filed with IRD and cannot be cancelled. Issue a Credit Note to reverse it.`,
+      );
+    }
+
     if ((billing as any).javaInvoiceId) {
       const { billingApi } = await import("./api/billingApi");
 
