@@ -112,6 +112,23 @@ public class Invoice {
     @Column(name = "reason_for_return", length = 1000)
     private String reasonForReturn;
 
+    /**
+     * Why, when and by whom this row was cancelled. IRD's procedure §6(ज)
+     * requires cancellation "stating the reason" and the Schedule 5 register
+     * to reflect it. The reason used to live only in the audit log — so an
+     * inspector reading the ledger saw Is_bill_Active = 0 and nothing else,
+     * and had to cross-reference a separate table to learn why. Null on a
+     * live row.
+     */
+    @Column(name = "cancel_reason", length = 1000)
+    private String cancelReason;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "cancelled_by_uid")
+    private String cancelledByUid;
+
     // IRD Sync Tracking
     @Column(name = "ird_synced", nullable = false)
     private boolean irdSynced = false;

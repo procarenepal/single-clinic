@@ -339,6 +339,10 @@ public class BillingController {
             }
 
             invoice.setActive(false);
+            // On the row itself, not only in the audit log — see Invoice.cancelReason.
+            invoice.setCancelReason(request.getReason());
+            invoice.setCancelledAt(java.time.LocalDateTime.now());
+            invoice.setCancelledByUid(userUid);
             Invoice saved = invoiceRepository.save(invoice);
 
             auditLogService.record("Invoice", saved.getId(), "CANCEL", userUid, clinicId,

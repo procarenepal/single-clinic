@@ -41,6 +41,10 @@ public class LedgerRecordDto {
     private final String sourceCollection;
     private final String sourceDocId;
     private final String createdAt;
+    /** Why/when/by whom the row was cancelled; all null on a live row. §6(ज). */
+    private final String cancelReason;
+    private final String cancelledAt;
+    private final String cancelledByUid;
 
     public static LedgerRecordDto fromInvoice(Invoice invoice) {
         return new LedgerRecordDto(
@@ -68,6 +72,11 @@ public class LedgerRecordDto {
                 invoice.getSourceDocId(),
                 invoice.getCreatedAt() != null
                         ? invoice.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                        : null);
+                        : null,
+                invoice.getCancelReason(),
+                invoice.getCancelledAt() != null
+                        ? invoice.getCancelledAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                        : null,
+                invoice.getCancelledByUid());
     }
 }
