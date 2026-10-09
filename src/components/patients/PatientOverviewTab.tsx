@@ -331,10 +331,15 @@ export default function PatientOverviewTab({
         color: "success",
       });
       navigate("/dashboard/patients");
-    } catch {
+    } catch (err) {
+      // deletePatient refuses when the patient holds wallet money or owes
+      // on an invoice, and says which — show that, not a generic failure.
       addToast({
-        title: "Error",
-        description: "Failed to delete patient.",
+        title: "Could not delete patient",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : "Failed to delete patient.",
         color: "danger",
       });
     } finally {

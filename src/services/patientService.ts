@@ -420,6 +420,55 @@ export const patientService = {
       const clinicId = existingPatient?.clinicId;
       const doctorId = existingPatient?.doctorId;
 
+      // A patient record is a hard delete, and two things hang off it that
+      // are the clinic's money: a wallet balance (a liability the clinic
+      // owes) and unpaid invoices (receivables the clinic is owed). Any
+      // clinic member could delete either into thin air. Refuse, and say
+      // exactly what has to be settled first — the Firestore rule enforces
+      // the wallet half as a floor; this is the precise version.
+      if (existingPatient) {
+        // Half a paisa either side: increment() arithmetic can leave a
+        // float residue like 4.5e-13 on a wallet that has in truth been
+        // emptied, and that must not make a patient undeletable.
+        const held = existingPatient.walletBalance || 0;
+
+        if (held >= 0.005) {
+          throw new Error(
+            `Cannot delete ${existingPatient.name}: they hold NPR ${held.toLocaleString()} in their wallet. Refund it first.`,
+          );
+        }
+
+        // What they owe, by the same definition every billing screen uses
+        // (appointment + lab + pharmacy credit sales, net of returns and
+        // payments). A lookup that fails must refuse, not pass: defaulting
+        // to "nothing owed" is exactly the wrong answer when the question
+        // could not be asked.
+        const { getPatientOutstandingSummary } = await import(
+          "@/utils/patientOutstanding"
+        );
+        let owed: number;
+
+        try {
+          owed = (
+            await getPatientOutstandingSummary(id, resolveClinicId(clinicId))
+          ).total;
+        } catch (lookupError) {
+          console.error(
+            "Could not check outstanding dues before deleting patient:",
+            lookupError,
+          );
+          throw new Error(
+            `Cannot delete ${existingPatient.name} right now: their outstanding dues could not be verified. Try again.`,
+          );
+        }
+
+        if (owed >= 0.005) {
+          throw new Error(
+            `Cannot delete ${existingPatient.name}: NPR ${owed.toLocaleString()} is still owed on their invoices. Settle or credit-note them first.`,
+          );
+        }
+      }
+
       const docRef = doc(db, PATIENTS_COLLECTION, id);
 
       await deleteDoc(docRef); // Hard delete
