@@ -53,6 +53,32 @@ public class FirestoreMirrorService {
     @Value("${billing.firestore-mirror.enabled:true}")
     private boolean enabled;
 
+    /**
+     * True only when Firestore positively reports that the document a ledger
+     * row points at no longer exists. False when it exists — and false on
+     * any error, so an outage or a permission problem can never be read as
+     * "dangling" and unlock a repoint that would overwrite a live pointer.
+     *
+     * Exists for the source-pointer remediation: it refuses to repoint a
+     * row that already points somewhere, which is right when that somewhere
+     * is real and wrong when the document was wiped (INV-2083.084-0003
+     * pointed at a document that no longer exists, so a successful filing
+     * could never be mirrored back and the dangling pointer blocked its
+     * own repair).
+     */
+    public boolean sourceDocumentIsDangling(String collection, String docId) {
+        if (collection == null || collection.isBlank() || docId == null || docId.isBlank()) {
+            return false;
+        }
+        try {
+            Firestore firestore = FirestoreClient.getFirestore();
+            return !firestore.collection(collection).document(docId).get().get().exists();
+        } catch (Exception e) {
+            log.warn("Could not check whether {}/{} exists; treating the pointer as live", collection, docId, e);
+            return false;
+        }
+    }
+
     public FirestoreMirrorService(AuditLogService auditLogService) {
         this.auditLogService = auditLogService;
     }

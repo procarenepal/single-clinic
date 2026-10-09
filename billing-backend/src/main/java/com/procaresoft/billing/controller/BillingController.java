@@ -207,8 +207,26 @@ public class BillingController {
             if (existing != null && !existing.isBlank()) {
                 boolean same = existing.equals(collection) && docId.equals(invoice.getSourceDocId());
                 if (!same) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
-                            "This invoice already points at " + existing + "/" + invoice.getSourceDocId());
+                    // A live pointer is never overwritten. A DANGLING one — the
+                    // document it names no longer exists — is the one case
+                    // where refusing is wrong: the row can never be mirrored to
+                    // a document that isn't there, and the stale pointer was
+                    // blocking its own repair. Only Firestore's positive word
+                    // that the target is gone unlocks this (see
+                    // sourceDocumentIsDangling); an error keeps the refusal.
+                    boolean dangling = firestoreMirrorService.sourceDocumentIsDangling(
+                            existing, invoice.getSourceDocId());
+                    if (!dangling) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "This invoice already points at " + existing + "/" + invoice.getSourceDocId());
+                    }
+                    String previous = existing + "/" + invoice.getSourceDocId();
+                    invoice.setSourceCollection(collection);
+                    invoice.setSourceDocId(docId);
+                    invoiceRepository.save(invoice);
+                    auditLogService.record("Invoice", invoice.getId(), "UPDATE", requireUserUid(httpRequest), clinicId,
+                            "Repointed " + invoice.getInvoiceNumber() + " from dangling " + previous
+                                    + " to " + collection + "/" + docId);
                 }
             } else {
                 invoice.setSourceCollection(collection);
