@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui";
 import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
 import { calculateTaxBreakdown } from "@/utils/taxEngine";
+import { withDoctorPrefix } from "@/utils/clinicianName";
 
 /**
  * Sensible per-clinician-type defaults for a newly-added (or retyped) row:
@@ -741,7 +742,8 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                       )
                                       .map((d) => (
                                         <option key={d.id} value={d.id}>
-                                          Dr. {d.name} ({d.speciality || "GP"})
+                                          {withDoctorPrefix(d.name)} (
+                                          {d.speciality || "GP"})
                                         </option>
                                       ))
                                   : experts
@@ -1347,7 +1349,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                             )
                                             .map((d) => (
                                               <option key={d.id} value={d.id}>
-                                                Dr. {d.name}
+                                                {withDoctorPrefix(d.name)}
                                               </option>
                                             ))}
                                         </>
@@ -1450,7 +1452,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                           )
                                           .map((d) => (
                                             <option key={d.id} value={d.id}>
-                                              Dr. {d.name} (
+                                              {withDoctorPrefix(d.name)} (
                                               {d.speciality || "GP"})
                                             </option>
                                           ))}

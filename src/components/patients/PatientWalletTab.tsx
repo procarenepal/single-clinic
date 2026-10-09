@@ -615,7 +615,15 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                             </span>
                           </>
                         ) : t.type === "refund" ? (
-                          "Package refund"
+                          // A refund references what it reverses: a package
+                          // (unused sessions) or an invoice (cancel / credit
+                          // note). Every refund used to be captioned
+                          // "Package refund".
+                          t.referenceType === "package" ? (
+                            "Package refund"
+                          ) : (
+                            "Invoice refund"
+                          )
                         ) : t.referenceType === "package" ? (
                           // Package-session deductions reference a
                           // patientPackage id, not an invoice — there's no
