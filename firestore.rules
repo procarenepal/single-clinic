@@ -1238,11 +1238,16 @@ match /patients/{patientId} {
                 && (walletUntouched()
                     || (request.resource.data.keys().hasAll(['lastWalletTxnId']) && walletMoveIsLedgered()));
 
-  // Allow clinic users to delete their own clinic's patients
-  allow delete: if isAuthenticated() &&
-                (isSuperAdmin() ||
-                 (resource.data.clinicId != null &&
-                  belongsToClinic(resource.data.clinicId)));
+  // Deleting a patient is an administrator's act, and never one that
+  // erases money: a patient holding a wallet balance is a liability the
+  // clinic owes, and deleting the record would make it vanish without a
+  // refund. Any clinic member could do this before. The app refuses
+  // earlier and more precisely (unpaid invoices too); this is the floor.
+  // Half a paisa either side: increment() arithmetic can leave a float
+  // residue like 4.5e-13 on a wallet that has in truth been emptied.
+  allow delete: if isSuperAdmin()
+                && resource.data.get('walletBalance', 0) < 0.005
+                && resource.data.get('walletBalance', 0) > -0.005;
 }
 
 // Patients collection-level rules for queries
@@ -3799,6 +3804,15 @@ match /doctorCommissions/{commissionId} {
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
   }
 
+  // A clawback is a commission record for a NEGATIVE amount: money the
+  // doctor was paid on an invoice that was later reversed, now owed back.
+  // It is the only shape a negative commission may take, and it must name
+  // the record it reverses. See services/core/commissionClawbackCore.
+  function isClawback() {
+    return request.resource.data.get('clawbackOf', '') is string &&
+           request.resource.data.get('clawbackOf', '') != '';
+  }
+
   // Allow clinic users to read their own clinic's doctor commissions
   allow read: if isAuthenticated() && 
               (isSuperAdmin() || belongsToClinic(resource.data.clinicId)) || (isAuthenticated() && resource == null);
@@ -3811,7 +3825,8 @@ match /doctorCommissions/{commissionId} {
                   request.resource.data.createdBy == request.auth.uid &&
                   request.resource.data.keys().hasAll(['doctorId', 'clinicId', 'billingId', 'commissionAmount', 'commissionPercentage', 'status', 'createdBy']) &&
                   request.resource.data.status in ['pending', 'paid', 'cancelled'] &&
-                  request.resource.data.commissionAmount is number && request.resource.data.commissionAmount >= 0 &&
+                  request.resource.data.commissionAmount is number &&
+                  (request.resource.data.commissionAmount >= 0 || isClawback()) &&
                   request.resource.data.commissionPercentage is number && request.resource.data.commissionPercentage >= 0 &&
                   request.resource.data.doctorId is string &&
                   request.resource.data.clinicId is string &&
@@ -3827,7 +3842,8 @@ match /doctorCommissions/{commissionId} {
                   request.resource.data.doctorId == resource.data.doctorId &&
                   request.resource.data.billingId == resource.data.billingId &&
                   // Ensure commission amount and percentage validations
-                  request.resource.data.commissionAmount is number && request.resource.data.commissionAmount >= 0 &&
+                  request.resource.data.commissionAmount is number &&
+                  (request.resource.data.commissionAmount >= 0 || isClawback()) &&
                   request.resource.data.commissionPercentage is number && request.resource.data.commissionPercentage >= 0 &&
                   request.resource.data.totalInvoiceAmount is number && request.resource.data.totalInvoiceAmount >= 0 &&
                   request.resource.data.status in ['pending', 'paid', 'cancelled']));

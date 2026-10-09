@@ -34,6 +34,7 @@ async function reset() {
       u(ADMIN, "clinic-admin", "default"), u(OTHER, "staff", "other"),
       setDoc(doc(db, "patients", "p1"), { clinicId: "default", name: "P One", walletBalance: 100, createdBy: STAFF }),
       setDoc(doc(db, "patients", "p0"), { clinicId: "default", name: "P Zero", createdBy: STAFF }), // never had a wallet
+      setDoc(doc(db, "patients", "pr"), { clinicId: "default", name: "P Residue", walletBalance: 4.547e-13, createdBy: STAFF }), // emptied wallet, float residue
       setDoc(doc(db, "appointmentBilling", "inv1"), { clinicId: "default", invoiceNumber: "INV-1", patientId: "p1", doctorId: "d", totalAmount: 565, paidAmount: 0, balanceAmount: 565, status: "draft", paymentStatus: "unpaid", irdSynced: false, createdBy: STAFF, paymentHistory: [], notes: "" }),
       setDoc(doc(db, "appointmentBilling", "inv2"), { clinicId: "default", invoiceNumber: "INV-2", patientId: "p1", doctorId: "d", totalAmount: 565, paidAmount: 0, balanceAmount: 565, status: "draft", paymentStatus: "unpaid", irdSynced: true, createdBy: STAFF, paymentHistory: [], notes: "" }),
       setDoc(doc(db, "appointmentBilling", "inv3"), { clinicId: "default", invoiceNumber: "INV-3", patientId: "p1", doctorId: "d", totalAmount: 565, paidAmount: 0, balanceAmount: 565, status: "finalized", paymentStatus: "unpaid", irdSynced: false, createdBy: STAFF, paymentHistory: [] }),
@@ -194,6 +195,48 @@ await t("packages: nobody deletes, clinic-admin included", async () => {
   await assertFails(deleteDoc(doc(as(STAFF), "patientPackages", "pkg1")));
   await assertFails(deleteDoc(doc(as(ADMIN), "patientPackages", "pkg1")));
 });
+
+
+// ── patients: delete ─────────────────────────────────────────────────────────
+await t("patients: clinic-admin can delete a patient who holds no wallet money", () =>
+  assertSucceeds(deleteDoc(doc(as(ADMIN), "patients", "p0"))));
+await t("patients: clinic-admin cannot delete a patient who holds wallet money", () =>
+  assertFails(deleteDoc(doc(as(ADMIN), "patients", "p1"))));
+await t("patients: a sub-paisa float residue does not count as held money", () =>
+  assertSucceeds(deleteDoc(doc(as(ADMIN), "patients", "pr"))));
+await t("patients: staff cannot delete a patient at all", () =>
+  assertFails(deleteDoc(doc(as(STAFF), "patients", "p0"))));
+
+// ── doctorCommissions: clawbacks ─────────────────────────────────────────────
+const commission = (over) => ({
+  doctorId: "d", doctorName: "Dr D", clinicId: "default", branchId: "default", billingId: "inv1", billingType: "appointment",
+  invoiceNumber: "INV-1", appointmentDate: now(), patientId: "p1", patientName: "P One", serviceNames: ["Consult"],
+  totalInvoiceAmount: 565, commissionPercentage: 15, commissionAmount: 84.75, status: "pending",
+  createdAt: now(), updatedAt: now(), createdBy: ADMIN, ...over,
+});
+await t("commission: clinic-admin creates an ordinary (positive) commission", () =>
+  assertSucceeds(setDoc(doc(as(ADMIN), "doctorCommissions", "c1"), commission({}))));
+// The refusal cases run as STAFF: this rules file lets clinic-admin bypass
+// every field validation via isSuperAdmin() (pre-existing, file-wide), so
+// only the validated branch — staff — exercises the carve-out.
+await t("commission: a negative amount with no clawbackOf is refused", () =>
+  assertFails(setDoc(doc(as(STAFF), "doctorCommissions", "c2"), commission({ commissionAmount: -84.75, createdBy: STAFF }))));
+await t("commission: a negative amount with an empty clawbackOf is refused", () =>
+  assertFails(setDoc(doc(as(STAFF), "doctorCommissions", "c3"), commission({ commissionAmount: -84.75, clawbackOf: "", createdBy: STAFF }))));
+await t("commission: a clawback (negative, naming the original) is allowed", () =>
+  assertSucceeds(setDoc(doc(as(ADMIN), "doctorCommissions", "c4"), commission({ commissionAmount: -84.75, clawbackOf: "c1", clawbackReason: "Invoice reversed after this commission was paid out" }))));
+await t("commission: staff (has commission access) can write a clawback too", () =>
+  assertSucceeds(setDoc(doc(as(STAFF), "doctorCommissions", "c5"), commission({ commissionAmount: -84.75, clawbackOf: "c1", createdBy: STAFF }))));
+await t("commission: recording a recovery on a clawback (negative paidAmount) is allowed", async () => {
+  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "doctorCommissions", "c6"), commission({ commissionAmount: -84.75, clawbackOf: "c1" })));
+  await assertSucceeds(updateDoc(doc(as(ADMIN), "doctorCommissions", "c6"), { paidAmount: -84.75, status: "paid", paymentMethod: "cash", paidDate: now(), updatedAt: now() }));
+});
+await t("commission: an ordinary commission cannot be edited into a negative amount", async () => {
+  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "doctorCommissions", "c7"), commission({})));
+  await assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "c7"), { commissionAmount: -10 }));
+});
+await t("commission: other-clinic member cannot write a clawback here", () =>
+  assertFails(setDoc(doc(as(OTHER), "doctorCommissions", "c8"), commission({ commissionAmount: -84.75, clawbackOf: "c1", createdBy: OTHER }))));
 
 await env.cleanup();
 const failed = results.filter((r) => r[0] === "FAIL");
