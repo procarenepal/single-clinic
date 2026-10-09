@@ -69,6 +69,7 @@ import {
   deriveVisitStage,
   visitQueueCandidates,
 } from "@/services/core/visitLifecycleCore";
+import { withDoctorPrefix } from "@/utils/clinicianName";
 import { patientPackageService } from "@/services/patientPackageService";
 import {
   Appointment,
@@ -1798,6 +1799,10 @@ export default function FrontOfficeDesk() {
         claimed = await appointmentService.claimVisitDeposit(
           appt.id,
           gate.dueAmount,
+          {
+            taxPercentage: billingSettings?.defaultTaxPercentage,
+            isTaxEnabled: Boolean(billingSettings?.enableTax),
+          },
         );
       } catch (err) {
         console.error("Error claiming visit deposit:", err);
@@ -2464,6 +2469,10 @@ export default function FrontOfficeDesk() {
           invoice: appt.billingId
             ? billings.find((b) => b.id === appt.billingId) || null
             : null,
+          pricing: {
+            taxPercentage: billingSettings?.defaultTaxPercentage,
+            isTaxEnabled: Boolean(billingSettings?.enableTax),
+          },
         });
 
         if (!eligibility.allowed) {
@@ -3628,7 +3637,7 @@ export default function FrontOfficeDesk() {
         const matchExp = experts.find((e) => e.id === value);
 
         current.referredByName = matchDoc
-          ? `Dr. ${matchDoc.name}`
+          ? withDoctorPrefix(matchDoc.name)
           : matchExp?.name || "";
       }
 

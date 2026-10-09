@@ -2952,7 +2952,8 @@ export default function PathologyBillingTab({
                                   Print
                                 </DropdownItem>
                                 {billing.status !== "cancelled" &&
-                                billing.status !== "finalized" ? (
+                                billing.status !== "finalized" &&
+                                !billing.irdSynced ? (
                                   <DropdownItem
                                     key="cancel"
                                     className="text-danger"
@@ -2961,12 +2962,10 @@ export default function PathologyBillingTab({
                                       <IoCloseCircleOutline className="text-lg" />
                                     }
                                   >
-                                    {billing.irdSynced
-                                      ? "Cancel (locked — IRD synced)"
-                                      : "Cancel Invoice"}
+                                    Cancel Invoice
                                   </DropdownItem>
                                 ) : null}
-                                {billing.status === "finalized" &&
+                                {billing.status !== "cancelled" &&
                                 billing.irdSynced &&
                                 !billing.isCreditNote &&
                                 !billing.hasCreditNote ? (

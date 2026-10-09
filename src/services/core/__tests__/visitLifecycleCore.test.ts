@@ -235,6 +235,46 @@ describe("canCompleteCheckout", () => {
     expect(result.reason).toMatch(/still to be collected/i);
   });
 
+  it("judges the deposit tax-inclusive when pricing is supplied", () => {
+    // 700 deposited against a 700 line that carries 13% tax: 91 is still
+    // owed. Without the pricing context this used to pass, and the desk
+    // (which gates tax-inclusive) and checkout disagreed about the visit.
+    const visit = {
+      status: "completed",
+      doctorId: "doc1",
+      triageCompletedAt: new Date(),
+      pendingVisitItems: [
+        { price: 700, amount: 700, isTaxable: true, taxRate: 13 } as any,
+      ],
+      depositedAmount: 700,
+    };
+    const pricing = { taxPercentage: 13, isTaxEnabled: true };
+    const result = canCompleteCheckout(visit, { pricing });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/91\.00 is still to be collected/);
+    // ...and the same visit with the tax deposited too passes the gate.
+    expect(
+      canCompleteCheckout({ ...visit, depositedAmount: 791 }, { pricing })
+        .reason,
+    ).not.toMatch(/still to be collected/);
+  });
+
+  it("blocks a fully deposited visit whose charges were never invoiced", () => {
+    // Money taken, nothing filed: closing now would strand the patient
+    // with no invoice, no IRD filing and no commission.
+    const result = canCompleteCheckout({
+      status: "completed",
+      doctorId: "doc1",
+      triageCompletedAt: new Date(),
+      pendingVisitItems: [{ price: 500, amount: 500 }],
+      depositedAmount: 500,
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/not been invoiced/i);
+  });
+
   it("blocks when the filed invoice still has a balance", () => {
     const result = canCompleteCheckout(billedVisit(), {
       invoice: { paymentStatus: "partial", balanceAmount: 65 },

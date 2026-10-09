@@ -22,7 +22,10 @@ import {
 import { db } from "@/config/firebase";
 import { cacheService } from "@/services/cacheService";
 import { Appointment } from "@/types/models";
-import { computeVisitOwed } from "@/services/core/visitBillingCore";
+import {
+  getVisitPaymentGate,
+  type VisitPricingContext,
+} from "@/services/core/visitBillingCore";
 import { resolveClinicId } from "./currentClinic";
 
 type AppointmentSnapshotHandler = (appointments: Appointment[]) => void;
@@ -531,6 +534,15 @@ export const appointmentService = {
   async claimVisitDeposit(
     appointmentId: string,
     requestedAmount: number,
+    /**
+     * The clinic's tax settings, so "what is still due" is computed the
+     * same way the desk computed the amount it is asking to claim. Without
+     * them this fell back to the pre-tax line total: the desk asked for
+     * the tax-inclusive gap, the claim capped it at the pre-tax gap, and
+     * the visit was stuck forever — "Collect Deposit" still showing, a
+     * second click answering "already collected".
+     */
+    pricing?: VisitPricingContext,
   ): Promise<number> {
     if (!(requestedAmount > 0)) return 0;
 
@@ -544,9 +556,9 @@ export const appointmentService = {
       }
 
       const data = snap.data();
-      const owed = computeVisitOwed(data.pendingVisitItems);
-      const alreadyDeposited = data.depositedAmount || 0;
-      const stillDue = Math.max(0, owed - alreadyDeposited);
+      const gate = getVisitPaymentGate(data as any, pricing);
+      const alreadyDeposited = gate.deposited;
+      const stillDue = gate.dueAmount;
       const claimable = Math.min(requestedAmount, stillDue);
 
       if (claimable <= 0) return 0;

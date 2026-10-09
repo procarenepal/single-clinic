@@ -19,7 +19,11 @@
  *     every caller, so the desk and the billing screen cannot disagree.
  */
 
-import { getVisitPaymentGate, type VisitBillingItem } from "./visitBillingCore";
+import {
+  getVisitPaymentGate,
+  type VisitBillingItem,
+  type VisitPricingContext,
+} from "./visitBillingCore";
 
 export type VisitStage =
   | "scheduled"
@@ -53,6 +57,8 @@ export interface VisitLifecycleInput {
   checkoutCompleted?: boolean;
   pendingVisitItems?: VisitBillingItem[];
   depositedAmount?: number;
+  pendingVisitDiscountType?: "flat" | "percent" | null;
+  pendingVisitDiscountValue?: number | null;
   recommendedProcedure?: unknown;
 }
 
@@ -66,6 +72,11 @@ export interface VisitLifecycleContext {
   /** The invoice this visit filed, if one has been filed and found. */
   invoice?: VisitInvoiceState | null;
   hasPendingPrescription?: boolean;
+  /**
+   * Clinic tax settings. Supply them wherever available so "still to be
+   * collected" is judged tax-inclusive, the way the desk collects it.
+   */
+  pricing?: VisitPricingContext;
 }
 
 const hasClinician = (id?: string | null) => Boolean(id && id !== "unassigned");
@@ -220,12 +231,27 @@ export function canCompleteCheckout(
     };
   }
 
-  const gate = getVisitPaymentGate(visit);
+  const gate = getVisitPaymentGate(visit, context.pricing);
 
   if (gate.isDue) {
     return {
       allowed: false,
       reason: `NPR ${gate.dueAmount.toFixed(2)} is still to be collected for this visit.`,
+    };
+  }
+
+  // Charges accumulated during the visit become an invoice only at
+  // "Settle Billing Invoice", which clears this list. While it is
+  // non-empty the money has been taken as a deposit but nothing has been
+  // filed — closing the visit now would leave the patient charged with no
+  // invoice, no IRD filing and no commission, and nothing left on the
+  // board to say so. Judged after the deposit gate so staff are told to
+  // collect first when that is what is actually missing.
+  if ((visit.pendingVisitItems?.length ?? 0) > 0) {
+    return {
+      allowed: false,
+      reason:
+        "This visit's charges have not been invoiced yet — settle the billing invoice first.",
     };
   }
 

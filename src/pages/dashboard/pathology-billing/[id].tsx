@@ -639,8 +639,14 @@ export default function PathologyInvoiceDetailPage() {
                 Record Payment
               </Button>
             )}
+            {/* Exactly one reversal action per live invoice: Cancel while it is
+                unfiled, Credit Note once IRD has it. Gating Credit Note on a
+                "finalized" status hid it for every invoice the front office
+                files — those stay "draft" after filing — so a synced invoice
+                offered only a Cancel that the service refuses. */}
             {invoice.status !== "cancelled" &&
-              invoice.status !== "finalized" && (
+              invoice.status !== "finalized" &&
+              !invoice.irdSynced && (
                 <Button
                   color="danger"
                   size="sm"
@@ -651,7 +657,7 @@ export default function PathologyInvoiceDetailPage() {
                   Cancel Invoice
                 </Button>
               )}
-            {invoice.status === "finalized" &&
+            {invoice.status !== "cancelled" &&
               invoice.irdSynced &&
               !invoice.isCreditNote &&
               !invoice.hasCreditNote && (
