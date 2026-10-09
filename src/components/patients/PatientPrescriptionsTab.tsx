@@ -36,6 +36,7 @@ import { doctorService } from "@/services/doctorService";
 import { medicineService } from "@/services/medicineService";
 import { appointmentService } from "@/services/appointmentService";
 import { Prescription } from "@/types/medical-records";
+import { withDoctorPrefix } from "@/utils/clinicianName";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ExtendedPrescription extends Prescription {
@@ -416,7 +417,7 @@ export default function PatientPrescriptionsTab({
           return {
             ...rx,
             patientName: pt?.name || "Unknown",
-            doctorName: doc ? `Dr. ${doc.name}` : "Unknown",
+            doctorName: doc ? withDoctorPrefix(doc.name) : "Unknown",
             itemsCount,
           } as ExtendedPrescription;
         }),

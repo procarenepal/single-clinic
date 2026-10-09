@@ -19,6 +19,7 @@ import { patientService } from "@/services/patientService";
 import { appointmentService } from "@/services/appointmentService";
 import { prescriptionService } from "@/services/prescriptionService";
 import { PageSkeleton } from "@/components/ui";
+import { withDoctorPrefix } from "@/utils/clinicianName";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -205,7 +206,10 @@ export default function ExpertDashboard() {
             </div>
             <h2 className="text-[14px] font-black text-text-main leading-tight tracking-tight">
               {greeting},{" "}
-              <span className="text-primary">Dr. {displayName}!</span> 👋
+              <span className="text-primary">
+                {withDoctorPrefix(displayName)}!
+              </span>{" "}
+              👋
             </h2>
             <p className="text-[12px] text-text-muted mt-1 font-semibold max-w-[480px] leading-tight">
               You have{" "}

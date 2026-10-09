@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@/components/ui/dropdown";
+import { withDoctorPrefix } from "@/utils/clinicianName";
 
 interface PatientAppointmentsTabProps {
   patientId: string;
@@ -160,7 +161,7 @@ export default function PatientAppointmentsTab({
   const getDoctorName = (id: string) => {
     const d = doctors.find((x) => x.id === id);
 
-    return d ? `Dr. ${d.name}` : "Unknown";
+    return d ? withDoctorPrefix(d.name) : "Unknown";
   };
   const getTypeName = (id: string) => {
     const t = appointmentTypes.find((x) => x.id === id);

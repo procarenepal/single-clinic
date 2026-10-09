@@ -14,6 +14,7 @@ import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { Doctor } from "@/types/models";
+import { withDoctorPrefix } from "@/utils/clinicianName";
 
 interface AddPrescriptionModalProps {
   isOpen: boolean;
@@ -99,7 +100,7 @@ export default function AddPrescriptionModal({
     // Get the selected doctor's name
     const selectedDoctor = doctors.find((doctor) => doctor.id === prescribedBy);
     const doctorName = selectedDoctor
-      ? `Dr. ${selectedDoctor.name}`
+      ? withDoctorPrefix(selectedDoctor.name)
       : prescribedBy;
 
     const prescriptions = medications.map((medication) => ({
@@ -172,10 +173,12 @@ export default function AddPrescriptionModal({
                 {(doctor) => (
                   <AutocompleteItem
                     key={doctor.id}
-                    textValue={`Dr. ${doctor.name} - ${doctor.speciality}`}
+                    textValue={`${withDoctorPrefix(doctor.name)} - ${doctor.speciality}`}
                   >
                     <div className="flex flex-col">
-                      <span className="text-small">Dr. {doctor.name}</span>
+                      <span className="text-small">
+                        {withDoctorPrefix(doctor.name)}
+                      </span>
                       <span className="text-tiny text-default-400">
                         {doctor.speciality}
                       </span>

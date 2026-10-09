@@ -56,6 +56,7 @@ import {
   getBlinkingCssClass,
   getAppointmentColorById,
 } from "@/utils/appointmentColors";
+import { withDoctorPrefix } from "@/utils/clinicianName";
 
 // Status color helper
 const getStatusColorCls = (status: string) => {
@@ -618,7 +619,9 @@ export default function AppointmentsPage() {
                     </div>
                     <div>
                       <p className="text-[13px] font-medium text-text-main leading-none mb-1">
-                        {doctorName === "Unassigned" ? "Unassigned" : `Dr. ${doctorName}`}
+                        {doctorName === "Unassigned"
+                          ? "Unassigned"
+                          : withDoctorPrefix(doctorName)}
                       </p>
                       <p className="text-[11.5px] text-text-muted">
                         {getDoctorSpecialityById(appointment.doctorId)}
