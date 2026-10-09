@@ -697,6 +697,9 @@ export const patientPackageService = {
             commissionReversalRatio,
             `Refund for ${unusedSessions} unused session(s) of ${data.packageName}. Reason: ${reason}`,
             createdBy,
+            // The wallet was credited for the exact refund amount above;
+            // the credit note's own wallet refund would pay it twice.
+            { refundWallet: false },
           );
         } catch (creditNoteError) {
           console.error(

@@ -22,6 +22,7 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { referralCommissionService } from "@/services/referralCommissionService";
 import { ReferralPartner, ReferralCommission, Patient } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
+import { summarizeCommissions } from "@/services/core/commissionAggregatesCore";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
 function CustomInput({
@@ -252,10 +253,16 @@ export default function ReferralPartnerProfilePage() {
   };
 
   const handlePaymentOpen = (commission: ReferralCommission) => {
+    const remaining =
+      commission.commissionAmount - (commission.paidAmount || 0);
+
     setSelectedCommission(commission);
     setPaymentForm({
-      amount: (
-        commission.commissionAmount - (commission.paidAmount || 0)
+      // A clawback (clawbackOf set) carries a NEGATIVE commissionAmount, so
+      // remaining is negative too; the amount to recover is its magnitude.
+      amount: (commission.clawbackOf
+        ? Math.abs(remaining)
+        : remaining
       ).toString(),
       method: "cash",
       reference: "",
@@ -278,14 +285,20 @@ export default function ReferralPartnerProfilePage() {
       return;
     }
 
-    const remaining =
+    const isClawback = !!selectedCommission.clawbackOf;
+    const outstanding =
       selectedCommission.commissionAmount -
       (selectedCommission.paidAmount || 0);
+    // For a clawback outstanding is negative; validate against its magnitude.
+    // The service applies the sign, so the positive amount is passed as-is.
+    const remaining = isClawback ? Math.abs(outstanding) : outstanding;
 
     if (amount > remaining) {
       addToast({
         title: "Error",
-        description: "Amount exceeds pending balance",
+        description: isClawback
+          ? "Amount exceeds balance owed back"
+          : "Amount exceeds pending balance",
         color: "warning",
       });
 
@@ -304,7 +317,7 @@ export default function ReferralPartnerProfilePage() {
       );
       addToast({
         title: "Success",
-        description: "Payment recorded",
+        description: isClawback ? "Recovery recorded" : "Payment recorded",
         color: "success",
       });
       setIsPaymentModalOpen(false);
@@ -312,7 +325,7 @@ export default function ReferralPartnerProfilePage() {
     } catch (err) {
       addToast({
         title: "Error",
-        description: "Payment failed",
+        description: isClawback ? "Recovery failed" : "Payment failed",
         color: "danger",
       });
     } finally {
@@ -337,16 +350,12 @@ export default function ReferralPartnerProfilePage() {
 
   if (!partner) return null;
 
-  const stats = commissions.reduce(
-    (acc, c) => {
-      acc.total += c.commissionAmount;
-      acc.paid += c.paidAmount || 0;
-
-      return acc;
-    },
-    { total: 0, paid: 0 },
-  );
-  const pending = stats.total - stats.paid;
+  // Clawbacks (negative, owed back) are receivables, not earnings: they
+  // count toward what is outstanding, never toward what was earned or paid.
+  // Cancelled records count toward nothing.
+  const summary = summarizeCommissions(commissions);
+  const stats = { total: summary.earned, paid: summary.paidOut };
+  const pending = summary.outstanding;
 
   // Aggregate unique patients from both sources
   const patientsFromCommissions = commissions.map((c) => ({
@@ -376,6 +385,14 @@ export default function ReferralPartnerProfilePage() {
 
     return "bg-mountain-50 text-mountain-700 border-mountain-200";
   };
+
+  // A clawback (clawbackOf set) carries a NEGATIVE commissionAmount: the
+  // partner owes the clinic. Its remaining is negative too, so the magnitude
+  // is what is still to recover.
+  const selectedIsClawback = !!selectedCommission?.clawbackOf;
+  const selectedRemaining = selectedCommission
+    ? selectedCommission.commissionAmount - (selectedCommission.paidAmount || 0)
+    : 0;
 
   return (
     <div className="flex flex-col gap-6 pb-12">
@@ -458,7 +475,7 @@ export default function ReferralPartnerProfilePage() {
           },
           {
             label: "Total Bills",
-            val: commissions.length,
+            val: commissions.filter((c) => !c.clawbackOf).length,
             icon: <IoReceiptOutline className="w-6 h-6 text-teal-600" />,
             bg: "bg-teal-50 border-teal-100",
           },
@@ -582,7 +599,7 @@ export default function ReferralPartnerProfilePage() {
                   Refresh
                 </Button>
               </div>
-              {commissions.length > 0 ? (
+              {commissions.some((c) => !c.clawbackOf) ? (
                 <div className="overflow-x-auto border border-mountain-100 rounded">
                   <table className="w-full text-left">
                     <thead>
@@ -602,22 +619,24 @@ export default function ReferralPartnerProfilePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-mountain-100">
-                      {commissions.map((c) => (
-                        <tr key={c.id} className="hover:bg-mountain-50/30">
-                          <td className="px-5 py-3 font-bold text-[13.5px] text-mountain-900 underline pointer-cursor">
-                            {c.invoiceNumber}
-                          </td>
-                          <td className="px-5 py-3 font-semibold text-mountain-700">
-                            {c.patientName}
-                          </td>
-                          <td className="px-5 py-3 font-bold text-teal-700">
-                            {formatCurrency(c.totalInvoiceAmount)}
-                          </td>
-                          <td className="px-5 py-3 text-mountain-500">
-                            {new Date(c.invoiceDate).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))}
+                      {commissions
+                        .filter((c) => !c.clawbackOf)
+                        .map((c) => (
+                          <tr key={c.id} className="hover:bg-mountain-50/30">
+                            <td className="px-5 py-3 font-bold text-[13.5px] text-mountain-900 underline pointer-cursor">
+                              {c.invoiceNumber}
+                            </td>
+                            <td className="px-5 py-3 font-semibold text-mountain-700">
+                              {c.patientName}
+                            </td>
+                            <td className="px-5 py-3 font-bold text-teal-700">
+                              {formatCurrency(c.totalInvoiceAmount)}
+                            </td>
+                            <td className="px-5 py-3 text-mountain-500">
+                              {new Date(c.invoiceDate).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -715,6 +734,14 @@ export default function ReferralPartnerProfilePage() {
                           >
                             {c.status}
                           </span>
+                          {c.clawbackOf && (
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider bg-red-50 text-red-700 border-red-200"
+                              title={c.clawbackReason}
+                            >
+                              Owed back
+                            </span>
+                          )}
                         </div>
                         <p className="text-[13.5px] font-medium text-mountain-700">
                           {c.patientName} -{" "}
@@ -734,25 +761,49 @@ export default function ReferralPartnerProfilePage() {
                       <div className="text-left md:text-right flex flex-col md:items-end gap-2">
                         <div>
                           <p className="text-[18px] font-bold text-mountain-900 leading-none">
-                            {formatCurrency(c.commissionAmount)}
+                            {formatCurrency(
+                              c.clawbackOf
+                                ? Math.abs(c.commissionAmount)
+                                : c.commissionAmount,
+                            )}
                           </p>
+                          {c.clawbackOf && c.clawbackReason && (
+                            <p className="text-[11px] text-mountain-500 mt-1">
+                              {c.clawbackReason}
+                            </p>
+                          )}
                           {c.status === "pending" && (
-                            <p className="text-[12px] text-amber-600 font-medium mt-1">
-                              Pending:{" "}
-                              {formatCurrency(
-                                c.commissionAmount - (c.paidAmount || 0),
+                            <p
+                              className={`text-[12px] font-medium mt-1 ${c.clawbackOf ? "text-red-600" : "text-amber-600"}`}
+                            >
+                              {c.clawbackOf ? (
+                                <>
+                                  {formatCurrency(
+                                    Math.abs(
+                                      c.commissionAmount - (c.paidAmount || 0),
+                                    ),
+                                  )}{" "}
+                                  to recover
+                                </>
+                              ) : (
+                                <>
+                                  Pending:{" "}
+                                  {formatCurrency(
+                                    c.commissionAmount - (c.paidAmount || 0),
+                                  )}
+                                </>
                               )}
                             </p>
                           )}
                         </div>
                         {c.status !== "paid" && (
                           <Button
-                            color="success"
+                            color={c.clawbackOf ? "warning" : "success"}
                             size="sm"
                             startContent={<IoCashOutline />}
                             onClick={() => handlePaymentOpen(c)}
                           >
-                            Record Pay
+                            {c.clawbackOf ? "Record Recovery" : "Record Pay"}
                           </Button>
                         )}
                       </div>
@@ -774,7 +825,7 @@ export default function ReferralPartnerProfilePage() {
         hideCloseButton={paymentProcessing}
         isDismissable={!paymentProcessing}
         isOpen={isPaymentModalOpen}
-        title="Pay Commission"
+        title={selectedIsClawback ? "Record Recovery" : "Pay Commission"}
         onClose={() => !paymentProcessing && setIsPaymentModalOpen(false)}
       >
         <div className="p-6">
@@ -788,14 +839,22 @@ export default function ReferralPartnerProfilePage() {
                   {selectedCommission.invoiceNumber}
                 </span>
               </p>
+              {selectedIsClawback && selectedCommission.clawbackReason && (
+                <p className="text-[12px] text-red-600">
+                  {selectedCommission.clawbackReason}
+                </p>
+              )}
               <div className="mt-2 pt-2 border-t border-mountain-200">
                 <p className="text-[11px] text-mountain-400 font-bold uppercase tracking-wider mb-1">
-                  Outstanding Balance
+                  {selectedIsClawback ? "Owed Back" : "Outstanding Balance"}
                 </p>
-                <p className="text-[20px] font-bold text-amber-600 leading-none">
+                <p
+                  className={`text-[20px] font-bold leading-none ${selectedIsClawback ? "text-red-600" : "text-amber-600"}`}
+                >
                   {formatCurrency(
-                    selectedCommission.commissionAmount -
-                      (selectedCommission.paidAmount || 0),
+                    selectedIsClawback
+                      ? Math.abs(selectedRemaining)
+                      : selectedRemaining,
                   )}
                 </p>
               </div>
@@ -805,7 +864,7 @@ export default function ReferralPartnerProfilePage() {
           <div className="space-y-4">
             <CustomInput
               required
-              label="Payment Amount"
+              label={selectedIsClawback ? "Recovery Amount" : "Payment Amount"}
               startContent="NPR"
               type="number"
               value={paymentForm.amount}
@@ -862,7 +921,7 @@ export default function ReferralPartnerProfilePage() {
                 isLoading={paymentProcessing}
                 onClick={handlePaymentSubmit}
               >
-                Submit Payment
+                {selectedIsClawback ? "Record Recovery" : "Submit Payment"}
               </Button>
             </div>
           </div>

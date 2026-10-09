@@ -50,9 +50,9 @@ vi.mock("firebase/firestore", async () => {
   };
 });
 
-vi.mock("@/config/firebase", () => ({ db: {} }));
-vi.mock("../../config/firebase", () => ({ db: {} }));
-vi.mock("../config/firebase", () => ({ db: {} }));
+vi.mock("@/config/firebase", () => ({ db: {}, auth: { currentUser: { uid: "tester" } } }));
+vi.mock("../../config/firebase", () => ({ db: {}, auth: { currentUser: { uid: "tester" } } }));
+vi.mock("../config/firebase", () => ({ db: {}, auth: { currentUser: { uid: "tester" } } }));
 
 function fakeDocSnap(id: string, data: Record<string, any>) {
   return {
@@ -194,8 +194,39 @@ describe("updateCommissionStatus — newly added to expert/staff services", () =
     const balanceRevert = updateDocMock.mock.calls[0][1];
 
     expect(balanceRevert.totalCommissionEarned).toEqual({ __increment: -300 });
-    // remaining balance = commissionAmount - paidAmount = 300 - 100 = 200
-    expect(balanceRevert.totalCommissionBalance).toEqual({ __increment: -200 });
+    // Balance drops by the WHOLE amount: the unpaid 200 is no longer owed,
+    // and the paid 100 is now owed back — carried by the clawback below.
+    // (It used to drop by only 200, leaving the paid-out 100 unaccounted.)
+    expect(balanceRevert.totalCommissionBalance).toEqual({ __increment: -300 });
+
+    // The 100 already paid out is recorded as a negative pending commission
+    // naming the original, so the next payout nets it.
+    expect(addDocMock).toHaveBeenCalledTimes(1);
+    const clawback = addDocMock.mock.calls[0][1];
+
+    expect(clawback.commissionAmount).toBe(-100);
+    expect(clawback.status).toBe("pending");
+    expect(clawback.clawbackOf).toBe("comm_1");
+    expect(clawback.staffId).toBe("staff_1");
+    expect(clawback.createdBy).toBe("tester");
+    expect(clawback.paidAmount).toBeUndefined();
+  });
+
+  it("staffCommissionService writes no clawback when nothing had been paid", async () => {
+    getDocMock.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        staffId: "staff_1",
+        commissionAmount: 300,
+        paidAmount: 0,
+        status: "pending",
+      }),
+    });
+
+    await staffCommissionService.updateCommissionStatus("comm_1", "cancelled");
+
+    expect(updateDocMock.mock.calls[0][1].totalCommissionBalance).toEqual({ __increment: -300 });
+    expect(addDocMock).not.toHaveBeenCalled();
   });
 });
 

@@ -37,6 +37,7 @@ import { appointmentBillingService } from "@/services/appointmentBillingService"
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { Doctor, Appointment, Patient, DoctorCommission } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
+import { earnedAmount } from "@/services/core/commissionAggregatesCore";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
 function CustomInput({
@@ -502,10 +503,16 @@ export default function DoctorProfilePage() {
   };
 
   const handlePaymentOpen = (commission: DoctorCommission) => {
+    const remainingAmount =
+      commission.commissionAmount - (commission.paidAmount || 0);
+
     setSelectedCommission(commission);
     setPaymentForm({
-      amount: (
-        commission.commissionAmount - (commission.paidAmount || 0)
+      // A clawback's remaining is negative; the form collects the amount
+      // to recover as a positive number (the service applies the sign).
+      amount: (commission.clawbackOf
+        ? Math.abs(remainingAmount)
+        : remainingAmount
       ).toString(),
       method: "cash",
       reference: "",
@@ -527,14 +534,20 @@ export default function DoctorProfilePage() {
 
       return;
     }
+    const isClawback = Boolean(selectedCommission.clawbackOf);
     const remainingAmount =
       selectedCommission.commissionAmount -
       (selectedCommission.paidAmount || 0);
+    // A clawback's remaining is negative; the entered amount is the positive
+    // sum to recover, so it is checked against the magnitude.
+    const maxAmount = isClawback ? Math.abs(remainingAmount) : remainingAmount;
 
-    if (amount > remainingAmount) {
+    if (amount > maxAmount) {
       addToast({
         title: "Excessive Amount",
-        description: "Payment cannot exceed remaining amount.",
+        description: isClawback
+          ? "Recovery cannot exceed the amount owed back."
+          : "Payment cannot exceed remaining amount.",
         color: "warning",
       });
 
@@ -552,7 +565,7 @@ export default function DoctorProfilePage() {
         currentUser?.uid,
       );
       addToast({
-        title: "Payment Recorded",
+        title: isClawback ? "Recovery Recorded" : "Payment Recorded",
         description: `Recorded NPR ${amount.toLocaleString()}`,
         color: "success",
       });
@@ -561,8 +574,10 @@ export default function DoctorProfilePage() {
       setSelectedCommission(null);
     } catch {
       addToast({
-        title: "Payment Error",
-        description: "Failed to record payment.",
+        title: isClawback ? "Recovery Error" : "Payment Error",
+        description: isClawback
+          ? "Failed to record recovery."
+          : "Failed to record payment.",
         color: "danger",
       });
     } finally {
@@ -585,6 +600,9 @@ export default function DoctorProfilePage() {
 
   // Business and Target Calculations
   const getCommissionBusiness = (c: DoctorCommission) => {
+    // A clawback is money owed back on a reversed invoice, not business;
+    // the reversed invoice's own (cancelled) record is already excluded.
+    if (c.clawbackOf) return 0;
     const percentage = c.commissionPercentage || doctor?.defaultCommission || 0;
     const amt = c.commissionAmount || 0;
 
@@ -675,7 +693,7 @@ export default function DoctorProfilePage() {
 
     if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
-        (sum, c) => sum + c.commissionAmount,
+        (sum, c) => sum + earnedAmount(c),
         0,
       );
     }
@@ -683,7 +701,7 @@ export default function DoctorProfilePage() {
     // Safely calculate from actual records to avoid historical cached data drift
     return commissions
       .filter((c) => c.status !== "cancelled")
-      .reduce((sum, c) => sum + c.commissionAmount, 0);
+      .reduce((sum, c) => sum + earnedAmount(c), 0);
   };
 
   const getSelectedRangeCommissionBalance = () => {
@@ -1844,6 +1862,14 @@ export default function DoctorProfilePage() {
                           >
                             {commission.status}
                           </span>
+                          {commission.clawbackOf && (
+                            <span
+                              className="inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-600 border-red-500/20"
+                              title={commission.clawbackReason}
+                            >
+                              Owed back
+                            </span>
+                          )}
                         </div>
                         <p className="text-[13.5px] font-medium text-text-main">
                           {commission.patientName} -{" "}
@@ -1861,26 +1887,50 @@ export default function DoctorProfilePage() {
                       <div className="text-left md:text-right flex flex-col md:items-end gap-2">
                         <div>
                           <p className="text-[18px] font-bold text-text-main leading-none">
-                            {formatCurrency(commission.commissionAmount)}
+                            {formatCurrency(
+                              commission.clawbackOf
+                                ? Math.abs(commission.commissionAmount)
+                                : commission.commissionAmount,
+                            )}
                           </p>
-                          {commission.status === "pending" && (
-                            <p className="text-[12px] text-amber-500 font-medium mt-1">
-                              Pending:{" "}
-                              {formatCurrency(
-                                commission.commissionAmount -
-                                  (commission.paidAmount || 0),
-                              )}
+                          {commission.status === "pending" &&
+                            (commission.clawbackOf ? (
+                              <p className="text-[12px] text-red-500 font-medium mt-1">
+                                {formatCurrency(
+                                  Math.abs(
+                                    commission.commissionAmount -
+                                      (commission.paidAmount || 0),
+                                  ),
+                                )}{" "}
+                                to recover
+                              </p>
+                            ) : (
+                              <p className="text-[12px] text-amber-500 font-medium mt-1">
+                                Pending:{" "}
+                                {formatCurrency(
+                                  commission.commissionAmount -
+                                    (commission.paidAmount || 0),
+                                )}
+                              </p>
+                            ))}
+                          {commission.clawbackReason && (
+                            <p className="text-[12px] text-text-muted mt-1">
+                              {commission.clawbackReason}
                             </p>
                           )}
                         </div>
                         {commission.status === "pending" && (
                           <Button
-                            color="success"
+                            color={
+                              commission.clawbackOf ? "warning" : "success"
+                            }
                             size="sm"
                             startContent={<IoCashOutline />}
                             onClick={() => handlePaymentOpen(commission)}
                           >
-                            Pay Ext.
+                            {commission.clawbackOf
+                              ? "Record recovery"
+                              : "Pay Ext."}
                           </Button>
                         )}
                       </div>
@@ -1902,7 +1952,9 @@ export default function DoctorProfilePage() {
         hideCloseButton={paymentProcessing}
         isDismissable={!paymentProcessing}
         isOpen={isPaymentModalOpen}
-        title="Pay Commission"
+        title={
+          selectedCommission?.clawbackOf ? "Record Recovery" : "Pay Commission"
+        }
         onClose={() => setIsPaymentModalOpen(false)}
       >
         <div className="p-6">
@@ -1923,22 +1975,45 @@ export default function DoctorProfilePage() {
                   %
                 </span>
               </p>
-              <p className="mt-2 text-[15px]">
-                <span className="text-text-muted">Pending Amount:</span>{" "}
-                <span className="font-bold text-amber-500">
-                  {formatCurrency(
-                    selectedCommission.commissionAmount -
-                      (selectedCommission.paidAmount || 0),
-                  )}
-                </span>
-              </p>
+              {selectedCommission.clawbackOf ? (
+                <p className="mt-2 text-[15px]">
+                  <span className="text-text-muted">Owed back:</span>{" "}
+                  <span className="font-bold text-red-500">
+                    {formatCurrency(
+                      Math.abs(
+                        selectedCommission.commissionAmount -
+                          (selectedCommission.paidAmount || 0),
+                      ),
+                    )}
+                  </span>
+                </p>
+              ) : (
+                <p className="mt-2 text-[15px]">
+                  <span className="text-text-muted">Pending Amount:</span>{" "}
+                  <span className="font-bold text-amber-500">
+                    {formatCurrency(
+                      selectedCommission.commissionAmount -
+                        (selectedCommission.paidAmount || 0),
+                    )}
+                  </span>
+                </p>
+              )}
+              {selectedCommission.clawbackReason && (
+                <p className="mt-1 text-[12px] text-text-muted">
+                  {selectedCommission.clawbackReason}
+                </p>
+              )}
             </div>
           )}
 
           <div className="space-y-4">
             <CustomInput
               required
-              label="Payment Amount"
+              label={
+                selectedCommission?.clawbackOf
+                  ? "Recovery Amount"
+                  : "Payment Amount"
+              }
               startContent="NPR"
               type="number"
               value={paymentForm.amount}
@@ -1999,7 +2074,9 @@ export default function DoctorProfilePage() {
                 isLoading={paymentProcessing}
                 onClick={handlePaymentSubmit}
               >
-                Submit Payment
+                {selectedCommission?.clawbackOf
+                  ? "Record Recovery"
+                  : "Submit Payment"}
               </Button>
             </div>
           </div>

@@ -1244,6 +1244,13 @@ export interface StaffCommission {
   commissionPercentage: number;
   commissionAmount: number;
   status: "pending" | "paid" | "cancelled";
+  /**
+   * Set on a clawback: the id of the paid-out commission this record owes
+   * back. commissionAmount is NEGATIVE on such a record. See
+   * services/core/commissionClawbackCore.
+   */
+  clawbackOf?: string;
+  clawbackReason?: string;
   paidAmount?: number;
   paymentMethod?: string;
   paymentReference?: string;
@@ -1970,6 +1977,14 @@ export interface DoctorCommission {
   commissionPercentage: number; // Commission percentage at the time
   commissionAmount: number; // Calculated commission
   status: "pending" | "paid" | "cancelled";
+  /**
+   * Set on a clawback: the id of the paid-out commission this record owes
+   * back. commissionAmount is NEGATIVE on such a record. See
+   * services/core/commissionClawbackCore.
+   */
+  clawbackOf?: string;
+  clawbackReason?: string;
+
   paidDate?: Date;
   paidAmount?: number;
   paymentMethod?: string;
@@ -2004,6 +2019,13 @@ export interface ExpertCommission {
   paymentNotes?: string;
   paidDate?: Date;
   status: "pending" | "paid" | "cancelled";
+  /**
+   * Set on a clawback: the id of the paid-out commission this record owes
+   * back. commissionAmount is NEGATIVE on such a record. See
+   * services/core/commissionClawbackCore.
+   */
+  clawbackOf?: string;
+  clawbackReason?: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -2365,6 +2387,13 @@ export interface ReferralCommission {
   commissionPercentage: number;
   commissionAmount: number;
   status: "pending" | "paid" | "cancelled";
+  /**
+   * Set on a clawback: the id of the paid-out commission this record owes
+   * back. commissionAmount is NEGATIVE on such a record. See
+   * services/core/commissionClawbackCore.
+   */
+  clawbackOf?: string;
+  clawbackReason?: string;
   paidAmount: number;
   paymentMethod?: string;
   paymentReference?: string;

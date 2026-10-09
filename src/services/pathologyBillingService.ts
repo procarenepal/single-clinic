@@ -102,16 +102,16 @@ async function reverseCommissionsForBilling(billingId: string): Promise<void> {
 
     await Promise.all([
       ...docComms
-        .filter((c) => c.status !== "cancelled")
+        .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
         .map((c) => doctorCommissionService.updateCommissionStatus(c.id, "cancelled")),
       ...refComms
-        .filter((c) => c.status !== "cancelled")
+        .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
         .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
       ...expComms
-        .filter((c) => c.status !== "cancelled")
+        .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
         .map((c) => expertCommissionService.updateCommissionStatus(c.id, "cancelled")),
       ...staffComms
-        .filter((c) => c.status !== "cancelled")
+        .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
         .map((c) => staffCommissionService.updateCommissionStatus(c.id, "cancelled")),
     ]);
   } catch (error) {

@@ -30,6 +30,11 @@ import {
   getCommissionsByBillingId as getCommissionsByBillingIdCore,
 } from "@/services/clinicianCommissionService";
 import { resolveClinicId } from "./currentClinic";
+import {
+  earnedAmount,
+  isClawback,
+  summarizeCommissions,
+} from "./core/commissionAggregatesCore";
 
 const DOCTOR_CONFIG: ClinicianCommissionConfig = {
   entityType: "doctor",
@@ -67,6 +72,8 @@ function toDoctorCommission(r: GenericCommissionRecord): DoctorCommission {
     updatedAt: r.updatedAt,
     createdBy: r.createdBy,
     paidBy: r.paidBy,
+    clawbackOf: r.clawbackOf,
+    clawbackReason: r.clawbackReason,
   };
 }
 
@@ -285,7 +292,12 @@ class DoctorCommissionService {
 
       const stats = liveCommissions.reduce(
         (acc, commission) => {
-          acc.totalCommission += commission.commissionAmount;
+          // A clawback (negative, owed back on a reversed invoice) is a
+          // receivable, not earnings or an invoice — see
+          // commissionAggregatesCore. It shows up in pendingCommission.
+          if (isClawback(commission)) return acc;
+
+          acc.totalCommission += earnedAmount(commission);
           acc.paidCommission += commission.paidAmount || 0;
           acc.totalInvoices += 1;
 
@@ -307,7 +319,8 @@ class DoctorCommissionService {
         },
       );
 
-      stats.pendingCommission = stats.totalCommission - stats.paidCommission;
+      // Net of anything owed back: this is what the clinic still owes.
+      stats.pendingCommission = summarizeCommissions(commissions).outstanding;
 
       return stats;
     } catch (error) {
@@ -337,8 +350,9 @@ class DoctorCommissionService {
    * partial package refund for N of T sessions should only claw back N/T of
    * the commission, leaving the clinician's earnings for sessions already
    * delivered intact) — unlike updateCommissionStatus("cancelled"), which is
-   * all-or-nothing. Never reduces below 0, and never claws back the portion
-   * already paid out (payouts are a separate, already-settled event).
+   * all-or-nothing. Never reduces the record below what has already been
+   * paid on it; the reversed share that had already been paid out is
+   * recorded as owed back (a clawback, see commissionClawbackCore).
    */
   async reduceCommissionAmount(
     commissionId: string,

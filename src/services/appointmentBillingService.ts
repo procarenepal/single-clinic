@@ -68,6 +68,12 @@ export function isBillingLocked(
  * reversed, not just the first. Failures here are logged, not thrown — the
  * invoice-side cancellation/credit-note is the primary, legally-required
  * action and must not be blocked by a commission-bookkeeping error.
+ *
+ * A commission that had already been PAID OUT when it is reversed leaves a
+ * clawback behind: a negative pending commission naming it (written by the
+ * service's own cancel/reduce path; see commissionClawbackCore). A clawback
+ * also carries the billing's id, so it would be found here on a second
+ * reversal — it is skipped: "reversing" it would erase the debt.
  */
 export async function reverseCommissionsForBilling(
   billingId: string,
@@ -102,22 +108,22 @@ export async function reverseCommissionsForBilling(
     if (ratio >= 1) {
       await Promise.all([
         ...docComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             doctorCommissionService.updateCommissionStatus(c.id, "cancelled"),
           ),
         ...expComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             expertCommissionService.updateCommissionStatus(c.id, "cancelled"),
           ),
         ...refComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             referralCommissionService.updateCommissionStatus(c.id, "cancelled"),
           ),
         ...staffComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             staffCommissionService.updateCommissionStatus(c.id, "cancelled"),
           ),
@@ -125,7 +131,7 @@ export async function reverseCommissionsForBilling(
     } else {
       await Promise.all([
         ...docComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             doctorCommissionService.reduceCommissionAmount(
               c.id,
@@ -133,7 +139,7 @@ export async function reverseCommissionsForBilling(
             ),
           ),
         ...expComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             expertCommissionService.reduceCommissionAmount(
               c.id,
@@ -141,7 +147,7 @@ export async function reverseCommissionsForBilling(
             ),
           ),
         ...refComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             referralCommissionService.reduceCommissionAmount(
               c.id,
@@ -149,7 +155,7 @@ export async function reverseCommissionsForBilling(
             ),
           ),
         ...staffComms
-          .filter((c) => c.status !== "cancelled")
+          .filter((c) => c.status !== "cancelled" && !c.clawbackOf)
           .map((c) =>
             staffCommissionService.reduceCommissionAmount(
               c.id,
@@ -2348,19 +2354,34 @@ export const appointmentBillingService = {
    * the tax authority's record of this invoice's revenue gets corrected
    * instead of silently staying overstated.
    *
-   * The caller is responsible for the wallet refund and commission
-   * reversal at the same ratio (see patientPackageService.refundUnusedSessions,
-   * which already does both) — this function only produces the IRD-facing
-   * paper trail. It never throws: a patient getting their money back must
-   * never be blocked by a tax-sync technicality, so failures are logged
-   * loudly for accounting to follow up on instead.
+   * Once the credit note is filed, the wallet-funded share of the reversed
+   * portion is returned to the patient's wallet (best-effort; see
+   * `options.refundWallet` to opt out when the caller has already credited
+   * the wallet itself, as patientPackageService.refundUnusedSessions does).
+   * Commission reversal at the same ratio stays the caller's job. It never
+   * throws: a patient getting their money back must never be blocked by a
+   * tax-sync technicality, so failures are logged loudly for accounting to
+   * follow up on instead.
    */
   async issuePartialCreditNote(
     originalBillingId: string,
     ratio: number,
     reason: string,
     createdBy: string,
+    options: {
+      /**
+       * Return the wallet-funded share of the reversed portion to the
+       * patient's wallet once the credit note is filed. Defaults to true
+       * because a partial reversal of a wallet-paid invoice that keeps the
+       * money is simply wrong. The package-refund path passes false: it
+       * has already credited the wallet for the exact refund amount before
+       * it gets here, and a second credit would pay the patient twice.
+       */
+      refundWallet?: boolean;
+    } = {},
   ): Promise<string | null> {
+    const refundWallet = options.refundWallet !== false;
+
     try {
       const clampedRatio = Math.min(1, Math.max(0, ratio));
 
@@ -2420,6 +2441,35 @@ export const appointmentBillingService = {
           (original.notes ? original.notes + "\n" : "") +
           `Partially reversed (${pct}%) by Credit Note ${newCreditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
       });
+
+      // The wallet-funded share of what was just reversed goes back to the
+      // wallet — the same rule the full cancel/credit-note path applies,
+      // scaled by the ratio. Read from paymentHistory, never the top-level
+      // method (see walletRefundableAmount). Best-effort, like the
+      // commission reversal: the credit note is already filed and must not
+      // be undone by a wallet hiccup; the failure is logged loudly instead.
+      if (refundWallet && original.patientId) {
+        const share =
+          Math.round(walletRefundableAmount(original) * clampedRatio * 100) / 100;
+
+        if (share > 0) {
+          try {
+            await walletService.refundFunds(
+              original.patientId,
+              original.clinicId,
+              share,
+              original.id,
+              `Partial reversal (${pct}%) of ${original.invoiceNumber} by Credit Note ${newCreditNoteInvoiceNumber}. ${reason}`,
+              createdBy,
+            );
+          } catch (walletError) {
+            console.error(
+              `Credit Note ${newCreditNoteInvoiceNumber} filed but the NPR ${share} wallet refund failed for patient ${original.patientId}:`,
+              walletError,
+            );
+          }
+        }
+      }
 
       return newCreditNoteId;
     } catch (error) {

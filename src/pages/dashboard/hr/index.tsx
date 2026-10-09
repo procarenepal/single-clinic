@@ -91,6 +91,7 @@ import {
 } from "@/types/models";
 import { expertService } from "@/services/expertService";
 import { doctorService } from "@/services/doctorService";
+import { planSalaryCommissionNetting } from "@/services/core/payrollCommissionNettingCore";
 import { staffCommissionService } from "@/services/staffCommissionService";
 import { accountService } from "@/services/accountService";
 import { hrService } from "@/services/hrService";
@@ -1287,24 +1288,37 @@ export default function HRPage() {
         return;
       }
 
-      const pendingCommission = payrollForm.includeCommission
-        ? selectedStaff.totalCommissionBalance || 0
-        : 0;
       const incentiveAmt = Number(payrollForm.incentive) || 0;
       const customBonusAmt = Number(payrollForm.customBonus) || 0;
       const customDeductionAmt = Number(payrollForm.customDeduction) || 0;
+      const taxAmt = payrollForm.applyTax
+        ? Math.round(
+            Number(payrollForm.amount) * (payrollForm.taxPercentage / 100),
+          )
+        : 0;
+      // The most a commission deduction can be taken from.
+      const grossPayout =
+        Number(payrollForm.amount) +
+        incentiveAmt +
+        customBonusAmt -
+        taxAmt -
+        customDeductionAmt;
+      // Net of the staff member's pending rows: positives add to the
+      // salary, clawbacks (owed back) are deducted — but never past what
+      // this payout can bear; the rest stays pending. Priced from the rows
+      // themselves rather than the counter, which can lag a payment that
+      // was recorded a moment ago. See payrollCommissionNettingCore.
+      const netting = payrollForm.includeCommission
+        ? planSalaryCommissionNetting(staffCommissions, grossPayout)
+        : null;
+      const pendingCommission = netting ? netting.netIncluded : 0;
 
       const subTotal =
         Number(payrollForm.amount) +
         pendingCommission +
         incentiveAmt +
         customBonusAmt;
-      const taxAmt = payrollForm.applyTax
-        ? Math.round(
-            Number(payrollForm.amount) * (payrollForm.taxPercentage / 100),
-          )
-        : 0;
-      const totalPayout = subTotal - taxAmt - customDeductionAmt;
+      const totalPayout = Math.max(0, subTotal - taxAmt - customDeductionAmt);
 
       const isAdvance =
         payrollForm.paymentType === "advance" ||
@@ -1329,7 +1343,7 @@ export default function HRPage() {
         dueAmount: 0,
         paymentStatus: "paid",
         paymentMethod: payrollForm.paymentMethod,
-        description: `${isAdvance ? "Advance Salary" : "Salary"} for ${payrollForm.selectedMonths.join(", ")}${pendingCommission > 0 ? ` + Commission Rs. ${pendingCommission.toLocaleString()}` : ""}${incentiveAmt > 0 ? ` + Incentive Rs. ${incentiveAmt.toLocaleString()}` : ""}${customBonusAmt > 0 ? ` + Bonus Rs. ${customBonusAmt.toLocaleString()} (${payrollForm.customBonusNotes})` : ""}${taxAmt > 0 ? ` - Tax Rs. ${taxAmt.toLocaleString()}` : ""}${customDeductionAmt > 0 ? ` - Deduction Rs. ${customDeductionAmt.toLocaleString()} (${payrollForm.customDeductionNotes})` : ""}. ${payrollForm.notes}`,
+        description: `${isAdvance ? "Advance Salary" : "Salary"} for ${payrollForm.selectedMonths.join(", ")}${pendingCommission > 0 ? ` + Commission Rs. ${pendingCommission.toLocaleString()}` : pendingCommission < 0 ? ` - Commission owed back Rs. ${Math.abs(pendingCommission).toLocaleString()}` : ""}${incentiveAmt > 0 ? ` + Incentive Rs. ${incentiveAmt.toLocaleString()}` : ""}${customBonusAmt > 0 ? ` + Bonus Rs. ${customBonusAmt.toLocaleString()} (${payrollForm.customBonusNotes})` : ""}${taxAmt > 0 ? ` - Tax Rs. ${taxAmt.toLocaleString()}` : ""}${customDeductionAmt > 0 ? ` - Deduction Rs. ${customDeductionAmt.toLocaleString()} (${payrollForm.customDeductionNotes})` : ""}. ${payrollForm.notes}`,
         clinicId: clinicId!,
         branchId: branchId || "",
         createdBy: userData?.id || "",
@@ -1337,17 +1351,16 @@ export default function HRPage() {
 
       await accountService.createBill(bill);
 
-      // If commission is included, mark all pending commissions as paid
-      if (payrollForm.includeCommission && pendingCommission > 0) {
-        const pendingCommissions = staffCommissions.filter(
-          (c) => c.status === "pending",
-        );
-
+      // Settle exactly what the planner netted: positives paid out in
+      // full, clawbacks recovered only as far as this payout covered them
+      // (a signed negative amount records a recovery — see
+      // commissionPaymentCore). Anything carried forward stays pending.
+      if (netting && netting.settlements.length > 0) {
         await Promise.all(
-          pendingCommissions.map((c) =>
+          netting.settlements.map((settlement) =>
             staffCommissionService.payCommission(
-              c.id,
-              c.commissionAmount - (c.paidAmount || 0),
+              settlement.id,
+              settlement.amount,
               payrollForm.paymentMethod,
               undefined,
               `Included in salary payment ${payrollForm.selectedMonths.join(", ")}`,
@@ -1359,7 +1372,7 @@ export default function HRPage() {
 
       addToast({
         title: "Success",
-        description: `Salary disbursed successfully.${pendingCommission > 0 ? ` Included Commission: Rs. ${pendingCommission.toLocaleString()}.` : ""}${incentiveAmt > 0 ? ` Included Incentive: Rs. ${incentiveAmt.toLocaleString()}.` : ""}${payrollForm.applyTax ? ` Deducted Tax: Rs. ${Math.round(Number(payrollForm.amount) * (payrollForm.taxPercentage / 100)).toLocaleString()}.` : ""}`,
+        description: `Salary disbursed successfully.${pendingCommission > 0 ? ` Included Commission: Rs. ${pendingCommission.toLocaleString()}.` : pendingCommission < 0 ? ` Deducted commission owed back: Rs. ${Math.abs(pendingCommission).toLocaleString()}.` : ""}${incentiveAmt > 0 ? ` Included Incentive: Rs. ${incentiveAmt.toLocaleString()}.` : ""}${payrollForm.applyTax ? ` Deducted Tax: Rs. ${Math.round(Number(payrollForm.amount) * (payrollForm.taxPercentage / 100)).toLocaleString()}.` : ""}${netting && netting.carriedForward >= 0.005 ? ` Rs. ${netting.carriedForward.toLocaleString()} owed back could not be withheld and stays pending.` : ""}`,
         color: "success",
       });
       setIsPayModalOpen(false);
@@ -1389,7 +1402,9 @@ export default function HRPage() {
       );
       addToast({
         title: "Success",
-        description: "Commission paid successfully",
+        description: selectedCommission.clawbackOf
+          ? "Commission recovery recorded successfully"
+          : "Commission paid successfully",
         color: "success",
       });
       setIsCommissionPayModalOpen(false);
@@ -1407,6 +1422,24 @@ export default function HRPage() {
       setPayingCommission(false);
     }
   };
+
+  // What the salary modal would net for the selected staff member, from
+  // the rows themselves (the counter can lag a just-recorded payment).
+  // Same arithmetic as handlePaySalary.
+  const payrollGrossPreview =
+    (Number(payrollForm.amount) || 0) +
+    (Number(payrollForm.incentive) || 0) +
+    (Number(payrollForm.customBonus) || 0) -
+    (payrollForm.applyTax
+      ? Math.round(
+          (Number(payrollForm.amount) || 0) * (payrollForm.taxPercentage / 100),
+        )
+      : 0) -
+    (Number(payrollForm.customDeduction) || 0);
+  const payrollNettingPreview = planSalaryCommissionNetting(
+    staffCommissions,
+    payrollGrossPreview,
+  );
 
   const handleClockOut = async (member: StaffMember) => {
     try {
@@ -4498,10 +4531,16 @@ export default function HRPage() {
                         title={
                           <div className="flex items-center gap-2">
                             <span>Referral Commissions</span>
-                            {(selectedStaff.totalCommissionBalance || 0) >
-                              0 && (
+                            {(selectedStaff.totalCommissionBalance || 0) >=
+                              0.005 && (
                               <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
                                 Pending
+                              </span>
+                            )}
+                            {(selectedStaff.totalCommissionBalance || 0) <=
+                              -0.005 && (
+                              <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                                Owed back
                               </span>
                             )}
                           </div>
@@ -4528,18 +4567,29 @@ export default function HRPage() {
                               </CardBody>
                             </Card>
                             <Card
-                              className="bg-success/5 border border-success/20"
+                              className={
+                                (selectedStaff.totalCommissionBalance || 0) < 0
+                                  ? "bg-rose-50 border border-rose-200"
+                                  : "bg-success/5 border border-success/20"
+                              }
                               shadow="none"
                             >
                               <CardBody className="p-4 flex flex-row items-center justify-between">
                                 <div>
-                                  <p className="text-[10px] font-bold text-success uppercase tracking-widest opacity-70 mb-1">
-                                    Current Pending Balance
+                                  <p
+                                    className={`text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1 ${(selectedStaff.totalCommissionBalance || 0) < 0 ? "text-rose-600" : "text-success"}`}
+                                  >
+                                    {(selectedStaff.totalCommissionBalance ||
+                                      0) < 0
+                                      ? "Owed Back By Staff"
+                                      : "Current Pending Balance"}
                                   </p>
-                                  <h4 className="text-[20px] font-bold text-success">
+                                  <h4
+                                    className={`text-[20px] font-bold ${(selectedStaff.totalCommissionBalance || 0) < 0 ? "text-rose-600" : "text-success"}`}
+                                  >
                                     Rs.{" "}
-                                    {(
-                                      selectedStaff.totalCommissionBalance || 0
+                                    {Math.abs(
+                                      selectedStaff.totalCommissionBalance || 0,
                                     ).toLocaleString()}
                                   </h4>
                                 </div>
@@ -4597,7 +4647,42 @@ export default function HRPage() {
                                     </div>
                                   </TableCell>
                                   <TableCell className="font-bold">
-                                    Rs. {comm.commissionAmount.toLocaleString()}
+                                    {comm.clawbackOf ? (
+                                      <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-danger">
+                                            Rs.{" "}
+                                            {Math.abs(
+                                              comm.commissionAmount,
+                                            ).toLocaleString()}
+                                          </span>
+                                          <span
+                                            className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-danger/10 text-danger"
+                                            title={
+                                              comm.clawbackReason ||
+                                              "Owed back to the clinic"
+                                            }
+                                          >
+                                            Owed back
+                                          </span>
+                                        </div>
+                                        {comm.status === "pending" && (
+                                          <div className="text-[10px] text-text-muted font-normal">
+                                            Rs.{" "}
+                                            {Math.abs(
+                                              comm.commissionAmount -
+                                                (comm.paidAmount || 0),
+                                            ).toLocaleString()}{" "}
+                                            to recover
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <>
+                                        Rs.{" "}
+                                        {comm.commissionAmount.toLocaleString()}
+                                      </>
+                                    )}
                                   </TableCell>
                                   <TableCell>
                                     <span
@@ -4610,23 +4695,35 @@ export default function HRPage() {
                                     {comm.status === "pending" && (
                                       <Button
                                         className="h-7 text-[10px] font-bold"
-                                        color="primary"
+                                        color={
+                                          comm.clawbackOf
+                                            ? "warning"
+                                            : "primary"
+                                        }
                                         size="sm"
                                         variant="flat"
                                         onPress={() => {
                                           setSelectedCommission(comm);
                                           setCommissionPayForm({
-                                            amount:
-                                              comm.commissionAmount -
-                                              (comm.paidAmount || 0),
+                                            amount: comm.clawbackOf
+                                              ? Math.abs(
+                                                  comm.commissionAmount -
+                                                    (comm.paidAmount || 0),
+                                                )
+                                              : comm.commissionAmount -
+                                                (comm.paidAmount || 0),
                                             paymentMethod: "Cash",
-                                            notes: `Commission for patient: ${comm.patientName}`,
+                                            notes: comm.clawbackOf
+                                              ? `Commission recovery for patient: ${comm.patientName}`
+                                              : `Commission for patient: ${comm.patientName}`,
                                             reference: "",
                                           });
                                           setIsCommissionPayModalOpen(true);
                                         }}
                                       >
-                                        Pay
+                                        {comm.clawbackOf
+                                          ? "Record recovery"
+                                          : "Pay"}
                                       </Button>
                                     )}
                                   </TableCell>
@@ -5261,19 +5358,32 @@ export default function HRPage() {
                           ).toLocaleString()}
                         </span>
                       </div>
-                      {(selectedStaff?.totalCommissionBalance || 0) > 0 && (
+                      {Math.abs(payrollNettingPreview.netBalance) >= 0.005 && (
                         <div className="flex flex-col gap-1 border border-violet-200 bg-violet-50 rounded-lg p-2 mt-1">
                           <div className="flex justify-between text-[12px] text-violet-700">
                             <span className="font-semibold">
-                              Pending Commission:
+                              {payrollNettingPreview.netIncluded < 0
+                                ? "Commission owed back:"
+                                : "Pending Commission:"}
                             </span>
                             <span className="font-bold">
-                              + Rs.{" "}
-                              {(
-                                selectedStaff?.totalCommissionBalance || 0
+                              {payrollNettingPreview.netIncluded < 0
+                                ? "- "
+                                : "+ "}
+                              Rs.{" "}
+                              {Math.abs(
+                                payrollNettingPreview.netIncluded,
                               ).toLocaleString()}
                             </span>
                           </div>
+                          {payrollNettingPreview.carriedForward >= 0.005 && (
+                            <p className="text-[10px] text-rose-600">
+                              Rs.{" "}
+                              {payrollNettingPreview.carriedForward.toLocaleString()}{" "}
+                              more is owed back than this payout can cover; it
+                              stays pending.
+                            </p>
+                          )}
                           <div className="flex items-center gap-2">
                             <Checkbox
                               classNames={{
@@ -5289,7 +5399,9 @@ export default function HRPage() {
                                 }))
                               }
                             >
-                              Include commission in this payout
+                              {payrollNettingPreview.netIncluded < 0
+                                ? "Deduct the commission owed back from this payout"
+                                : "Include commission in this payout"}
                             </Checkbox>
                           </div>
                         </div>
@@ -5345,7 +5457,7 @@ export default function HRPage() {
                             const subT =
                               payrollForm.amount +
                               (payrollForm.includeCommission
-                                ? selectedStaff?.totalCommissionBalance || 0
+                                ? payrollNettingPreview.netIncluded
                                 : 0) +
                               payrollForm.incentive +
                               payrollForm.customBonus;
@@ -5356,10 +5468,9 @@ export default function HRPage() {
                                 )
                               : 0;
 
-                            return (
-                              subT -
-                              taxAmt -
-                              payrollForm.customDeduction
+                            return Math.max(
+                              0,
+                              subT - taxAmt - payrollForm.customDeduction,
                             ).toLocaleString();
                           })()}
                         </span>
@@ -5408,18 +5519,33 @@ export default function HRPage() {
               <ModalHeader>
                 <div className="flex flex-col">
                   <h2 className="text-[16px] font-bold text-[rgb(var(--color-text))] tracking-tight">
-                    Pay Referral Commission
+                    {selectedCommission?.clawbackOf
+                      ? "Record Commission Recovery"
+                      : "Pay Referral Commission"}
                   </h2>
                   <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-normal">
-                    Recording commission payment for {selectedStaff?.name}
+                    {selectedCommission?.clawbackOf
+                      ? `Owed back by ${selectedStaff?.name}: Rs. ${Math.abs(
+                          (selectedCommission.commissionAmount || 0) -
+                            (selectedCommission.paidAmount || 0),
+                        ).toLocaleString()}`
+                      : `Recording commission payment for ${selectedStaff?.name}`}
                   </p>
+                  {selectedCommission?.clawbackOf &&
+                    selectedCommission.clawbackReason && (
+                      <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-normal">
+                        {selectedCommission.clawbackReason}
+                      </p>
+                    )}
                 </div>
               </ModalHeader>
               <ModalBody className="py-4">
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
-                      Amount to Pay (Rs.)
+                      {selectedCommission?.clawbackOf
+                        ? "Amount to Recover (Rs.)"
+                        : "Amount to Pay (Rs.)"}
                     </label>
                     <Input
                       size="sm"
@@ -5507,7 +5633,9 @@ export default function HRPage() {
                   size="sm"
                   onPress={handlePayStaffCommission}
                 >
-                  Confirm Payment
+                  {selectedCommission?.clawbackOf
+                    ? "Confirm Recovery"
+                    : "Confirm Payment"}
                 </Button>
               </ModalFooter>
             </>

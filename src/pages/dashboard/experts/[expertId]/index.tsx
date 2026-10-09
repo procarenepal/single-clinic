@@ -42,6 +42,8 @@ import {
 } from "@/components/ui/modal";
 import { Chip } from "@/components/ui/chip";
 
+import { earnedAmount } from "@/services/core/commissionAggregatesCore";
+
 // Copy to clipboard helper component
 const CopyButton = ({ text, label }: { text: string; label: string }) => {
   const [copied, setCopied] = useState(false);
@@ -415,6 +417,9 @@ export default function ExpertProfilePage() {
 
   // Business and Target Calculations
   const getCommissionBusiness = (c: ExpertCommission) => {
+    // A clawback is money owed back on a reversed invoice, not business;
+    // the reversed invoice's own (cancelled) record is already excluded.
+    if (c.clawbackOf) return 0;
     const percentage = c.commissionPercentage || expert?.defaultCommission || 0;
     const amt = c.commissionAmount || 0;
 
@@ -505,7 +510,7 @@ export default function ExpertProfilePage() {
 
     if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
-        (sum, c) => sum + c.commissionAmount,
+        (sum, c) => sum + earnedAmount(c),
         0,
       );
     }
@@ -513,7 +518,7 @@ export default function ExpertProfilePage() {
     // Safely calculate from actual records to avoid historical cached data drift
     return commissions
       .filter((c) => c.status !== "cancelled")
-      .reduce((sum, c) => sum + c.commissionAmount, 0);
+      .reduce((sum, c) => sum + earnedAmount(c), 0);
   };
 
   const getSelectedRangeCommissionBalance = () => {
@@ -612,14 +617,41 @@ export default function ExpertProfilePage() {
     }
   };
 
+  // A clawback (clawbackOf set) carries a NEGATIVE commissionAmount: the
+  // expert owes the clinic. remaining is negative too, so its absolute
+  // value is what is still to recover / to pay in either direction.
+  const selectedIsClawback = !!selectedCommission?.clawbackOf;
+  const selectedRemaining = selectedCommission
+    ? Math.round(
+        Math.abs(
+          selectedCommission.commissionAmount -
+            (selectedCommission.paidAmount || 0),
+        ) * 100,
+      ) / 100
+    : 0;
+
   const handlePaymentSubmit = async () => {
     if (!selectedCommission) return;
     const amount = parseFloat(paymentForm.amount);
 
     if (isNaN(amount) || amount <= 0) return;
 
+    if (amount > selectedRemaining) {
+      addToast({
+        title: "Error",
+        description: selectedIsClawback
+          ? `Amount cannot exceed NPR ${selectedRemaining} still to recover.`
+          : `Amount cannot exceed NPR ${selectedRemaining} remaining.`,
+        color: "danger",
+      });
+
+      return;
+    }
+
     try {
       setPaymentProcessing(true);
+      // Positive amount in both directions; the service applies the sign
+      // for a clawback (recovery).
       await expertCommissionService.payCommission(
         selectedCommission.id,
         amount,
@@ -630,7 +662,9 @@ export default function ExpertProfilePage() {
       );
       addToast({
         title: "Success",
-        description: "Payment recorded.",
+        description: selectedIsClawback
+          ? "Recovery recorded."
+          : "Payment recorded.",
         color: "success",
       });
       loadCommissions();
@@ -1535,7 +1569,42 @@ export default function ExpertProfilePage() {
                               "Expert Consultation"}
                           </td>
                           <td className="p-3 font-semibold">
-                            NPR {c.commissionAmount}
+                            {c.clawbackOf ? (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span>
+                                    NPR {Math.abs(c.commissionAmount)}
+                                  </span>
+                                  <Chip
+                                    color="danger"
+                                    size="sm"
+                                    title={c.clawbackReason}
+                                    variant="flat"
+                                  >
+                                    Owed back
+                                  </Chip>
+                                </div>
+                                {c.status !== "paid" && (
+                                  <span className="text-[11px] font-medium text-text-muted">
+                                    NPR{" "}
+                                    {Math.round(
+                                      Math.abs(
+                                        c.commissionAmount -
+                                          (c.paidAmount || 0),
+                                      ) * 100,
+                                    ) / 100}{" "}
+                                    to recover
+                                  </span>
+                                )}
+                                {c.clawbackReason && (
+                                  <span className="text-[11px] font-normal text-text-muted">
+                                    {c.clawbackReason}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <>NPR {c.commissionAmount}</>
+                            )}
                           </td>
                           <td className="p-3">
                             <Chip
@@ -1558,14 +1627,16 @@ export default function ExpertProfilePage() {
                                   setSelectedCommission(c);
                                   setPaymentForm({
                                     ...paymentForm,
-                                    amount: (
-                                      c.commissionAmount - (c.paidAmount || 0)
+                                    amount: Math.abs(
+                                      c.commissionAmount - (c.paidAmount || 0),
                                     ).toString(),
                                   });
                                   setIsPaymentModalOpen(true);
                                 }}
                               >
-                                Record Payment
+                                {c.clawbackOf
+                                  ? "Record recovery"
+                                  : "Record Payment"}
                               </Button>
                             )}
                           </td>
@@ -1585,11 +1656,23 @@ export default function ExpertProfilePage() {
         onClose={() => setIsPaymentModalOpen(false)}
       >
         <ModalContent>
-          <ModalHeader>Record Commission Payment</ModalHeader>
+          <ModalHeader>
+            {selectedIsClawback
+              ? "Record recovery"
+              : "Record Commission Payment"}
+          </ModalHeader>
           <ModalBody className="p-5 flex flex-col gap-4">
+            {selectedIsClawback && (
+              <p className="text-[12.5px] text-text-muted">
+                Owed back: NPR {selectedRemaining}
+                {selectedCommission?.clawbackReason
+                  ? ` — ${selectedCommission.clawbackReason}`
+                  : ""}
+              </p>
+            )}
             <Input
               fullWidth
-              label="Amount to Pay"
+              label={selectedIsClawback ? "Amount to Recover" : "Amount to Pay"}
               placeholder="0.00"
               startContent={
                 <span className="text-text-muted text-[12px] font-semibold">
@@ -1616,7 +1699,7 @@ export default function ExpertProfilePage() {
               isLoading={paymentProcessing}
               onClick={handlePaymentSubmit}
             >
-              Save Payment
+              {selectedIsClawback ? "Save Recovery" : "Save Payment"}
             </Button>
           </ModalFooter>
         </ModalContent>

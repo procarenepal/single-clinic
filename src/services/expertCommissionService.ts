@@ -48,6 +48,8 @@ function toExpertCommission(r: GenericCommissionRecord): ExpertCommission {
     updatedAt: r.updatedAt,
     createdBy: r.createdBy,
     paidBy: r.paidBy,
+    clawbackOf: r.clawbackOf,
+    clawbackReason: r.clawbackReason,
   };
 }
 
@@ -137,7 +139,9 @@ class ExpertCommissionService {
   /**
    * Reduce a still-pending commission by a proportional amount (e.g. a
    * partial package refund) rather than fully cancelling it. Never reduces
-   * below 0, and never claws back an already-paid-out portion.
+   * below what has already been paid on it; the reversed share that had
+   * already been paid out is recorded as owed back (a clawback, see
+   * commissionClawbackCore).
    */
   async reduceCommissionAmount(
     commissionId: string,

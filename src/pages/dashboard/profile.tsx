@@ -734,6 +734,14 @@ export default function ProfilePage() {
                               >
                                 {commission.status}
                               </span>
+                              {commission.clawbackOf && (
+                                <span
+                                  className="inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-600 border-red-500/20"
+                                  title={commission.clawbackReason}
+                                >
+                                  Owed back
+                                </span>
+                              )}
                             </div>
                             <p className="text-[13.5px] font-medium text-text-main">
                               {commission.patientName} -{" "}
@@ -750,17 +758,37 @@ export default function ProfilePage() {
                           </div>
                           <div className="text-left md:text-right">
                             <p className="text-[18px] font-bold text-text-main leading-none">
-                              NPR {commission.commissionAmount.toLocaleString()}
+                              NPR{" "}
+                              {(commission.clawbackOf
+                                ? Math.abs(commission.commissionAmount)
+                                : commission.commissionAmount
+                              ).toLocaleString()}
                             </p>
-                            {commission.status === "pending" && (
-                              <p className="text-[12px] text-amber-500 font-medium mt-1">
-                                Pending: NPR{" "}
-                                {(
-                                  commission.commissionAmount -
-                                  (commission.paidAmount || 0)
-                                ).toLocaleString()}
-                              </p>
-                            )}
+                            {commission.clawbackOf &&
+                              commission.clawbackReason && (
+                                <p className="text-[12px] text-text-muted mt-1">
+                                  {commission.clawbackReason}
+                                </p>
+                              )}
+                            {commission.status === "pending" &&
+                              (commission.clawbackOf ? (
+                                <p className="text-[12px] text-red-600 font-medium mt-1">
+                                  NPR{" "}
+                                  {Math.abs(
+                                    commission.commissionAmount -
+                                      (commission.paidAmount || 0),
+                                  ).toLocaleString()}{" "}
+                                  to recover
+                                </p>
+                              ) : (
+                                <p className="text-[12px] text-amber-500 font-medium mt-1">
+                                  Pending: NPR{" "}
+                                  {(
+                                    commission.commissionAmount -
+                                    (commission.paidAmount || 0)
+                                  ).toLocaleString()}
+                                </p>
+                              ))}
                           </div>
                         </div>
                       ))}
@@ -928,18 +956,41 @@ export default function ProfilePage() {
                                   "Expert Consultation"}
                               </td>
                               <td className="p-3 font-semibold">
-                                NPR {c.commissionAmount.toLocaleString()}
+                                NPR{" "}
+                                {(c.clawbackOf
+                                  ? Math.abs(c.commissionAmount)
+                                  : c.commissionAmount
+                                ).toLocaleString()}
+                                {c.clawbackOf && c.clawbackReason && (
+                                  <p className="text-[11px] text-text-muted font-normal mt-0.5">
+                                    {c.clawbackReason}
+                                  </p>
+                                )}
                               </td>
                               <td className="p-3">
-                                <Chip
-                                  color={
-                                    c.status === "paid" ? "success" : "warning"
-                                  }
-                                  size="sm"
-                                  variant="flat"
-                                >
-                                  {c.status}
-                                </Chip>
+                                <div className="flex items-center gap-1.5">
+                                  <Chip
+                                    color={
+                                      c.status === "paid"
+                                        ? "success"
+                                        : "warning"
+                                    }
+                                    size="sm"
+                                    variant="flat"
+                                  >
+                                    {c.status}
+                                  </Chip>
+                                  {c.clawbackOf && (
+                                    <Chip
+                                      color="danger"
+                                      size="sm"
+                                      title={c.clawbackReason}
+                                      variant="flat"
+                                    >
+                                      Owed back
+                                    </Chip>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}

@@ -12,8 +12,14 @@ import {
   runTransaction,
 } from "firebase/firestore";
 
-import { db } from "@/config/firebase";
+import { auth, db } from "@/config/firebase";
 import { StaffCommission } from "@/types/models";
+import {
+  buildClawbackRecord,
+  cancellationCounterDeltas,
+  partialReversalPlan,
+} from "./core/commissionClawbackCore";
+import { applyCommissionPayment } from "./core/commissionPaymentCore";
 import { resolveClinicId } from "./currentClinic";
 
 class StaffCommissionService {
@@ -178,6 +184,46 @@ class StaffCommissionService {
     }
   }
 
+  /**
+   * Money that already left the clinic is owed back. Record that as a
+   * negative pending commission naming the original, so the next payout
+   * nets it (see commissionClawbackCore). Never throws: the reversal that
+   * called this is already durable, and a failure here is loud, not fatal.
+   */
+  private async recordClawback(
+    original: object,
+    originalId: string,
+    owedBack?: number,
+    reason?: string,
+  ): Promise<void> {
+    try {
+      const now = new Date();
+      const clawback = buildClawbackRecord(
+        original,
+        originalId,
+        auth.currentUser?.uid || "system",
+        now,
+        reason,
+        owedBack,
+      );
+
+      if (!clawback) return;
+
+      await addDoc(collection(db, this.collectionName), {
+        ...clawback,
+        createdAt: Timestamp.fromDate(now),
+        updatedAt: Timestamp.fromDate(now),
+      });
+    } catch (error) {
+      console.error(
+        "Staff commission " +
+          originalId +
+          " reversed but its paid-out portion could not be recorded as owed back:",
+        error,
+      );
+    }
+  }
+
   // Update commission status (for cancelling commissions)
   async updateCommissionStatus(
     commissionId: string,
@@ -193,14 +239,19 @@ class StaffCommissionService {
 
       const commissionData = commissionDoc.data() as StaffCommission;
 
-      if (status === "cancelled" && commissionData.status !== "cancelled") {
+      const cancelling =
+        status === "cancelled" && commissionData.status !== "cancelled";
+
+      if (cancelling) {
+        // Balance drops by the WHOLE amount: the unpaid part is no longer
+        // owed, and the paid part is now owed back (carried by the clawback
+        // below). See commissionClawbackCore.
+        const delta = cancellationCounterDeltas(commissionData);
         const staffRef = doc(db, "staff", commissionData.staffId);
 
         await updateDoc(staffRef, {
-          totalCommissionEarned: increment(-commissionData.commissionAmount),
-          totalCommissionBalance: increment(
-            -(commissionData.commissionAmount - (commissionData.paidAmount || 0)),
-          ),
+          totalCommissionEarned: increment(delta.earned),
+          totalCommissionBalance: increment(delta.balance),
           updatedAt: Timestamp.now(),
         });
       }
@@ -209,6 +260,10 @@ class StaffCommissionService {
         status,
         updatedAt: Timestamp.fromDate(new Date()),
       });
+
+      if (cancelling) {
+        await this.recordClawback(commissionData, commissionId);
+      }
     } catch (error) {
       console.error("Error updating staff commission status:", error);
       throw error;
@@ -218,7 +273,9 @@ class StaffCommissionService {
   /**
    * Reduce a still-pending commission by a proportional amount (e.g. a
    * partial package refund) rather than fully cancelling it. Never reduces
-   * below 0, and never claws back an already-paid-out portion.
+   * below what has already been paid on it; the reversed share that had
+   * already been paid out is recorded as owed back (a clawback, see
+   * commissionClawbackCore).
    */
   async reduceCommissionAmount(
     commissionId: string,
@@ -237,32 +294,36 @@ class StaffCommissionService {
 
       if (commissionData.status === "cancelled") return;
 
-      const paidAmount = commissionData.paidAmount || 0;
-      const outstanding = Math.max(
-        0,
-        commissionData.commissionAmount - paidAmount,
-      );
-      const actualReduction = Math.min(reduceByAmount, outstanding);
+      const plan = partialReversalPlan(commissionData, reduceByAmount);
 
-      if (actualReduction <= 0) return;
-
-      const newCommissionAmount = Math.max(
-        0,
-        commissionData.commissionAmount - actualReduction,
-      );
+      if (!plan) return;
 
       const staffRef = doc(db, "staff", commissionData.staffId);
 
       await updateDoc(staffRef, {
-        totalCommissionEarned: increment(-actualReduction),
-        totalCommissionBalance: increment(-actualReduction),
+        totalCommissionEarned: increment(plan.earnedDelta),
+        totalCommissionBalance: increment(plan.balanceDelta),
         updatedAt: Timestamp.now(),
       });
 
+      // The paid share of the reversed part moves onto the clawback below,
+      // so a later full cancel cannot claw it back a second time.
       await updateDoc(docRef, {
-        commissionAmount: newCommissionAmount,
+        commissionAmount: plan.newCommissionAmount,
+        paidAmount: plan.newPaidAmount,
+        status: plan.newStatus,
         updatedAt: Timestamp.fromDate(new Date()),
       });
+
+      // The reversed share that had already been paid out is owed back.
+      if (plan.overpaid > 0) {
+        await this.recordClawback(
+          commissionData,
+          commissionId,
+          plan.overpaid,
+          "Invoice partially reversed after this commission was paid out",
+        );
+      }
     } catch (error) {
       console.error("Error reducing staff commission amount:", error);
       throw error;
@@ -305,10 +366,6 @@ class StaffCommissionService {
     paidBy?: string,
   ): Promise<void> {
     try {
-      if (paidAmount <= 0) {
-        throw new Error("Payment amount must be greater than 0");
-      }
-
       const docRef = doc(db, this.collectionName, commissionId);
 
       // Read-validate-write inside one transaction — see the identical fix
@@ -321,25 +378,21 @@ class StaffCommissionService {
         }
 
         const currentCommission = commissionDoc.data() as StaffCommission;
-        const remainingAmount =
-          currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
 
-        if (paidAmount > remainingAmount) {
-          throw new Error(
-            "Payment amount cannot exceed remaining commission balance.",
-          );
+        if (currentCommission.status === "cancelled") {
+          throw new Error("This commission has been cancelled.");
         }
 
+        // Handles both directions: an ordinary payout, and recovering a
+        // clawback (negative commission). See commissionPaymentCore.
+        const applied = applyCommissionPayment(currentCommission, paidAmount);
+
         const updateData: any = {
-          paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
+          paidAmount: applied.paidAmount,
           paymentMethod,
           paidDate: Timestamp.fromDate(new Date()),
           updatedAt: Timestamp.fromDate(new Date()),
-          status:
-            (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
-              ? "paid"
-              : "pending",
+          status: applied.status,
         };
 
         if (paymentReference !== undefined)
@@ -352,7 +405,7 @@ class StaffCommissionService {
         const staffRef = doc(db, "staff", currentCommission.staffId);
 
         transaction.update(staffRef, {
-          totalCommissionBalance: increment(-paidAmount),
+          totalCommissionBalance: increment(applied.balanceDelta),
           updatedAt: Timestamp.now(),
         });
       });

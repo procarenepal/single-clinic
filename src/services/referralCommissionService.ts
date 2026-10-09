@@ -13,12 +13,23 @@ import {
   runTransaction,
 } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { auth, db } from "../config/firebase";
 import {
   PathologyBilling,
   ReferralPartner,
   ReferralCommission,
 } from "../types/models";
+import {
+  buildClawbackRecord,
+  cancellationCounterDeltas,
+  partialReversalPlan,
+} from "./core/commissionClawbackCore";
+import { applyCommissionPayment } from "./core/commissionPaymentCore";
+import {
+  earnedAmount,
+  isClawback,
+  summarizeCommissions,
+} from "./core/commissionAggregatesCore";
 
 /**
  * Service for managing referral commissions in Firestore
@@ -295,10 +306,6 @@ class ReferralCommissionService {
     paidBy?: string,
   ): Promise<void> {
     try {
-      if (paidAmount <= 0) {
-        throw new Error("Payment amount must be greater than 0");
-      }
-
       const docRef = doc(db, this.collectionName, commissionId);
 
       // Read-validate-write inside one transaction — see the identical fix
@@ -311,25 +318,21 @@ class ReferralCommissionService {
         }
 
         const currentCommission = commissionDoc.data() as ReferralCommission;
-        const remainingAmount =
-          currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
 
-        if (paidAmount > remainingAmount) {
-          throw new Error(
-            "Payment amount cannot exceed remaining commission balance.",
-          );
+        if (currentCommission.status === "cancelled") {
+          throw new Error("This commission has been cancelled.");
         }
 
+        // Handles both directions: an ordinary payout, and recovering a
+        // clawback (negative commission). See commissionPaymentCore.
+        const applied = applyCommissionPayment(currentCommission, paidAmount);
+
         const updateData: any = {
-          paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
+          paidAmount: applied.paidAmount,
           paymentMethod,
           paidDate: Timestamp.fromDate(new Date()),
           updatedAt: Timestamp.fromDate(new Date()),
-          status:
-            (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
-              ? "paid"
-              : "pending",
+          status: applied.status,
         };
 
         if (paymentReference !== undefined)
@@ -346,7 +349,7 @@ class ReferralCommissionService {
         );
 
         transaction.update(partnerRef, {
-          totalCommissionBalance: increment(-paidAmount),
+          totalCommissionBalance: increment(applied.balanceDelta),
           updatedAt: Timestamp.now(),
         });
       });
@@ -384,7 +387,12 @@ class ReferralCommissionService {
 
       const stats = liveCommissions.reduce(
         (acc, commission) => {
-          acc.totalCommission += commission.commissionAmount;
+          // A clawback (negative, owed back on a reversed invoice) is a
+          // receivable, not earnings or an invoice — see
+          // commissionAggregatesCore. It shows up in pendingCommission.
+          if (isClawback(commission)) return acc;
+
+          acc.totalCommission += earnedAmount(commission);
           acc.paidCommission += commission.paidAmount || 0;
           acc.totalInvoices += 1;
 
@@ -406,7 +414,8 @@ class ReferralCommissionService {
         },
       );
 
-      stats.pendingCommission = stats.totalCommission - stats.paidCommission;
+      // Net of anything owed back: this is what the clinic still owes.
+      stats.pendingCommission = summarizeCommissions(commissions).outstanding;
 
       return stats;
     } catch (error) {
@@ -420,6 +429,46 @@ class ReferralCommissionService {
         paidInvoices: 0,
         pendingInvoices: 0,
       };
+    }
+  }
+
+  /**
+   * Money that already left the clinic is owed back. Record that as a
+   * negative pending commission naming the original, so the next payout
+   * nets it (see commissionClawbackCore). Never throws: the reversal that
+   * called this is already durable, and a failure here is loud, not fatal.
+   */
+  private async recordClawback(
+    original: object,
+    originalId: string,
+    owedBack?: number,
+    reason?: string,
+  ): Promise<void> {
+    try {
+      const now = new Date();
+      const clawback = buildClawbackRecord(
+        original,
+        originalId,
+        auth.currentUser?.uid || "system",
+        now,
+        reason,
+        owedBack,
+      );
+
+      if (!clawback) return;
+
+      await addDoc(collection(db, this.collectionName), {
+        ...clawback,
+        createdAt: Timestamp.fromDate(now),
+        updatedAt: Timestamp.fromDate(now),
+      });
+    } catch (error) {
+      console.error(
+        "Referral commission " +
+          originalId +
+          " reversed but its paid-out portion could not be recorded as owed back:",
+        error,
+      );
     }
   }
 
@@ -440,12 +489,19 @@ class ReferralCommissionService {
       
       const commissionData = commissionDoc.data() as ReferralCommission;
       
-      if (status === "cancelled" && commissionData.status !== "cancelled") {
-        // Revert the commission balances for the partner
+      const cancelling =
+        status === "cancelled" && commissionData.status !== "cancelled";
+
+      if (cancelling) {
+        // Balance drops by the WHOLE amount: the unpaid part is no longer
+        // owed, and the paid part is now owed back (carried by the clawback
+        // below). See commissionClawbackCore.
+        const delta = cancellationCounterDeltas(commissionData);
         const partnerRef = doc(db, "referralPartners", commissionData.partnerId);
+
         await updateDoc(partnerRef, {
-          totalCommissionEarned: increment(-commissionData.commissionAmount),
-          totalCommissionBalance: increment(-(commissionData.commissionAmount - (commissionData.paidAmount || 0))),
+          totalCommissionEarned: increment(delta.earned),
+          totalCommissionBalance: increment(delta.balance),
           updatedAt: Timestamp.now(),
         });
       }
@@ -454,6 +510,10 @@ class ReferralCommissionService {
         status,
         updatedAt: Timestamp.fromDate(new Date()),
       });
+
+      if (cancelling) {
+        await this.recordClawback(commissionData, commissionId);
+      }
     } catch (error) {
       console.error("Error updating referral commission status:", error);
       throw error;
@@ -463,7 +523,9 @@ class ReferralCommissionService {
   /**
    * Reduce a still-pending commission by a proportional amount (e.g. a
    * partial package refund) rather than fully cancelling it. Never reduces
-   * below 0, and never claws back an already-paid-out portion.
+   * below what has already been paid on it; the reversed share that had
+   * already been paid out is recorded as owed back (a clawback, see
+   * commissionClawbackCore).
    */
   async reduceCommissionAmount(
     commissionId: string,
@@ -482,32 +544,36 @@ class ReferralCommissionService {
 
       if (commissionData.status === "cancelled") return;
 
-      const paidAmount = commissionData.paidAmount || 0;
-      const outstanding = Math.max(
-        0,
-        commissionData.commissionAmount - paidAmount,
-      );
-      const actualReduction = Math.min(reduceByAmount, outstanding);
+      const plan = partialReversalPlan(commissionData, reduceByAmount);
 
-      if (actualReduction <= 0) return;
-
-      const newCommissionAmount = Math.max(
-        0,
-        commissionData.commissionAmount - actualReduction,
-      );
+      if (!plan) return;
 
       const partnerRef = doc(db, "referralPartners", commissionData.partnerId);
 
       await updateDoc(partnerRef, {
-        totalCommissionEarned: increment(-actualReduction),
-        totalCommissionBalance: increment(-actualReduction),
+        totalCommissionEarned: increment(plan.earnedDelta),
+        totalCommissionBalance: increment(plan.balanceDelta),
         updatedAt: Timestamp.now(),
       });
 
+      // The paid share of the reversed part moves onto the clawback below,
+      // so a later full cancel cannot claw it back a second time.
       await updateDoc(docRef, {
-        commissionAmount: newCommissionAmount,
+        commissionAmount: plan.newCommissionAmount,
+        paidAmount: plan.newPaidAmount,
+        status: plan.newStatus,
         updatedAt: Timestamp.fromDate(new Date()),
       });
+
+      // The reversed share that had already been paid out is owed back.
+      if (plan.overpaid > 0) {
+        await this.recordClawback(
+          commissionData,
+          commissionId,
+          plan.overpaid,
+          "Invoice partially reversed after this commission was paid out",
+        );
+      }
     } catch (error) {
       console.error("Error reducing referral commission amount:", error);
       throw error;
