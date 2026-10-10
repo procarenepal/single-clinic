@@ -8,6 +8,11 @@ import {
   hasLiveInvoice,
   visitQueueCandidates,
   LEGACY_TRIAGE_MARKER,
+  isVoidedInvoice,
+  deriveBillingSubState,
+  nextStageAfterConsultation,
+  reverseVisitPlan,
+  rerouteVisitPlan,
 } from "../visitLifecycleCore";
 
 const billedVisit = (overrides = {}) => ({
@@ -352,5 +357,159 @@ describe("visitQueueCandidates", () => {
     expect(
       visitQueueCandidates({ doctorId: null, assignedExpertId: "" }),
     ).toEqual({ doctor: true, expert: true });
+  });
+});
+
+describe("voided invoices", () => {
+  it("a reissued (voided) invoice id is never live, so the visit returns to the desk", () => {
+    const visit = billedVisit({ voidedInvoiceIds: ["inv1"] });
+
+    expect(isVoidedInvoice(visit)).toBe(true);
+    expect(hasLiveInvoice(visit, { status: "cancelled" })).toBe(false);
+    expect(deriveVisitStage(visit, { invoice: { status: "cancelled" } })).toBe("billing");
+    expect(deriveBillingSubState(visit, { invoice: { status: "cancelled" } })).toBe("to-settle");
+  });
+});
+
+describe("deriveBillingSubState", () => {
+  it("is to-settle before anything is filed", () => {
+    expect(deriveBillingSubState({ status: "completed", pendingVisitItems: [{ price: 500, amount: 500 }] })).toBe("to-settle");
+  });
+
+  it("is filed-unpaid while a live invoice still carries a balance", () => {
+    expect(
+      deriveBillingSubState(billedVisit(), { invoice: { paymentStatus: "partial", balanceAmount: 65 } }),
+    ).toBe("filed-unpaid");
+  });
+
+  it("is reissue when new lines accumulate under a filed invoice", () => {
+    expect(
+      deriveBillingSubState(billedVisit({ pendingVisitItems: [{ price: 300, amount: 300 }] }), {
+        invoice: { paymentStatus: "paid", balanceAmount: 0 },
+      }),
+    ).toBe("reissue");
+  });
+
+  it("is reissue when the filed invoice was cancelled without a reissue", () => {
+    expect(deriveBillingSubState(billedVisit(), { invoice: { status: "cancelled" } })).toBe("reissue");
+  });
+});
+
+describe("nextStageAfterConsultation", () => {
+  it("routes to the expert when the doctor recorded expert work for today", () => {
+    const out = nextStageAfterConsultation({
+      assignedExpertId: "exp1",
+      recommendedItems: [{ doToday: true, status: "recommended", performedBy: { kind: "expert" } }],
+    });
+
+    expect(out).toEqual({ status: "in-progress", doctorConsultationCompleted: true, routeToExpert: true });
+  });
+
+  it("completes when the doctor recorded only own work", () => {
+    expect(
+      nextStageAfterConsultation({
+        assignedExpertId: "exp1",
+        recommendedItems: [{ doToday: true, status: "performed", performedBy: { kind: "doctor" } }],
+      }).status,
+    ).toBe("completed");
+  });
+
+  it("still sends a booked expert the patient when the doctor recorded nothing", () => {
+    expect(nextStageAfterConsultation({ assignedExpertId: "exp1" }).routeToExpert).toBe(true);
+  });
+
+  it("completes a doctor-only visit", () => {
+    expect(nextStageAfterConsultation({ assignedExpertId: "unassigned" }).status).toBe("completed");
+  });
+});
+
+describe("reverseVisitPlan", () => {
+  const now = new Date("2026-10-10T10:00:00Z");
+  const by = "staff1";
+
+  it("cancel after check-in clears the visit's charges but keeps the wallet money as credit", () => {
+    const plan = reverseVisitPlan(
+      "cancel",
+      { status: "confirmed", depositedAmount: 791, pendingVisitItems: [{ price: 700, amount: 700 }], patientPackageId: "pp1" },
+      { by, now, reason: "left" },
+    );
+
+    expect(plan.allowed).toBe(true);
+    expect(plan.patch.status).toBe("cancelled");
+    expect(plan.patch.pendingVisitItems).toEqual([]);
+    expect(plan.patch.depositedAmount).toBe(0);
+    expect(plan.walletCreditRetained).toBe(791);
+    expect(plan.releasesSession).toBe(true);
+    expect(plan.note).toMatch(/Cancelled by staff1/);
+  });
+
+  it("cancel is refused once an invoice has been filed", () => {
+    const plan = reverseVisitPlan("cancel", billedVisit(), { by, now }, { invoice: { paymentStatus: "paid" } });
+
+    expect(plan.allowed).toBe(false);
+    expect(plan.reason).toMatch(/credit note/i);
+  });
+
+  it("send back keeps clinicians, triage and money", () => {
+    const plan = reverseVisitPlan(
+      "send-back",
+      { status: "in-progress", doctorId: "doc1", triageCompletedAt: now, depositedAmount: 791, cabinName: "OPD 2" },
+      { by, now },
+    );
+
+    expect(plan.allowed).toBe(true);
+    expect(plan.patch).toEqual({ status: "confirmed", cabinName: null });
+    expect(plan.walletCreditRetained).toBe(0);
+  });
+
+  it("undo check-in is refused when a deposit exists", () => {
+    const plan = reverseVisitPlan("undo-check-in", { status: "confirmed", depositedAmount: 791 }, { by, now });
+
+    expect(plan.allowed).toBe(false);
+    expect(plan.reason).toMatch(/Cancel Visit/);
+  });
+
+  it("undo check-in returns a fee-free visit to scheduled", () => {
+    const plan = reverseVisitPlan("undo-check-in", { status: "confirmed", depositedAmount: 0 }, { by, now });
+
+    expect(plan.allowed).toBe(true);
+    expect(plan.patch.status).toBe("scheduled");
+  });
+
+  it("no-show only applies to a scheduled visit", () => {
+    expect(reverseVisitPlan("no-show", { status: "scheduled" }, { by, now }).allowed).toBe(true);
+    expect(reverseVisitPlan("no-show", { status: "confirmed" }, { by, now }).allowed).toBe(false);
+  });
+
+  it("reinstate restores status only", () => {
+    const plan = reverseVisitPlan("reinstate", { status: "no-show" }, { by, now });
+
+    expect(plan.patch).toEqual({ status: "scheduled", cancelReason: null, checkedInAt: null });
+  });
+});
+
+describe("rerouteVisitPlan", () => {
+  const now = new Date("2026-10-10T10:00:00Z");
+
+  it("changes the clinician and room, keeps earlier lines attributed, never after filing", () => {
+    const plan = rerouteVisitPlan(
+      {
+        status: "in-progress",
+        doctorId: "docA",
+        pendingVisitItems: [{ price: 700, amount: 700, doctorId: "docA", appointmentTypeName: "Consultation" }],
+      },
+      { doctorId: "docB", doctorName: "Dr. B", cabinName: "OPD 3" },
+      { by: "staff1", now },
+    );
+
+    expect(plan.allowed).toBe(true);
+    expect(plan.patch).toEqual({ doctorId: "docB", cabinName: "OPD 3" });
+    expect(plan.keptAttribution).toEqual(["Consultation"]);
+    expect(plan.note).toMatch(/Rerouted to Dr. B · OPD 3/);
+
+    expect(
+      rerouteVisitPlan(billedVisit(), { doctorId: "docB" }, { by: "staff1", now }, { invoice: { paymentStatus: "paid" } })
+        .allowed,
+    ).toBe(false);
   });
 });

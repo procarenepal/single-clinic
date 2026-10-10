@@ -13,6 +13,10 @@
 
 import { calculateTaxBreakdown } from "@/utils/taxEngine";
 
+import { isLineCollectableAtCheckIn } from "./legacyVisitAdapters";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export interface VisitBillingItem {
   price: number;
   amount: number;
@@ -59,9 +63,7 @@ export function computeVisitPayableTotal(
 
   if (chargeable.length === 0) return 0;
 
-  const taxPercentage = pricing.isTaxEnabled
-    ? pricing.taxPercentage || 0
-    : 0;
+  const taxPercentage = pricing.isTaxEnabled ? pricing.taxPercentage || 0 : 0;
 
   const result = calculateTaxBreakdown({
     items: chargeable.map((item) => ({
@@ -101,7 +103,9 @@ export interface VisitReferral {
  * nonzero `amount` (the per-session value used as the commission base), so
  * they must never add to what the patient owes.
  */
-export function computeVisitOwed(items: VisitBillingItem[] | undefined): number {
+export function computeVisitOwed(
+  items: VisitBillingItem[] | undefined,
+): number {
   if (!items || items.length === 0) return 0;
 
   return items.reduce(
@@ -110,9 +114,14 @@ export function computeVisitOwed(items: VisitBillingItem[] | undefined): number 
   );
 }
 
+export type VisitGateScope = "checkin" | "all";
+
 export interface VisitPaymentGate {
   owed: number;
   deposited: number;
+  /** Standing wallet credit the caller allowed to count toward what is owed. */
+  standingCredit: number;
+  scope: VisitGateScope;
   /** True when money is still owed for this visit before it may proceed. */
   isDue: boolean;
   /** How much to collect to close the gap; never negative. */
@@ -123,35 +132,49 @@ export interface VisitPaymentGate {
  * The single definition of "has this visit been paid for so far" — used by
  * every queue gate so the front desk, the doctor's queue and the billing
  * counter cannot disagree about whether a patient may proceed.
+ *
+ * Pricing is REQUIRED: a caller that omitted it used to get the pre-tax
+ * line total, so the queue admitted a patient the desk still showed as
+ * owing the VAT. Scope says which lines count: "checkin" is only the lines
+ * collected before the clinician (what gates admission to a cabin), "all"
+ * is everything on the visit (what gates closing it).
  */
 export function getVisitPaymentGate(
   visit: {
+    appointmentTypeId?: string | null;
     pendingVisitItems?: VisitBillingItem[];
     depositedAmount?: number;
     pendingVisitDiscountType?: "flat" | "percent" | null;
     pendingVisitDiscountValue?: number | null;
   },
-  /**
-   * Clinic tax settings. Supply them wherever available so "owed" matches
-   * what checkout will actually invoice; without them this falls back to
-   * the pre-tax line total, which under-states what is due by the tax.
-   */
-  pricing?: VisitPricingContext,
+  pricing: VisitPricingContext,
+  scope: VisitGateScope = "all",
+  opts: { standingCredit?: number } = {},
 ): VisitPaymentGate {
-  const owed = pricing
-    ? computeVisitPayableTotal(visit.pendingVisitItems, {
-        ...pricing,
-        discountType: visit.pendingVisitDiscountType || "percent",
-        discountValue: visit.pendingVisitDiscountValue || 0,
-      })
-    : computeVisitOwed(visit.pendingVisitItems);
-  const deposited = visit.depositedAmount || 0;
-  const dueAmount = Math.max(0, owed - deposited);
+  const all = visit.pendingVisitItems || [];
+  const inScope =
+    scope === "all"
+      ? all
+      : all.filter((item) =>
+          isLineCollectableAtCheckIn(item as never, visit.appointmentTypeId),
+        );
+  const owed = round2(
+    computeVisitPayableTotal(inScope, {
+      ...pricing,
+      discountType: visit.pendingVisitDiscountType || "flat",
+      discountValue: visit.pendingVisitDiscountValue || 0,
+    }),
+  );
+  const deposited = round2(visit.depositedAmount || 0);
+  const standingCredit = round2(Math.max(0, opts.standingCredit || 0));
+  const dueAmount = round2(Math.max(0, owed - deposited - standingCredit));
 
   return {
     owed,
     deposited,
-    isDue: owed > 0 && deposited < owed,
+    standingCredit,
+    scope,
+    isDue: dueAmount >= 0.005,
     dueAmount,
   };
 }
@@ -217,16 +240,17 @@ export function todayLocalDateString(now: Date = new Date()): string {
 
 /**
  * The invoice-level discount to apply at checkout, carried forward from
- * wherever staff entered it during the visit. Checkout has no discount UI
- * of its own, so an unset value must mean "no discount", never "undefined"
- * flowing into the totals maths.
+ * wherever staff entered it during the visit. An unset value must mean "no
+ * discount", never "undefined" flowing into the totals maths. The default
+ * type is "flat", the same default createBilling applies when the type is
+ * missing, so a visit and its invoice never disagree.
  */
 export function resolveVisitDiscount(visit: {
   pendingVisitDiscountType?: "flat" | "percent" | null;
   pendingVisitDiscountValue?: number | null;
 }): { discountType: "flat" | "percent"; discountValue: number } {
   return {
-    discountType: visit.pendingVisitDiscountType || "percent",
+    discountType: visit.pendingVisitDiscountType || "flat",
     discountValue: visit.pendingVisitDiscountValue || 0,
   };
 }

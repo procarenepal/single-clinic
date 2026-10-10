@@ -6029,6 +6029,10 @@ export default function FrontOfficeDesk() {
               currentDoctorId={currentDoctorId}
               currentExpertId={currentExpertId}
               filteredAppointments={filteredAppointments}
+              pricing={{
+                taxPercentage: billingSettings?.defaultTaxPercentage,
+                isTaxEnabled: Boolean(billingSettings?.enableTax),
+              }}
               getApptTypeLabel={getApptTypeLabel}
               getDoctorName={getDoctorName}
               getDoctorSpeciality={getDoctorSpeciality}

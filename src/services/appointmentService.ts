@@ -542,7 +542,7 @@ export const appointmentService = {
      * the visit was stuck forever — "Collect Deposit" still showing, a
      * second click answering "already collected".
      */
-    pricing?: VisitPricingContext,
+    pricing: VisitPricingContext,
   ): Promise<number> {
     if (!(requestedAmount > 0)) return 0;
 
@@ -556,7 +556,7 @@ export const appointmentService = {
       }
 
       const data = snap.data();
-      const gate = getVisitPaymentGate(data as any, pricing);
+      const gate = getVisitPaymentGate(data as any, pricing, "all");
       const alreadyDeposited = gate.deposited;
       const stillDue = gate.dueAmount;
       const claimable = Math.min(requestedAmount, stillDue);

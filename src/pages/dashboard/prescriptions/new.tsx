@@ -373,7 +373,19 @@ export default function NewPrescriptionPage() {
       // fell through and the gate silently admitted everyone regardless of
       // payment. It now uses the same owed-vs-deposited definition the
       // front desk and queue use, so the three cannot disagree.
-      if (getVisitPaymentGate(apt as any).isDue) return false;
+      // "checkin" scope: only the lines collected before the clinician gate
+      // admission; procedure lines wait for Settle.
+      if (
+        getVisitPaymentGate(
+          apt as any,
+          {
+            taxPercentage: appointmentBillingSettings?.defaultTaxPercentage,
+            isTaxEnabled: Boolean(appointmentBillingSettings?.enableTax),
+          },
+          "checkin",
+        ).isDue
+      )
+        return false;
 
       // Legacy records predating pendingVisitItems still carry their state
       // on the invoice pointer alone.

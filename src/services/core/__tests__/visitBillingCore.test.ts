@@ -105,6 +105,69 @@ describe("getVisitPaymentGate with pricing context", () => {
   });
 });
 
+describe("getVisitPaymentGate scope", () => {
+  const pricing = { taxPercentage: 13, isTaxEnabled: true };
+  const consult = { ...taxable(700), collectAtCheckIn: true, origin: "booked" };
+  const peel = { ...taxable(2500), appointmentTypeName: "Peel", collectAtCheckIn: false, origin: "procedure" };
+
+  it("'checkin' counts only the lines collected before the clinician", () => {
+    const gate = getVisitPaymentGate(
+      { pendingVisitItems: [consult, peel], depositedAmount: 791 },
+      pricing,
+      "checkin",
+    );
+
+    expect(gate.scope).toBe("checkin");
+    expect(gate.owed).toBe(791);
+    expect(gate.isDue).toBe(false);
+  });
+
+  it("'all' counts every line, so the same visit still owes the procedure", () => {
+    const gate = getVisitPaymentGate(
+      { pendingVisitItems: [consult, peel], depositedAmount: 791 },
+      pricing,
+      "all",
+    );
+
+    expect(gate.owed).toBe(3616);
+    expect(gate.dueAmount).toBe(2825);
+  });
+
+  it("reads a legacy booked line (no flag) as collectable at check-in", () => {
+    const legacyConsult = { ...taxable(700), appointmentTypeId: "consult-type" };
+    const legacyProc = { ...taxable(2500), appointmentTypeId: "peel-type" };
+    const gate = getVisitPaymentGate(
+      { appointmentTypeId: "consult-type", pendingVisitItems: [legacyConsult, legacyProc] },
+      pricing,
+      "checkin",
+    );
+
+    expect(gate.owed).toBe(791);
+  });
+
+  it("lets standing wallet credit cover what is owed without a ledger write", () => {
+    const gate = getVisitPaymentGate(
+      { pendingVisitItems: [consult] },
+      pricing,
+      "checkin",
+      { standingCredit: 791 },
+    );
+
+    expect(gate.standingCredit).toBe(791);
+    expect(gate.isDue).toBe(false);
+    expect(gate.dueAmount).toBe(0);
+  });
+
+  it("treats a sub-paisa gap as settled", () => {
+    const gate = getVisitPaymentGate(
+      { pendingVisitItems: [consult], depositedAmount: 790.996 },
+      pricing,
+    );
+
+    expect(gate.isDue).toBe(false);
+  });
+});
+
 describe("computeVisitOwed", () => {
   it("is zero for a visit with no charges yet", () => {
     expect(computeVisitOwed(undefined)).toBe(0);
@@ -131,14 +194,14 @@ describe("computeVisitOwed", () => {
 
 describe("getVisitPaymentGate", () => {
   it("is not due when nothing has been charged", () => {
-    const gate = getVisitPaymentGate({ pendingVisitItems: [] });
+    const gate = getVisitPaymentGate({ pendingVisitItems: [] }, {});
 
     expect(gate.isDue).toBe(false);
     expect(gate.dueAmount).toBe(0);
   });
 
   it("is due when charges exist and nothing was deposited", () => {
-    const gate = getVisitPaymentGate({ pendingVisitItems: [item(500, 500)] });
+    const gate = getVisitPaymentGate({ pendingVisitItems: [item(500, 500)] }, {});
 
     expect(gate.isDue).toBe(true);
     expect(gate.dueAmount).toBe(500);
@@ -148,7 +211,7 @@ describe("getVisitPaymentGate", () => {
     const gate = getVisitPaymentGate({
       pendingVisitItems: [item(500, 500), item(2500, 2500)],
       depositedAmount: 500,
-    });
+    }, {});
 
     expect(gate.isDue).toBe(true);
     expect(gate.dueAmount).toBe(2500);
@@ -158,7 +221,7 @@ describe("getVisitPaymentGate", () => {
     const gate = getVisitPaymentGate({
       pendingVisitItems: [item(500, 500)],
       depositedAmount: 500,
-    });
+    }, {});
 
     expect(gate.isDue).toBe(false);
     expect(gate.dueAmount).toBe(0);
@@ -168,14 +231,14 @@ describe("getVisitPaymentGate", () => {
     const gate = getVisitPaymentGate({
       pendingVisitItems: [item(500, 500)],
       depositedAmount: 800,
-    });
+    }, {});
 
     expect(gate.isDue).toBe(false);
     expect(gate.dueAmount).toBe(0);
   });
 
   it("does not gate a package-session-only visit, which owes nothing", () => {
-    const gate = getVisitPaymentGate({ pendingVisitItems: [item(0, 8333)] });
+    const gate = getVisitPaymentGate({ pendingVisitItems: [item(0, 8333)] }, {});
 
     expect(gate.isDue).toBe(false);
   });
@@ -283,7 +346,7 @@ describe("todayLocalDateString", () => {
 describe("resolveVisitDiscount", () => {
   it("defaults to no discount when none was entered during the visit", () => {
     expect(resolveVisitDiscount({})).toEqual({
-      discountType: "percent",
+      discountType: "flat",
       discountValue: 0,
     });
   });
@@ -312,6 +375,6 @@ describe("resolveVisitDiscount", () => {
         pendingVisitDiscountType: null,
         pendingVisitDiscountValue: 0,
       }),
-    ).toEqual({ discountType: "percent", discountValue: 0 });
+    ).toEqual({ discountType: "flat", discountValue: 0 });
   });
 });

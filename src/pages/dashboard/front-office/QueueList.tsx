@@ -13,7 +13,10 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Spinner } from "@/components/ui";
-import { getVisitPaymentGate } from "@/services/core/visitBillingCore";
+import {
+  getVisitPaymentGate,
+  type VisitPricingContext,
+} from "@/services/core/visitBillingCore";
 
 function formatTimeTo12Hour(timeStr: string) {
   const [h, m] = timeStr.split(":");
@@ -105,6 +108,8 @@ export interface QueueListProps {
     onClick: () => void;
   };
   billings: any[];
+  /** Clinic tax settings, so "owed" here is the same tax-inclusive figure the desk collects. */
+  pricing: VisitPricingContext;
   getStageBadge: (stage: string, appt: any) => React.ReactNode;
   getPatientReg: (patientId: string) => string;
   getDoctorSpeciality: (appt: any) => string;
@@ -158,6 +163,7 @@ export const QueueList: React.FC<QueueListProps> = ({
   getPatientStage,
   getGuidedAction,
   billings,
+  pricing,
   getStageBadge,
   getPatientReg,
   getDoctorSpeciality,
@@ -514,8 +520,11 @@ export const QueueList: React.FC<QueueListProps> = ({
                     // Same single definition every other gate uses, so the
                     // queue, the desk and the doctor's list cannot disagree
                     // about whether this patient may proceed.
-                    const isConsBillPending = getVisitPaymentGate(appt as any)
-                      .isDue;
+                    const isConsBillPending = getVisitPaymentGate(
+                      appt as any,
+                      pricing,
+                      "checkin",
+                    ).isDue;
 
                     return (
                       <div key={appt.id} className="p-3 pl-4 md:pl-16 hover:bg-surface-2/30 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3">

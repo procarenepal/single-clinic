@@ -497,7 +497,10 @@ export default function BillingCounterPage() {
             a.status !== "no-show" &&
             !a.billingId &&
             ((a.pendingVisitItems?.length || 0) > 0 ||
-              getVisitPaymentGate(a).owed > 0),
+              getVisitPaymentGate(a, {
+                taxPercentage: settings?.defaultTaxPercentage,
+                isTaxEnabled: Boolean(settings?.enableTax),
+              }).owed > 0),
         );
 
         if (openVisit) {

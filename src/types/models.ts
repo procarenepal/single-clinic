@@ -229,6 +229,16 @@ export interface Patient {
     referredByName?: string; // Name of specific doctor/expert
   }>;
   walletBalance?: number; // Total available advance deposit balance
+  /** Procedures a clinician planned for a later visit; no charge until performed. */
+  plannedProcedures?: Array<{
+    appointmentTypeId: string;
+    name: string;
+    recommendedBy: string;
+    recommendedAt: Date;
+    performedBy?: string;
+  }>;
+  /** True when dob was derived from an age typed at intake. */
+  dobApproximate?: boolean;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the patient record
@@ -251,6 +261,8 @@ export interface WalletTransaction {
   // Missing on old transactions predating this field — treat as "invoice"
   // for backward compatibility with existing deduction rows.
   referenceType?: "invoice" | "package" | "appointment";
+  /** The eSewa / Khalti / card / bank transaction id — distinct from referenceId. */
+  paymentReference?: string;
   notes?: string;
   createdAt: Date;
   createdBy: string;
@@ -287,6 +299,13 @@ export interface TreatmentPackage {
   // of relying solely on the clinician's own blanket default.
   calculateCommission?: boolean; // false = never earns commission on this package's sessions, regardless of clinician defaults
   defaultCommission?: number; // this package's own commission %, taking priority over the performing clinician's own default when set
+  /** VAT on the sale invoice, gated by the clinic master switch like an AppointmentType. Absent → not taxable. */
+  isTaxable?: boolean;
+  taxRate?: number;
+  /** Who performs a session of this package. Absent → "expert". */
+  sessionPerformerKind?: "expert" | "doctor" | "either";
+  /** Prefilled performer for sessions. */
+  defaultPerformerId?: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -312,6 +331,14 @@ export interface PatientPackage {
   totalSessions: number;
   usedSessions: number;
   billingId?: string; // Links to the AppointmentBilling invoice this package was sold on
+  /**
+   * ONE per-session value, fixed at sale (walletCreditAmount / totalSessions,
+   * 2 dp) and used by the wallet deduction at consume, the refund cap and
+   * the session line's commission base alike — they used to be computed
+   * three ways. Legacy packages are backfilled with the whole-rupee figure
+   * they had been deducting.
+   */
+  perSessionValue?: number;
   sessions?: PackageSessionTicket[]; // Explicit ticket tracking
   sessionHistory?: {
     consumedAt: Date;
@@ -356,6 +383,17 @@ export interface AppointmentType {
    * calculateCommission isn't false. Blank/unset falls back to the
    * clinician's own default, exactly as before this field existed. */
   defaultCommission?: number;
+  /**
+   * Where this type's price comes from. "doctor" bills the performing
+   * doctor's own consultationCharge (the consultation); "catalogue" bills
+   * `price`. Replaces the substring test on the type's NAME ("consult")
+   * that decided this before. Absent on legacy types → "catalogue".
+   */
+  pricedBy?: "catalogue" | "doctor";
+  /** Who performs this service. Absent → "either". */
+  performerKind?: "doctor" | "expert" | "either";
+  /** Which clinical log the procedure sheet shows for it. Absent → "none". */
+  procedureLog?: "none" | "laser";
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the appointment type
@@ -439,7 +477,38 @@ export interface Appointment {
   triageRecordedBy?: string;
   /** Running total deposited into the patient's wallet for this visit specifically. Derived cache — source of truth is the tagged wallet transactions. */
   depositedAmount?: number;
+  /** The wallet ledger rows behind depositedAmount. Invariant: their amounts sum to it. */
+  depositTxnIds?: string[];
   checkoutCompleted?: boolean;
+  /** When the patient actually arrived; wait time and escalation run from here, not from creation. */
+  checkedInAt?: Date;
+  closedAt?: Date;
+  cancelReason?: string;
+  /** Who sent the patient to a cabin without triage (permissioned). */
+  triageSkippedBy?: string;
+  /** 0 (absent) for the first filing; incremented by a reissue. Drives the idempotency key. */
+  invoiceRevision?: number;
+  /** Invoices this visit filed and later voided by a reissue; never treated as live. */
+  voidedInvoiceIds?: string[];
+  /** Every change to the visit discount, so it is auditable and resettable. */
+  pendingVisitDiscountHistory?: Array<{
+    from: { type: "flat" | "percent"; value: number } | null;
+    to: { type: "flat" | "percent"; value: number } | null;
+    by: string;
+    at: Date;
+    reason?: string;
+  }>;
+  /** Typed replacement for the untyped recommendedProcedure blob. */
+  recommendedItems?: VisitRecommendedItem[];
+  /** Structured clinical log entries recorded during the visit. */
+  procedureLog?: VisitProcedureLogEntry[];
+  /** Set when a visit closes with no chargeable line and therefore no invoice. */
+  unbilledClosure?: {
+    items: AppointmentBillingItem[];
+    reason: "no-chargeable-lines" | "prepaid-session";
+    at: Date;
+    by: string;
+  };
   doctorConsultationCompleted?: boolean;
   cabinName?: string;
   patientPackageId?: string; // Links this appointment to a specific active package session
@@ -482,6 +551,8 @@ export interface Doctor {
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
   consultationCharge?: number; // Custom charge per doctor consultation
+  /** Room the triage sheet pre-selects for this doctor. */
+  defaultRoomId?: string;
   monthlyTarget?: number; // Monthly business target
   createdAt: Date;
   updatedAt: Date;
@@ -505,6 +576,8 @@ export interface Expert {
   /** See `Doctor.isOnDuty` — same meaning, same "undefined = on-duty"
    * default. */
   isOnDuty?: boolean;
+  /** Room the triage sheet pre-selects for this expert. */
+  defaultRoomId?: string;
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
   monthlyTarget?: number; // Monthly business target
@@ -1736,10 +1809,70 @@ export interface IssuedItem {
 // Appointment Billing models
 
 // Appointment Billing Settings for clinic-specific configuration
+/** Where on the visit a pending line came from. */
+export type VisitLineOrigin = "booked" | "procedure" | "session" | "manual";
+
+/** A procedure a clinician recorded for this visit, typed. */
+export interface VisitRecommendedItem {
+  id: string;
+  appointmentTypeId: string;
+  name: string;
+  quantity: number;
+  performedBy: { id: string; kind: "doctor" | "expert"; name: string };
+  recommendedBy: string;
+  doToday: boolean;
+  status: "recommended" | "performed" | "deferred" | "declined";
+  note?: string;
+  decidedAt?: Date;
+  decidedBy?: string;
+}
+
+export interface VisitProcedureLogEntry {
+  appointmentTypeId: string;
+  area?: string;
+  laser?: { energy?: number; spotSize?: number; pulseWidth?: number; passes?: number };
+  notes?: string;
+  by: string;
+  at: Date;
+}
+
+export interface FrontOfficeRoom {
+  id: string;
+  name: string;
+  /** Only one patient at a time. */
+  isExclusive: boolean;
+}
+
+/**
+ * Front-office behaviour the clinic configures once. Role lists rather than
+ * RBAC keys: the role editor validates permissions as page ids only, so a
+ * key like "billing.discount" cannot be saved on a role.
+ */
+export interface FrontOfficeSettings {
+  defaultConsultationTypeId?: string;
+  defaultExpertTypeId?: string;
+  rooms: FrontOfficeRoom[];
+  discountRoles: UserRole[];
+  priceOverrideRoles: UserRole[];
+  lineRemovalRoles: UserRole[];
+  skipTriageRoles: UserRole[];
+  settleRoles: UserRole[];
+  refundRoles: UserRole[];
+  sellPackageRoles: UserRole[];
+  triageForExpertVisits: boolean;
+  collectProcedureBeforePerforming: boolean;
+  /** Transitional: the new settle sheet. Removed once the old path is deleted. */
+  settleV2: boolean;
+  /** Transitional: the new intake sheet. */
+  intakeV2: boolean;
+}
+
 export interface AppointmentBillingSettings {
   id: string;
   clinicId: string;
   branchId: string; // Associated branch
+  /** Front-office flow configuration; absent on clinics configured before it existed (defaults apply). */
+  frontOffice?: Partial<FrontOfficeSettings>;
   // Feature Configuration
   enabledByAdmin: boolean; // Platform super admin controls this
   isActive: boolean; // Clinic can enable/disable locally
@@ -1799,6 +1932,20 @@ export interface AppointmentBillingItem {
    * so no parallel id field is introduced.
    */
   lineKind?: "service" | "lab" | "medicine";
+  /** Which collection doctorId resolves against. */
+  performerKind?: "doctor" | "expert";
+  /** Where on the visit this line came from. */
+  origin?: VisitLineOrigin;
+  /** Copied from the type at append; drives the check-in payment gate. */
+  collectAtCheckIn?: boolean;
+  /** On session lines: the PatientPackage consumed. */
+  patientPackageId?: string;
+  /** On expert-performed lines: the doctor who recommended it. */
+  recommendedBy?: string;
+  addedBy?: string;
+  addedAt?: Date;
+  /** A permissioned, reasoned departure from the catalogue price; the line keeps its catalogue id and tax flags. */
+  priceOverride?: { from: number; reason: string; by: string; at: Date };
   /**
    * Which stock pool a medicine line is dispensed from. "scheme" is the
    * doctor-received stock pharmacy tracks separately from stock it bought, and
@@ -1828,6 +1975,11 @@ export interface AppointmentBillingItem {
 // Main appointment billing/invoice record
 export interface AppointmentBilling {
   id: string;
+  /** How the invoice was funded, row by row; paymentMethod is the single method when all agree, else "mixed". */
+  fundingMethods?: Array<{ method: string; amount: number }>;
+  invoiceRevision?: number;
+  /** The visit this invoice settled. */
+  sourceAppointmentId?: string;
   invoiceNumber: string; // Generated invoice number (prefix + sequence)
   clinicId: string;
   branchId: string; // Associated branch

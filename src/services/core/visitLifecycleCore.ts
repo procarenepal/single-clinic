@@ -60,6 +60,21 @@ export interface VisitLifecycleInput {
   pendingVisitDiscountType?: "flat" | "percent" | null;
   pendingVisitDiscountValue?: number | null;
   recommendedProcedure?: unknown;
+  appointmentTypeId?: string | null;
+  /** Invoices this visit filed and later voided by a reissue. */
+  voidedInvoiceIds?: string[] | null;
+  recommendedItems?: VisitRecommendedItemLike[] | null;
+  invoiceRevision?: number | null;
+  cabinName?: string | null;
+  patientPackageId?: string | null;
+  checkedInAt?: unknown;
+}
+
+/** The subset of a typed recommendation the lifecycle reads. */
+export interface VisitRecommendedItemLike {
+  doToday?: boolean;
+  status?: string;
+  performedBy?: { kind?: string } | null;
 }
 
 export interface VisitInvoiceState {
@@ -118,11 +133,19 @@ export function hasOutstandingInvoice(
  * not, which is what makes a voided visit billable again instead of being
  * stranded as "already billed" with its charges already cleared.
  */
+/** A billingId that a reissue has already voided is never live. */
+export function isVoidedInvoice(visit: VisitLifecycleInput): boolean {
+  return Boolean(
+    visit.billingId && visit.voidedInvoiceIds?.includes(visit.billingId),
+  );
+}
+
 export function hasLiveInvoice(
   visit: VisitLifecycleInput,
   invoice?: VisitInvoiceState | null,
 ): boolean {
   if (!visit.billingId) return false;
+  if (isVoidedInvoice(visit)) return false;
   // billingId points somewhere but the invoice couldn't be loaded — treat
   // it as live rather than inviting a second filing on missing data.
   if (!invoice) return true;
@@ -169,7 +192,11 @@ export function deriveVisitStage(
     // out: its charges were cleared at checkout, so leaving it "done" means
     // services were delivered, the invoice was cancelled, and there is no
     // way left to bill for them.
-    if (visit.billingId && context.invoice?.status === "cancelled") {
+    if (
+      visit.billingId &&
+      !isVoidedInvoice(visit) &&
+      context.invoice?.status === "cancelled"
+    ) {
       return "billing";
     }
 
@@ -231,7 +258,7 @@ export function canCompleteCheckout(
     };
   }
 
-  const gate = getVisitPaymentGate(visit, context.pricing);
+  const gate = getVisitPaymentGate(visit, context.pricing || {}, "all");
 
   if (gate.isDue) {
     return {
@@ -308,4 +335,313 @@ export function visitQueueCandidates(
   if (!hasDoctor && !hasExpert) return { doctor: true, expert: true };
 
   return { doctor: hasDoctor, expert: hasExpert };
+}
+
+/**
+ * Where a visit at the billing desk actually is:
+ *   - "to-settle": nothing filed yet (or the filing was voided) — the
+ *     settle sheet files from the pending lines;
+ *   - "filed-unpaid": an invoice stands and still carries a balance —
+ *     the desk collects against it;
+ *   - "reissue": an invoice stands but the visit has changed under it
+ *     (new pending lines, or the invoice was cancelled without a reissue)
+ *     — the only honest move is a credit note and a new filing.
+ */
+export type BillingSubState = "to-settle" | "filed-unpaid" | "reissue";
+
+export function deriveBillingSubState(
+  visit: VisitLifecycleInput,
+  context: VisitLifecycleContext = {},
+): BillingSubState {
+  const pending = visit.pendingVisitItems?.length ?? 0;
+
+  if (
+    visit.billingId &&
+    !isVoidedInvoice(visit) &&
+    context.invoice?.status === "cancelled"
+  ) {
+    return "reissue";
+  }
+  if (!hasLiveInvoice(visit, context.invoice)) return "to-settle";
+  if (pending > 0) return "reissue";
+  if (hasOutstandingInvoice(context.invoice)) return "filed-unpaid";
+
+  return "to-settle";
+}
+
+export interface ConsultationOutcome {
+  status: "in-progress" | "completed";
+  doctorConsultationCompleted: true;
+  /** True when the visit now moves to the expert's cabin. */
+  routeToExpert: boolean;
+}
+
+/**
+ * What finishing the doctor's step does next. An expert on the visit gets
+ * the patient when the doctor recorded work for them today — or when the
+ * doctor recorded nothing at all, since a booked expert step (consultation
+ * plus a skin test, say) must still happen. Otherwise the visit completes
+ * and goes to the settle desk.
+ */
+export function nextStageAfterConsultation(
+  visit: Pick<VisitLifecycleInput, "assignedExpertId" | "recommendedItems">,
+): ConsultationOutcome {
+  const hasExpert = hasClinician(visit.assignedExpertId);
+  const items = visit.recommendedItems;
+  const recordedNothing = !items || items.length === 0;
+  const expertWorkToday = (items || []).some(
+    (i) =>
+      i.doToday !== false &&
+      (i.status === undefined || i.status === "recommended") &&
+      i.performedBy?.kind === "expert",
+  );
+  const routeToExpert = hasExpert && (expertWorkToday || recordedNothing);
+
+  return {
+    status: routeToExpert ? "in-progress" : "completed",
+    doctorConsultationCompleted: true,
+    routeToExpert,
+  };
+}
+
+export type ReverseVisitKind =
+  | "no-show"
+  | "cancel"
+  | "send-back"
+  | "undo-check-in"
+  | "reinstate";
+
+export interface ReverseVisitPlan {
+  allowed: boolean;
+  /** Present when not allowed; safe to show to staff verbatim. */
+  reason?: string;
+  /** Fields to write on the appointment. */
+  patch: Record<string, unknown>;
+  /** A package session ticket this visit held must be released. */
+  releasesSession: boolean;
+  /** Money already in the wallet that stays there as credit (never clawed). */
+  walletCreditRetained: number;
+  /** A line to append to the visit's notes. */
+  note?: string;
+}
+
+/**
+ * The one definition of every way a visit goes backwards, so Undo
+ * Check-In, Send Back, No-Show, Cancel and Reinstate — from the desk and
+ * from the Appointments page — produce identical state. None of them ever
+ * touches a filed invoice or the wallet ledger.
+ */
+export function reverseVisitPlan(
+  kind: ReverseVisitKind,
+  visit: VisitLifecycleInput,
+  input: { reason?: string; by: string; now: Date },
+  context: VisitLifecycleContext = {},
+): ReverseVisitPlan {
+  const status = visit.status?.toLowerCase();
+  const deposit = Math.max(0, visit.depositedAmount || 0);
+  const none: ReverseVisitPlan = {
+    allowed: false,
+    patch: {},
+    releasesSession: false,
+    walletCreditRetained: 0,
+  };
+  const stamp = (label: string) =>
+    `[${label} by ${input.by} at ${input.now.toISOString()}${input.reason ? `: ${input.reason}` : ""}]`;
+
+  switch (kind) {
+    case "no-show":
+      if (status !== "scheduled") {
+        return {
+          ...none,
+          reason:
+            "Only a scheduled visit can be marked no-show. Cancel the visit instead.",
+        };
+      }
+
+      return {
+        allowed: true,
+        patch: { status: "no-show" },
+        releasesSession: false,
+        walletCreditRetained: 0,
+        note: stamp("No-show"),
+      };
+
+    case "cancel":
+      if (hasLiveInvoice(visit, context.invoice)) {
+        return {
+          ...none,
+          reason:
+            "This visit's invoice has been filed. Reverse it from the invoice (credit note), not here.",
+        };
+      }
+      if (status === "cancelled") {
+        return { ...none, reason: "This visit is already cancelled." };
+      }
+
+      return {
+        allowed: true,
+        patch: {
+          status: "cancelled",
+          cancelReason: input.reason || "",
+          cabinName: null,
+          pendingVisitItems: [],
+          pendingVisitReferrals: [],
+          pendingVisitDiscountType: null,
+          pendingVisitDiscountValue: 0,
+          recommendedItems: [],
+          recommendedProcedure: null,
+          depositedAmount: 0,
+          depositTxnIds: [],
+        },
+        releasesSession: Boolean(visit.patientPackageId),
+        walletCreditRetained: deposit,
+        note: stamp("Cancelled"),
+      };
+
+    case "send-back":
+      if (
+        status !== "in-progress" &&
+        !(status === "confirmed" && isTriageComplete(visit))
+      ) {
+        return {
+          ...none,
+          reason:
+            "Only a patient in a cabin, or triaged and waiting, can be sent back.",
+        };
+      }
+
+      return {
+        allowed: true,
+        patch: { status: "confirmed", cabinName: null },
+        releasesSession: false,
+        walletCreditRetained: 0,
+        note: stamp("Sent back to waiting"),
+      };
+
+    case "undo-check-in":
+      if (status !== "confirmed") {
+        return {
+          ...none,
+          reason: "Only a waiting patient can have check-in undone.",
+        };
+      }
+      if (deposit >= 0.005) {
+        return {
+          ...none,
+          reason:
+            "A deposit was collected for this visit. Use Cancel Visit instead, which keeps the money as wallet credit.",
+        };
+      }
+
+      return {
+        allowed: true,
+        patch: {
+          status: "scheduled",
+          checkedInAt: null,
+          cabinName: null,
+          pendingVisitItems: [],
+          pendingVisitReferrals: [],
+        },
+        releasesSession: Boolean(visit.patientPackageId),
+        walletCreditRetained: 0,
+        note: stamp("Check-in undone"),
+      };
+
+    case "reinstate":
+      if (status !== "no-show" && status !== "cancelled") {
+        return {
+          ...none,
+          reason: "Only a no-show or cancelled visit can be reinstated.",
+        };
+      }
+
+      return {
+        allowed: true,
+        patch: { status: "scheduled", cancelReason: null, checkedInAt: null },
+        releasesSession: false,
+        walletCreditRetained: 0,
+        note: stamp("Reinstated"),
+      };
+  }
+
+  return none;
+}
+
+export interface RerouteTarget {
+  doctorId?: string | null;
+  doctorName?: string | null;
+  assignedExpertId?: string | null;
+  expertName?: string | null;
+  cabinName?: string | null;
+}
+
+export interface RerouteVisitPlan {
+  allowed: boolean;
+  reason?: string;
+  patch: Record<string, unknown>;
+  note?: string;
+  /** Names of lines whose attribution stays with the previous clinician. */
+  keptAttribution: string[];
+}
+
+/**
+ * Change who sees the patient and/or where. Lines already on the visit
+ * keep their performer (the fee was earned by whoever it was attributed
+ * to); new lines go to the new clinician. Never after filing.
+ */
+export function rerouteVisitPlan(
+  visit: VisitLifecycleInput,
+  target: RerouteTarget,
+  input: { by: string; now: Date },
+  context: VisitLifecycleContext = {},
+): RerouteVisitPlan {
+  if (hasLiveInvoice(visit, context.invoice)) {
+    return {
+      allowed: false,
+      reason: "This visit has been invoiced; it cannot be rerouted.",
+      patch: {},
+      keptAttribution: [],
+    };
+  }
+  const status = visit.status?.toLowerCase();
+
+  if (status !== "confirmed" && status !== "in-progress") {
+    return {
+      allowed: false,
+      reason: "Only a waiting or in-cabin patient can be rerouted.",
+      patch: {},
+      keptAttribution: [],
+    };
+  }
+  const patch: Record<string, unknown> = {};
+
+  if (target.doctorId !== undefined)
+    patch.doctorId = target.doctorId || "unassigned";
+  if (target.assignedExpertId !== undefined)
+    patch.assignedExpertId = target.assignedExpertId || "unassigned";
+  if (target.cabinName !== undefined)
+    patch.cabinName = target.cabinName || null;
+
+  const keptAttribution = (visit.pendingVisitItems || [])
+    .filter((line) => {
+      const owner = (line as { doctorId?: string }).doctorId;
+
+      return (
+        Boolean(owner) &&
+        owner !== target.doctorId &&
+        owner !== target.assignedExpertId
+      );
+    })
+    .map((line) => String(line.appointmentTypeName || "service"));
+  const to =
+    [target.doctorName, target.expertName].filter(Boolean).join(" / ") ||
+    "cabin";
+  const where = target.cabinName ? ` · ${target.cabinName}` : "";
+
+  return {
+    allowed: true,
+    patch,
+    note: `[Rerouted to ${to}${where} by ${input.by} at ${input.now.toISOString()}]`,
+    keptAttribution,
+  };
 }
