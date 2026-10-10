@@ -71,3 +71,5 @@ firestore-backup-*/
 full-wipe-backup-*/
 mysql-*-backup-*.sql
 mysql-audit-log-backup-*.sql
+# One-off migration backups (clinic data) — never commit
+backups/

@@ -41,6 +41,7 @@ import {
   createDispensingCreditNote,
   hasDispensableLines,
 } from "./unifiedBillingService";
+import type { FrontOfficeSettings } from "@/types/models";
 
 const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
@@ -352,6 +353,19 @@ export const appointmentBillingService = {
   /**
    * Create or update appointment billing settings for a clinic
    */
+  /**
+   * The front-office configuration block (default services, rooms, role
+   * lists, behaviour switches). Written whole, so a stale partial can never
+   * leave a role list half-updated.
+   */
+  async updateFrontOfficeSettings(
+    clinicId: string,
+    frontOffice: FrontOfficeSettings,
+    updatedBy: string,
+  ): Promise<void> {
+    await this.updateBillingSettings(clinicId, { frontOffice }, updatedBy);
+  },
+
   async updateBillingSettings(
     clinicId: string,
     settings: Partial<AppointmentBillingSettings>,

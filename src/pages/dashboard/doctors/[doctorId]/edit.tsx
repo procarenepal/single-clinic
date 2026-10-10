@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { appointmentTypeService } from "@/services/appointmentTypeService";
+import { withFrontOfficeDefaults } from "@/services/core/frontOfficePermissionCore";
 import { specialityService } from "@/services/specialityService";
 import { addToast } from "@/components/ui/toast";
 import { db } from "@/config/firebase";
@@ -137,7 +140,38 @@ export default function EditDoctorPage() {
     email: "",
     nmcNumber: "",
     consultationCharge: "",
+    defaultRoomId: "",
   });
+  const [rooms, setRooms] = useState<Array<{ value: string; label: string }>>(
+    [],
+  );
+  const [doctorPricedTypes, setDoctorPricedTypes] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    (async () => {
+      try {
+        const [settings, types] = await Promise.all([
+          appointmentBillingService.getBillingSettings(clinicId),
+          appointmentTypeService.getAppointmentTypes(clinicId),
+        ]);
+
+        setRooms(
+          withFrontOfficeDefaults(settings?.frontOffice).rooms.map((r) => ({
+            value: r.id,
+            label: r.name,
+          })),
+        );
+        setDoctorPricedTypes(
+          types
+            .filter((t) => t.isActive !== false && t.pricedBy === "doctor")
+            .map((t) => t.name),
+        );
+      } catch (error) {
+        console.error("Error loading rooms / catalogue:", error);
+      }
+    })();
+  }, [clinicId]);
 
   useEffect(() => {
     loadSpecialities();
@@ -218,6 +252,7 @@ export default function EditDoctorPage() {
           doctor.consultationCharge !== undefined
             ? String(doctor.consultationCharge)
             : "",
+        defaultRoomId: doctor.defaultRoomId || "",
       });
     } catch (error) {
       addToast({
@@ -279,6 +314,21 @@ export default function EditDoctorPage() {
       }
     }
 
+    // The consultation type bills this doctor's own charge; without one,
+    // every check-in for it would be refused at the desk.
+    if (
+      doctorPricedTypes.length > 0 &&
+      !(parseFloat(doctorProfile.consultationCharge) > 0)
+    ) {
+      addToast({
+        title: "Consultation charge required",
+        description: `${doctorPricedTypes.join(", ")} bill each doctor's own consultation charge. Enter one for this doctor.`,
+        color: "warning",
+      });
+
+      return;
+    }
+
     setSaving(true);
     try {
       const updateData = {
@@ -290,6 +340,7 @@ export default function EditDoctorPage() {
         email: doctorProfile.email || "",
         nmcNumber: doctorProfile.nmcNumber,
         consultationCharge: parseFloat(doctorProfile.consultationCharge) || 0,
+        defaultRoomId: doctorProfile.defaultRoomId || null,
         clinicId,
         updatedBy: currentUser?.uid || "",
       };
@@ -389,6 +440,14 @@ export default function EditDoctorPage() {
                 placeholder="Enter charge amount (e.g. 500)"
                 type="number"
                 value={doctorProfile.consultationCharge}
+                onChange={handleDoctorProfileChange}
+              />
+              <CustomSelect
+                label="Default room"
+                name="defaultRoomId"
+                options={rooms}
+                placeholder="Pre-selected when sending to this doctor"
+                value={doctorProfile.defaultRoomId}
                 onChange={handleDoctorProfileChange}
               />
               <CustomSelect

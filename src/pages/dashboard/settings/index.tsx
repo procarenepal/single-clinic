@@ -62,6 +62,15 @@ const settingsSections: SettingsSection[] = [
     category: "clinic",
   },
   {
+    id: "front-office-settings",
+    title: "Front Office",
+    description:
+      "Default services, rooms and cabins, who may discount, settle or refund",
+    icon: <IoBusinessOutline className="w-6 h-6" />,
+    href: "/dashboard/settings/front-office",
+    category: "clinic",
+  },
+  {
     id: "medical-report-fields",
     title: "Medical Report Fields",
     description: "Configure custom fields for patient medical reports",

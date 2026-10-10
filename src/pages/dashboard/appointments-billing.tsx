@@ -1419,6 +1419,27 @@ export default function AppointmentBillingPage() {
     }
   };
 
+  // The method pre-selected wherever money is taken (check-in, settle).
+  const handleSetDefaultMethod = async (key: string) => {
+    if (!clinicId || !currentUser) return;
+    try {
+      await appointmentBillingService.updateBillingSettings(
+        clinicId,
+        { defaultPaymentMethod: key },
+        currentUser.uid,
+      );
+      const s = await appointmentBillingService.getBillingSettings(clinicId);
+
+      if (s) setBillingSettings(s);
+    } catch (e: any) {
+      addToast({
+        title: "Update failed",
+        description: e?.message,
+        color: "danger",
+      });
+    }
+  };
+
   const handleToggleMethod = async (id: string, current: boolean) => {
     if (!clinicId || !currentUser) return;
     try {
@@ -2467,7 +2488,7 @@ export default function AppointmentBillingPage() {
               <div className="p-4 flex flex-col gap-4">
                 <Toggle
                   checked={taxSettingsForm.enableTax}
-                  label="Enable tax by default on new invoices"
+                  label="Clinic charges VAT on taxable services (master switch)"
                   onChange={(c) =>
                     setTaxSettingsForm((p) => ({ ...p, enableTax: c }))
                   }
@@ -2643,6 +2664,21 @@ export default function AppointmentBillingPage() {
                               <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
                                 Custom
                               </span>
+                            )}
+                            {m.key === billingSettings?.defaultPaymentMethod ? (
+                              <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                                Default
+                              </span>
+                            ) : (
+                              m.isEnabled && (
+                                <button
+                                  className="text-[10px] text-text-muted hover:text-primary underline-offset-2 hover:underline"
+                                  type="button"
+                                  onClick={() => handleSetDefaultMethod(m.key)}
+                                >
+                                  Set as default
+                                </button>
+                              )
                             )}
                           </div>
                           <p className="text-[11px] text-text-muted/60">

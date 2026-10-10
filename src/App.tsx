@@ -85,6 +85,9 @@ const AppointmentSettingsPage = lazy(
 const PackagesSettingsPage = lazy(
   () => import("@/pages/dashboard/settings/packages"),
 );
+const FrontOfficeSettingsPage = lazy(
+  () => import("@/pages/dashboard/settings/front-office"),
+);
 const ClinicSettingsPage = lazy(
   () => import("@/pages/dashboard/settings/clinic"),
 );
@@ -810,6 +813,14 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="settings/packages"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/settings/front-office">
+                                <FrontOfficeSettingsPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="settings/front-office"
                           />
                           <Route
                             element={

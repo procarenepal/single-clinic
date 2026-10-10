@@ -3,6 +3,10 @@ import { IoAddOutline } from "react-icons/io5";
 
 import { TreatmentPackage } from "@/types/models";
 import { packageService } from "@/services/packageService";
+import { expertService } from "@/services/expertService";
+import { doctorService } from "@/services/doctorService";
+import { Select, SelectItem } from "@/components/ui/select";
+import { perSessionValue } from "@/services/core/visitChargeCore";
 import { useAuthContext } from "@/context/AuthContext";
 import {
   Button,
@@ -39,11 +43,41 @@ export default function PackagesSettingsPage() {
     validityDays: "",
     calculateCommission: true,
     defaultCommission: "",
+    isTaxable: false,
+    taxRate: "",
+    sessionPerformerKind: "expert" as "expert" | "doctor" | "either",
+    defaultPerformerId: "",
   });
+  const [performers, setPerformers] = useState<
+    Array<{ id: string; name: string; kind: "doctor" | "expert" }>
+  >([]);
 
   useEffect(() => {
     loadPackages();
   }, [clinicId, branchId]);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    (async () => {
+      try {
+        const [experts, doctors] = await Promise.all([
+          expertService.getExperts(clinicId),
+          doctorService.getDoctors(clinicId),
+        ]);
+
+        setPerformers([
+          ...experts
+            .filter((e) => e.isActive !== false && !e.isDeleted)
+            .map((e) => ({ id: e.id, name: e.name, kind: "expert" as const })),
+          ...doctors
+            .filter((d) => d.isActive !== false && !d.isDeleted)
+            .map((d) => ({ id: d.id, name: d.name, kind: "doctor" as const })),
+        ]);
+      } catch (error) {
+        console.error("Error loading performers:", error);
+      }
+    })();
+  }, [clinicId]);
 
   const loadPackages = async () => {
     if (!clinicId) return;
@@ -76,6 +110,10 @@ export default function PackagesSettingsPage() {
           pkg.defaultCommission !== undefined
             ? String(pkg.defaultCommission)
             : "",
+        isTaxable: pkg.isTaxable === true,
+        taxRate: typeof pkg.taxRate === "number" ? String(pkg.taxRate) : "",
+        sessionPerformerKind: pkg.sessionPerformerKind || "expert",
+        defaultPerformerId: pkg.defaultPerformerId || "",
       });
     } else {
       setEditingPkg(null);
@@ -88,6 +126,10 @@ export default function PackagesSettingsPage() {
         validityDays: "",
         calculateCommission: true,
         defaultCommission: "",
+        isTaxable: false,
+        taxRate: "",
+        sessionPerformerKind: "expert",
+        defaultPerformerId: "",
       });
     }
     setIsModalOpen(true);
@@ -115,6 +157,11 @@ export default function PackagesSettingsPage() {
               Math.max(0, parseFloat(formData.defaultCommission) || 0),
             )
           : undefined;
+      const taxRateValue =
+        formData.isTaxable && formData.taxRate.trim()
+          ? Math.min(100, Math.max(0, parseFloat(formData.taxRate) || 0))
+          : undefined;
+      const defaultPerformerId = formData.defaultPerformerId || undefined;
 
       if (editingPkg) {
         await packageService.updatePackage(editingPkg.id, {
@@ -130,6 +177,10 @@ export default function PackagesSettingsPage() {
           validityDays: (validityDays ?? null) as any,
           calculateCommission: formData.calculateCommission,
           defaultCommission: (commissionValue ?? null) as any,
+          isTaxable: formData.isTaxable,
+          taxRate: (taxRateValue ?? null) as any,
+          sessionPerformerKind: formData.sessionPerformerKind,
+          defaultPerformerId: (defaultPerformerId ?? null) as any,
         });
         addToast({
           title: "Updated",
@@ -147,6 +198,10 @@ export default function PackagesSettingsPage() {
           branchId,
           createdBy: "system",
           calculateCommission: formData.calculateCommission,
+          isTaxable: formData.isTaxable,
+          sessionPerformerKind: formData.sessionPerformerKind,
+          ...(taxRateValue !== undefined && { taxRate: taxRateValue }),
+          ...(defaultPerformerId !== undefined && { defaultPerformerId }),
           // Fresh addDoc — omit each key entirely rather than writing
           // `undefined`, which Firestore also rejects on create.
           ...(totalSessions !== undefined && { totalSessions }),
@@ -588,6 +643,113 @@ export default function PackagesSettingsPage() {
                   </div>
                 )}
               </div>
+              <div className="flex flex-col gap-1 p-3 rounded-lg border border-border-base bg-surface-2/30">
+                <Checkbox
+                  className="font-medium"
+                  isSelected={formData.isTaxable}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, isTaxable: value }))
+                  }
+                >
+                  VAT applies to this package
+                </Checkbox>
+                <p className="text-xs text-text-muted ml-7 leading-relaxed">
+                  The sale invoice adds VAT on top of the price and the full
+                  amount is collected at sale. Cosmetic packages are usually
+                  taxable; confirm with your accountant.
+                </p>
+                {formData.isTaxable && (
+                  <div className="ml-7 mt-2 max-w-[200px]">
+                    <Input
+                      label="VAT rate % (optional)"
+                      max="100"
+                      min="0"
+                      placeholder="Uses clinic default"
+                      type="number"
+                      value={formData.taxRate}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, taxRate: e.target.value }))
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Select
+                  label="Sessions performed by"
+                  name="sessionPerformerKind"
+                  value={formData.sessionPerformerKind}
+                  variant="bordered"
+                  onChange={(e: any) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      sessionPerformerKind: e.target.value,
+                    }))
+                  }
+                >
+                  <SelectItem key="expert" value="expert">
+                    Expert
+                  </SelectItem>
+                  <SelectItem key="doctor" value="doctor">
+                    Doctor
+                  </SelectItem>
+                  <SelectItem key="either" value="either">
+                    Either
+                  </SelectItem>
+                </Select>
+                <Select
+                  label="Default performer (optional)"
+                  name="defaultPerformerId"
+                  value={formData.defaultPerformerId}
+                  variant="bordered"
+                  onChange={(e: any) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      defaultPerformerId: e.target.value,
+                    }))
+                  }
+                >
+                  <SelectItem key="" value="">
+                    — ask at the time —
+                  </SelectItem>
+                  {performers
+                    .filter(
+                      (p) =>
+                        formData.sessionPerformerKind === "either" ||
+                        p.kind === formData.sessionPerformerKind,
+                    )
+                    .map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} ({p.kind})
+                      </SelectItem>
+                    ))}
+                </Select>
+              </div>
+              {(() => {
+                const price = parseFloat(formData.price) || 0;
+                const credit = parseFloat(formData.walletCreditAmount) || price;
+                const sessions = parseInt(formData.totalSessions) || 0;
+                const perSession = perSessionValue(credit, sessions);
+
+                return (
+                  <div className="text-xs text-text-muted space-y-1">
+                    {sessions > 0 && (
+                      <p>
+                        Per-session value: NPR {perSession.toLocaleString()} (
+                        {credit.toLocaleString()} credit ÷ {sessions} sessions).
+                        Used for the wallet deduction, the refund cap and the
+                        commission base alike.
+                      </p>
+                    )}
+                    {Math.abs(credit - price) >= 0.005 && price > 0 && (
+                      <p className="text-warning">
+                        Wallet credit differs from the price: refunds of unused
+                        sessions are capped by the credit, not the price.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </ModalBody>
             <ModalFooter>
               <Button

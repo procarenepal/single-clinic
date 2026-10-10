@@ -35,6 +35,7 @@ import {
   getAppointmentColorById,
 } from "@/utils/appointmentColors";
 import { useModalState } from "@/hooks/useModalState";
+import { Select, SelectItem } from "@/components/ui/select";
 import { useTheme } from "@/context/ThemeContext";
 
 export default function AppointmentSettingsPage() {
@@ -148,6 +149,12 @@ export default function AppointmentSettingsPage() {
             type.calculateCommission && typeof type.defaultCommission === "number"
               ? type.defaultCommission
               : null,
+          // Flags, never names: these replace the substring tests on the
+          // type's name that used to decide pricing, performer and the
+          // clinical log.
+          pricedBy: type.pricedBy || "catalogue",
+          performerKind: type.performerKind || "either",
+          procedureLog: type.procedureLog || "none",
         } as any);
         savedId = editingType.id;
       } else {
@@ -162,6 +169,9 @@ export default function AppointmentSettingsPage() {
           billAtFrontDesk: type.billAtFrontDesk ?? false,
           calculateCommission: type.calculateCommission ?? true,
           isTaxable: type.isTaxable ?? false,
+          pricedBy: type.pricedBy || "catalogue",
+          performerKind: type.performerKind || "either",
+          procedureLog: type.procedureLog || "none",
           clinicId,
           branchId: clinicId,
           createdBy: currentUser.uid,
@@ -328,6 +338,14 @@ export default function AppointmentSettingsPage() {
       const addPromises = skincareTypes.map((type) => {
         const newType: any = {
           ...type,
+          // Every flag explicit, so a seeded type never reads as "undefined
+          // → not taxable / not collectable" by accident.
+          billAtFrontDesk: false,
+          calculateCommission: true,
+          isTaxable: false,
+          pricedBy: "catalogue",
+          performerKind: "either",
+          procedureLog: /laser/i.test(type.name) ? "laser" : "none",
           clinicId,
           branchId: clinicId,
           isActive: true,
@@ -455,6 +473,34 @@ export default function AppointmentSettingsPage() {
             <p className="text-[13.5px] text-text-muted mt-1">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
+            {(() => {
+              const active = appointmentTypes.filter((t) => t.isActive !== false);
+              const unpriced = active.filter(
+                (t) => typeof t.price !== "number" || Number.isNaN(t.price),
+              );
+              const unflagged = active.filter(
+                (t) => !t.pricedBy || !t.performerKind,
+              );
+
+              if (unpriced.length === 0 && unflagged.length === 0) return null;
+
+              return (
+                <div className="mt-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] text-text-main">
+                  {unpriced.length > 0 && (
+                    <p>
+                      No price (the front office will refuse to bill them):{" "}
+                      {unpriced.map((t) => t.name).join(", ")}
+                    </p>
+                  )}
+                  {unflagged.length > 0 && (
+                    <p>
+                      Not yet flagged (open and save once to set price source,
+                      performer and log): {unflagged.map((t) => t.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex gap-3">
@@ -486,6 +532,34 @@ export default function AppointmentSettingsPage() {
             <p className="text-[13.5px] text-text-muted mt-1">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
+            {(() => {
+              const active = appointmentTypes.filter((t) => t.isActive !== false);
+              const unpriced = active.filter(
+                (t) => typeof t.price !== "number" || Number.isNaN(t.price),
+              );
+              const unflagged = active.filter(
+                (t) => !t.pricedBy || !t.performerKind,
+              );
+
+              if (unpriced.length === 0 && unflagged.length === 0) return null;
+
+              return (
+                <div className="mt-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] text-text-main">
+                  {unpriced.length > 0 && (
+                    <p>
+                      No price (the front office will refuse to bill them):{" "}
+                      {unpriced.map((t) => t.name).join(", ")}
+                    </p>
+                  )}
+                  {unflagged.length > 0 && (
+                    <p>
+                      Not yet flagged (open and save once to set price source,
+                      performer and log): {unflagged.map((t) => t.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex gap-3">
@@ -764,18 +838,26 @@ function AppointmentTypeModal({
       color: "none",
       billAtFrontDesk: false,
       calculateCommission: true,
+      isTaxable: false,
+      pricedBy: "catalogue",
+      performerKind: "either",
+      procedureLog: "none",
     },
   );
 
   // Reset form data when type changes
   useEffect(() => {
-    const defaultFormData = {
+    const defaultFormData: Partial<AppointmentType> = {
       name: "",
       price: 0,
       isActive: true,
       color: "none",
       billAtFrontDesk: false,
       calculateCommission: true,
+      isTaxable: false,
+      pricedBy: "catalogue",
+      performerKind: "either",
+      procedureLog: "none",
     };
 
     setFormData(type || defaultFormData);
@@ -789,8 +871,12 @@ function AppointmentTypeModal({
 
       return;
     }
-    if (!formData.price || formData.price <= 0) {
-      console.error("Price must be greater than 0");
+    if (
+      typeof formData.price !== "number" ||
+      Number.isNaN(formData.price) ||
+      formData.price < 0
+    ) {
+      console.error("Price must be a number (0 means free)");
 
       return;
     }
@@ -819,19 +905,80 @@ function AppointmentTypeModal({
           />
           <Input
             isRequired
+            description={
+              formData.pricedBy === "doctor"
+                ? "Ignored: this type bills each doctor's own consultation charge"
+                : "0 = free (a line is recorded, nothing is collected)"
+            }
             label="Price (NPR)"
             min="0"
             placeholder="0"
-            step="1"
+            step="0.01"
             type="number"
-            value={formData.price?.toString() || ""}
+            value={formData.price?.toString() ?? ""}
             onChange={(e) =>
               setFormData((prev) => ({
                 ...prev,
-                price: parseInt(e.target.value) || 0,
+                price: Math.round((parseFloat(e.target.value) || 0) * 100) / 100,
               }))
             }
           />
+          <Select
+            label="Price comes from"
+            name="pricedBy"
+            value={formData.pricedBy || "catalogue"}
+            variant="bordered"
+            onChange={(e: any) =>
+              setFormData((prev) => ({
+                ...prev,
+                pricedBy: e.target.value === "doctor" ? "doctor" : "catalogue",
+              }))
+            }
+          >
+            <SelectItem key="catalogue" value="catalogue">
+              Catalogue price above
+            </SelectItem>
+            <SelectItem key="doctor" value="doctor">
+              The doctor's consultation charge (the consultation type)
+            </SelectItem>
+          </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Performed by"
+              name="performerKind"
+              value={formData.performerKind || "either"}
+              variant="bordered"
+              onChange={(e: any) =>
+                setFormData((prev) => ({ ...prev, performerKind: e.target.value }))
+              }
+            >
+              <SelectItem key="either" value="either">
+                Doctor or expert
+              </SelectItem>
+              <SelectItem key="doctor" value="doctor">
+                Doctor
+              </SelectItem>
+              <SelectItem key="expert" value="expert">
+                Expert
+              </SelectItem>
+            </Select>
+            <Select
+              label="Procedure log"
+              name="procedureLog"
+              value={formData.procedureLog || "none"}
+              variant="bordered"
+              onChange={(e: any) =>
+                setFormData((prev) => ({ ...prev, procedureLog: e.target.value }))
+              }
+            >
+              <SelectItem key="none" value="none">
+                None
+              </SelectItem>
+              <SelectItem key="laser" value="laser">
+                Laser parameters (energy, spot, pulse, passes)
+              </SelectItem>
+            </Select>
+          </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-mountain-700">
@@ -964,12 +1111,12 @@ function AppointmentTypeModal({
                 }))
               }
             >
-              Bill at Front Desk
+              Collect at check-in (before the clinician)
             </Checkbox>
             <p className="text-xs text-text-muted ml-7 leading-relaxed">
-              Select if this service should be billed instantly at check-in
-              (e.g., Analyzers, Walk-in Services). Leave unselected for
-              procedures billed later.
+              The fee is taken into the patient's wallet when they check in
+              and applied to the visit's invoice at settle. Leave unselected
+              for procedures collected at the end of the visit.
             </p>
           </div>
           

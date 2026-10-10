@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { withFrontOfficeDefaults } from "@/services/core/frontOfficePermissionCore";
 import { specialityService } from "@/services/specialityService";
 import { addToast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,17 @@ export default function EditExpertPage() {
   const [saving, setSaving] = useState(false);
   const [specialities, setSpecialities] = useState<any[]>([]);
   const [expertProfile, setExpertProfile] = useState<Partial<Expert>>({});
+  const [rooms, setRooms] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    appointmentBillingService
+      .getBillingSettings(clinicId)
+      .then((settings) =>
+        setRooms(withFrontOfficeDefaults(settings?.frontOffice).rooms),
+      )
+      .catch((error) => console.error("Error loading rooms:", error));
+  }, [clinicId]);
 
   useEffect(() => {
     if (expertId && clinicId) loadData();
@@ -182,6 +195,27 @@ export default function EditExpertPage() {
             })
           }
         />
+        <Select
+          label="Default room"
+          name="defaultRoomId"
+          value={expertProfile.defaultRoomId || ""}
+          variant="bordered"
+          onChange={(e: any) =>
+            setExpertProfile({
+              ...expertProfile,
+              defaultRoomId: e.target.value || undefined,
+            })
+          }
+        >
+          <SelectItem key="" value="">
+            — none —
+          </SelectItem>
+          {rooms.map((r) => (
+            <SelectItem key={r.id} value={r.id}>
+              {r.name}
+            </SelectItem>
+          ))}
+        </Select>
         <div className="col-span-2 flex justify-end gap-3">
           <Button variant="bordered" onClick={() => navigate(-1)}>
             Cancel
