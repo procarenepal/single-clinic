@@ -13,7 +13,12 @@ import {
   type ChargeableType,
   type ChargeClinician,
   type ChargeResolution,
+  previewLineCharge,
+  refusalMessage,
+  splitAmount,
+  withLinePrice,
 } from "../visitChargeCore";
+import { findBookedLine, mergeVisitLines } from "../legacyVisitAdapters";
 
 const NOW = new Date("2026-10-10T09:00:00Z");
 const lineOf = (r: ChargeResolution) => {
@@ -248,5 +253,215 @@ describe("package sessions", () => {
     expect(line.isTaxable).toBe(false);
     expect(line.patientPackageId).toBe("pp1");
     expect(line.doctorId).toBe("exp1");
+  });
+});
+
+describe("splitAmount / withLinePrice — shares that still sum to the catalogue price", () => {
+  it("puts the odd paisa on the first shares", () => {
+    expect(splitAmount(100, 3)).toEqual([33.34, 33.33, 33.33]);
+    expect(splitAmount(2500, 2)).toEqual([1250, 1250]);
+    expect(splitAmount(0.05, 2)).toEqual([0.03, 0.02]);
+    expect(splitAmount(700, 0)).toEqual([700]);
+  });
+
+  it("the shares always sum to the whole, two decimals", () => {
+    for (let n = 1; n <= 7; n++) {
+      for (const total of [1, 99.99, 1666.67, 4500, 0.01]) {
+        const sum = splitAmount(total, n).reduce((a, b) => a + b, 0);
+
+        expect(Math.round(sum * 100) / 100).toBe(total);
+      }
+    }
+  });
+
+  it("withLinePrice keeps the line and re-derives the amount", () => {
+    const line = resolveVisitLine(
+      { id: "t", name: "Peel", price: 2500 },
+      rina,
+      { origin: "procedure", addedBy: "u", now: new Date(0) },
+    );
+
+    if (line.ok === false) throw new Error("expected a line");
+    const share = withLinePrice(line.line, 1250);
+
+    expect(share.price).toBe(1250);
+    expect(share.amount).toBe(1250);
+    expect(share.appointmentTypeId).toBe("t");
+    expect(share.id).toBe(line.line.id);
+  });
+});
+
+describe("previewLineCharge — the read-only fee line", () => {
+  const pricing = { taxPercentage: 13, isTaxEnabled: true };
+
+  it("prices, taxes and flags collect-at-check-in like the resolver", () => {
+    const p = previewLineCharge(
+      {
+        id: "c",
+        name: "Doctor Consultation",
+        pricedBy: "doctor",
+        performerKind: "doctor",
+        billAtFrontDesk: true,
+        isTaxable: true,
+        taxRate: 13,
+      },
+      { id: "d1", name: "Dr. A", kind: "doctor", consultationCharge: 700 },
+      pricing,
+    );
+
+    expect(p).toEqual({
+      ok: true,
+      price: 700,
+      vat: 91,
+      total: 791,
+      isTaxable: true,
+      collectAtCheckIn: true,
+      isFree: false,
+    });
+  });
+
+  it("a free type previews as free and not collectable; an exempt type has no VAT", () => {
+    const free = previewLineCharge(
+      { id: "f", name: "Follow-up", price: 0, billAtFrontDesk: true },
+      null,
+      pricing,
+    );
+
+    expect(free).toMatchObject({
+      ok: true,
+      isFree: true,
+      collectAtCheckIn: false,
+      total: 0,
+    });
+    const exempt = previewLineCharge(
+      { id: "e", name: "Dressing", price: 300, isTaxable: false },
+      null,
+      pricing,
+    );
+
+    expect(exempt).toMatchObject({ ok: true, vat: 0, total: 300 });
+  });
+
+  it("refuses what the resolver refuses, and formats one sentence", () => {
+    const noDoctorYet = previewLineCharge(
+      { id: "c", name: "Doctor Consultation", pricedBy: "doctor" },
+      null,
+      pricing,
+    );
+
+    expect(noDoctorYet.ok).toBe(false);
+    const wrongKind = previewLineCharge(
+      {
+        id: "c",
+        name: "Doctor Consultation",
+        pricedBy: "doctor",
+        performerKind: "doctor",
+      },
+      rina,
+      pricing,
+    );
+
+    expect(wrongKind.ok).toBe(false);
+    if (wrongKind.ok === false) {
+      expect(refusalMessage(wrongKind)).toMatch(
+        /performed by a doctor, not Rina\. Fix it under Settings/,
+      );
+    }
+    const unpriced = previewLineCharge(
+      { id: "u", name: "Mystery" },
+      null,
+      pricing,
+    );
+
+    expect(unpriced.ok).toBe(false);
+  });
+});
+
+describe("mergeVisitLines / findBookedLine — one dedupe rule", () => {
+  const booked = {
+    id: "a",
+    origin: "booked",
+    appointmentTypeId: "c",
+    doctorId: "d1",
+    price: 700,
+    amount: 700,
+  };
+  const procedure = {
+    id: "b",
+    origin: "procedure",
+    appointmentTypeId: "p",
+    doctorId: "e1",
+    price: 2500,
+    amount: 2500,
+  };
+
+  it("skips a line already on the visit and keeps the rest", () => {
+    const r = mergeVisitLines([booked], [booked, procedure], "c");
+
+    expect(r.added).toEqual([procedure]);
+    expect(r.skipped).toEqual([booked]);
+    expect(r.next).toHaveLength(2);
+  });
+
+  it("matches a legacy line that never stored its origin", () => {
+    const legacy = {
+      id: "old",
+      appointmentTypeId: "c",
+      doctorId: "d1",
+      price: 700,
+      amount: 700,
+    };
+    const r = mergeVisitLines([legacy], [booked], "c");
+
+    expect(r.added).toEqual([]);
+    expect(r.skipped).toEqual([booked]);
+  });
+
+  it("the same service for a different performer is a different line", () => {
+    const r = mergeVisitLines(
+      [booked],
+      [{ ...booked, id: "x", doctorId: "d2" }],
+      "c",
+    );
+
+    expect(r.added).toHaveLength(1);
+  });
+
+  it("finds the booked line for a service whoever performs it", () => {
+    expect(findBookedLine([booked, procedure], "c", "c")?.id).toBe("a");
+    expect(findBookedLine([procedure], "c", "c")).toBeUndefined();
+    expect(
+      findBookedLine(
+        [
+          {
+            id: "old",
+            appointmentTypeId: "c",
+            doctorId: "d9",
+            price: 700,
+            amount: 700,
+          },
+        ],
+        "c",
+        "c",
+      )?.id,
+    ).toBe("old");
+  });
+});
+
+describe("legacy pseudo-id lines", () => {
+  it("the old desk's consultation-fee line is the booked line, so nothing is appended twice", () => {
+    const legacy = {
+      id: "old",
+      appointmentTypeId: "consultation-fee",
+      doctorId: "d1",
+      price: 700,
+      amount: 700,
+    };
+
+    expect(findBookedLine([legacy], "c", "c")?.id).toBe("old");
+    expect(findBookedLine([legacy], "c", undefined)?.id).toBe("old");
+    const r = mergeVisitLines([legacy], [legacy], "c");
+
+    expect(r.added).toEqual([]);
   });
 });

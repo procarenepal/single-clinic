@@ -21,7 +21,11 @@
  * Pure: no React, no Firestore, no clock.
  */
 
-import type { VisitBillingItem } from "./visitBillingCore";
+import {
+  computeVisitPayableTotal,
+  type VisitBillingItem,
+  type VisitPricingContext,
+} from "./visitBillingCore";
 
 export type PricedBy = "catalogue" | "doctor";
 export type PerformerKind = "doctor" | "expert";
@@ -114,6 +118,24 @@ export function typePerformerKind(
   return type.performerKind || "either";
 }
 
+/** The refusal when this clinician's kind may not perform the type. */
+export function performerRefusal(
+  type: Pick<ChargeableType, "name" | "performerKind">,
+  clinician: Pick<ChargeClinician, "name" | "kind"> | null | undefined,
+): ChargeRefused | null {
+  const allowed = typePerformerKind(type);
+
+  if (!clinician || allowed === "either" || allowed === clinician.kind) {
+    return null;
+  }
+
+  return {
+    ok: false,
+    reason: `"${type.name}" is performed by ${allowed === "doctor" ? "a doctor" : "an expert"}, not ${clinician.name}.`,
+    fixPath: APPOINTMENT_TYPES_SETTINGS,
+  };
+}
+
 /**
  * The price a type bills at for a given clinician, or a refusal.
  * Exposed on its own so previews and the intake picker can show it.
@@ -192,15 +214,9 @@ export function resolveVisitLine(
   clinician: ChargeClinician,
   input: ResolveLineInput,
 ): ChargeResolution {
-  const allowed = typePerformerKind(type);
+  const refused = performerRefusal(type, clinician);
 
-  if (allowed !== "either" && allowed !== clinician.kind) {
-    return {
-      ok: false,
-      reason: `"${type.name}" is performed by ${allowed === "doctor" ? "a doctor" : "an expert"}, not ${clinician.name}.`,
-      fixPath: APPOINTMENT_TYPES_SETTINGS,
-    };
-  }
+  if (refused) return refused;
 
   const priced = resolveTypePrice(type, clinician);
 
@@ -301,4 +317,101 @@ export function buildPackageSessionLine(
     addedBy: input.addedBy,
     addedAt: input.now,
   };
+}
+
+/** The same line charging a different price: a share of a split procedure. */
+export function withLinePrice(line: VisitLine, price: number): VisitLine {
+  const p = round2(Math.max(0, price));
+
+  return { ...line, price: p, amount: round2(p * line.quantity) };
+}
+
+/**
+ * n shares of an amount that sum EXACTLY to it at two decimals; the odd
+ * paisa land on the first shares. Two experts performing one procedure must
+ * still invoice what the catalogue priced, not 2 × round(price / 2).
+ */
+export function splitAmount(total: number, shares: number): number[] {
+  const count = Math.max(1, Math.floor(shares || 1));
+  const paisa = Math.round((total || 0) * 100);
+  const base = Math.floor(paisa / count);
+  const extra = paisa - base * count;
+
+  return Array.from(
+    { length: count },
+    (_, i) => (base + (i < extra ? 1 : 0)) / 100,
+  );
+}
+
+export interface LineChargePreview {
+  ok: true;
+  price: number;
+  vat: number;
+  /** What the patient pays for this line, VAT included. */
+  total: number;
+  isTaxable: boolean;
+  collectAtCheckIn: boolean;
+  isFree: boolean;
+}
+
+/**
+ * What a service will cost on a visit, for the read-only fee line the desk
+ * shows BEFORE anything is written: the same price, VAT and
+ * collect-at-check-in answers resolveVisitLine gives, or its refusal. The
+ * clinician may still be blank while a row is being filled in; a
+ * doctor-priced type then reports the refusal the desk would hit.
+ */
+export function previewLineCharge(
+  type: ChargeableType,
+  clinician: ChargeClinician | null | undefined,
+  pricing: Pick<VisitPricingContext, "taxPercentage" | "isTaxEnabled">,
+): LineChargePreview | ChargeRefused {
+  const refused = performerRefusal(type, clinician);
+
+  if (refused) return refused;
+
+  const priced = resolveTypePrice(type, clinician);
+
+  if (priced.ok === false) return priced;
+
+  const probe: VisitLine = {
+    id: "preview",
+    appointmentTypeId: type.id,
+    appointmentTypeName: type.name,
+    price: priced.price,
+    quantity: 1,
+    amount: priced.price,
+    commission: 0,
+    calculateCommission: false,
+    isTaxable: type.isTaxable === true,
+    ...(typeof type.taxRate === "number" ? { taxRate: type.taxRate } : {}),
+    doctorId: clinician?.id || "",
+    doctorName: clinician?.name || "",
+    performerKind: clinician?.kind || "doctor",
+    origin: "booked",
+    collectAtCheckIn: isCollectableAtCheckIn(type, priced.price),
+    addedBy: "",
+    addedAt: new Date(0),
+  };
+  const total = round2(
+    computeVisitPayableTotal([probe], {
+      taxPercentage: pricing.taxPercentage,
+      isTaxEnabled: pricing.isTaxEnabled,
+    }),
+  );
+
+  return {
+    ok: true,
+    price: priced.price,
+    vat: round2(total - priced.price),
+    total,
+    isTaxable: type.isTaxable === true,
+    collectAtCheckIn: probe.collectAtCheckIn,
+    isFree: priced.price === 0,
+  };
+}
+
+/** One sentence for a toast or an inline notice. */
+export function refusalMessage(r: ChargeRefused): string {
+  return `${r.reason} Fix it under ${r.fixPath}.`;
 }

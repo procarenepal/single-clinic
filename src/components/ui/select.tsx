@@ -100,11 +100,19 @@ export const Select: React.FC<SelectProps> = ({
     initialKey,
   );
 
-  const isControlled = selectedKeys !== undefined;
+  // Two conventions reach this component: HeroUI-style `selectedKeys`, and
+  // the native `value` + `onChange` pair most settings forms use. Both are
+  // controlled. `value` used to be spread onto the <select> and then
+  // overwritten by the internal key, so every value-driven select showed
+  // its first option whatever the form actually held.
+  const hasValueProp = rest.value !== undefined && rest.value !== null;
+  const isControlled = selectedKeys !== undefined || hasValueProp;
   const currentKey =
     selectedKeys && selectedKeys !== "all"
       ? Array.from(selectedKeys)[0]
-      : internalKey;
+      : hasValueProp
+        ? String(rest.value)
+        : internalKey;
 
   const handleChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
     const nextKey = e.target.value;

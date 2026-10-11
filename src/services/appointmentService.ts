@@ -21,9 +21,11 @@ import {
 
 import { db } from "@/config/firebase";
 import { cacheService } from "@/services/cacheService";
-import { Appointment } from "@/types/models";
+import { Appointment, AppointmentBillingItem } from "@/types/models";
+import { mergeVisitLines } from "@/services/core/legacyVisitAdapters";
 import {
   getVisitPaymentGate,
+  type VisitGateScope,
   type VisitPricingContext,
 } from "@/services/core/visitBillingCore";
 import { resolveClinicId } from "./currentClinic";
@@ -533,7 +535,8 @@ export const appointmentService = {
    */
   async claimVisitDeposit(
     appointmentId: string,
-    requestedAmount: number,
+    /** An amount, or "due" to claim everything the scope still owes. */
+    requestedAmount: number | "due",
     /**
      * The clinic's tax settings, so "what is still due" is computed the
      * same way the desk computed the amount it is asking to claim. Without
@@ -543,8 +546,13 @@ export const appointmentService = {
      * second click answering "already collected".
      */
     pricing: VisitPricingContext,
+    /**
+     * Which lines count as owed: "checkin" is what is collected before the
+     * clinician (the check-in deposit), "all" is the whole visit.
+     */
+    scope: VisitGateScope = "all",
   ): Promise<number> {
-    if (!(requestedAmount > 0)) return 0;
+    if (requestedAmount !== "due" && !(requestedAmount > 0)) return 0;
 
     const appointmentRef = doc(db, "appointments", appointmentId);
 
@@ -556,10 +564,13 @@ export const appointmentService = {
       }
 
       const data = snap.data();
-      const gate = getVisitPaymentGate(data as any, pricing, "all");
+      const gate = getVisitPaymentGate(data as any, pricing, scope);
       const alreadyDeposited = gate.deposited;
       const stillDue = gate.dueAmount;
-      const claimable = Math.min(requestedAmount, stillDue);
+      const claimable =
+        requestedAmount === "due"
+          ? stillDue
+          : Math.min(requestedAmount, stillDue);
 
       if (claimable <= 0) return 0;
 
@@ -569,6 +580,48 @@ export const appointmentService = {
       });
 
       return claimable;
+    });
+  },
+
+  /**
+   * Append lines to this visit atomically, skipping any already on it (see
+   * mergeVisitLines for the one identity rule). A plain read-modify-write
+   * from two desks at once lost one desk's lines. Returns what was actually
+   * added and what was already there.
+   */
+  async appendPendingVisitLines(
+    appointmentId: string,
+    lines: AppointmentBillingItem[],
+  ): Promise<{
+    added: AppointmentBillingItem[];
+    skipped: AppointmentBillingItem[];
+  }> {
+    if (lines.length === 0) return { added: [], skipped: [] };
+
+    const appointmentRef = doc(db, "appointments", appointmentId);
+
+    return runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(appointmentRef);
+
+      if (!snap.exists()) {
+        throw new Error("Appointment not found");
+      }
+
+      const data = snap.data();
+      const merged = mergeVisitLines(
+        (data.pendingVisitItems || []) as AppointmentBillingItem[],
+        lines,
+        data.appointmentTypeId,
+      );
+
+      if (merged.added.length > 0) {
+        transaction.update(appointmentRef, {
+          pendingVisitItems: merged.next,
+          updatedAt: Timestamp.now(),
+        });
+      }
+
+      return { added: merged.added, skipped: merged.skipped };
     });
   },
 

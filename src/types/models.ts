@@ -449,11 +449,10 @@ export interface Appointment {
   /** Referral commissions accumulated mid-visit alongside pendingVisitItems, merged at checkout. */
   pendingVisitReferrals?: AppointmentBilling["referrals"];
   /**
-   * Invoice-level discount staff entered during the visit (at check-in or
-   * when finalising a procedure) — there is no checkout-time UI to enter
-   * one, so this is the only way a discount set mid-visit reaches the real
-   * invoice. Last write wins: whichever of createConsultationBill/
-   * handleFinaliseProcedure ran most recently with a nonzero value.
+   * Legacy: a visit-level discount the old desk let staff enter at check-in
+   * or when finalising a procedure. Nothing writes it any more; Settle still
+   * honours it on in-flight visits until the permissioned discount of the
+   * settle sheet replaces it.
    */
   pendingVisitDiscountType?: "flat" | "percent";
   pendingVisitDiscountValue?: number;

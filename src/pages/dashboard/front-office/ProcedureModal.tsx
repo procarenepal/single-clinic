@@ -210,19 +210,14 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
           if (matchingType) {
             let wasAlreadyBilled = false;
 
-            // Check if this was the booked appointment type AND if it was billed at front desk
-            if (appointment.appointmentTypeId === matchingType.id) {
-              const nameLower = matchingType.name.toLowerCase();
-              const isConsult = nameLower.includes("consult");
-
-              if (
-                matchingType.billAtFrontDesk ||
-                nameLower.includes("hair analy") ||
-                nameLower.includes("skin analy") ||
-                isConsult
-              ) {
-                wasAlreadyBilled = true;
-              }
+            // Already on the visit (the booked service appended at
+            // check-in) — charging it again here would bill it twice.
+            if (
+              ((appointment as any).pendingVisitItems || []).some(
+                (l: any) => l.appointmentTypeId === matchingType.id,
+              )
+            ) {
+              wasAlreadyBilled = true;
             }
 
             if (!wasAlreadyBilled) {

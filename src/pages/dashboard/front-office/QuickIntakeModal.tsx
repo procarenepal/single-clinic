@@ -5,81 +5,171 @@ import { useNavigate } from "react-router-dom";
 
 import { Spinner } from "@/components/ui";
 import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
-import { calculateTaxBreakdown } from "@/utils/taxEngine";
 import { withDoctorPrefix } from "@/utils/clinicianName";
+import {
+  previewLineCharge,
+  refusalMessage,
+  type ChargeClinician,
+} from "@/services/core/visitChargeCore";
+import type { FrontOfficeSettings } from "@/types/models";
 
 /**
- * Sensible per-clinician-type defaults for a newly-added (or retyped) row:
- * a doctor's own consultation is typically charged directly with no
- * commission split, while an assigned expert typically earns a commission
- * on the procedure rather than a separate upfront fee. Matched by NAME
- * against the clinic's actual appointment types (not a hardcoded doc id)
- * since this project's data has been fully wiped/reseeded more than once —
- * a hardcoded id would silently stop matching after any future reseed.
+ * The service a newly-added (or retyped) clinician row starts with: the
+ * clinic's default consultation for a doctor, its default expert service
+ * for an expert — both set under Settings › Front Office. Nothing is
+ * matched by name any more; an unconfigured default leaves the row blank
+ * so staff pick a service deliberately.
  */
 export const getClinicianTypeDefaults = (
   type: "doctor" | "expert",
-  appointmentTypes: any[],
-) => {
-  const wantedName =
-    type === "doctor" ? "doctor consultation" : "skin test";
-  const match = appointmentTypes.find(
-    (t: any) => t.name?.toLowerCase() === wantedName,
-  );
+  frontOffice: Partial<FrontOfficeSettings> | null | undefined,
+) => ({
+  appointmentTypeId:
+    (type === "doctor"
+      ? frontOffice?.defaultConsultationTypeId
+      : frontOffice?.defaultExpertTypeId) || "",
+});
 
-  // Prefer the matched category's own settings (source of truth) over the
-  // doctor/expert guess — a category configured to bill at front desk or
-  // calculate commission should win regardless of clinician type.
-  return {
-    chargeConsultation: match
-      ? Boolean(match.billAtFrontDesk)
-      : type === "doctor",
-    addCommission: match
-      ? match.calculateCommission !== false
-      : type === "expert",
-    appointmentTypeId: match?.id || "",
-  };
-};
+export interface RowFee {
+  status:
+    | "charge"
+    | "free"
+    | "refused"
+    | "package"
+    | "session"
+    | "deferred"
+    | "none";
+  label: string;
+  /** VAT-inclusive amount this row collects at check-in, when it does. */
+  collectNow: number;
+}
+
+const money = (n: number) => `NPR ${n.toLocaleString()}`;
 
 /**
- * Best-effort preview price for a clinician row — mirrors (simplified) the
- * authoritative pricing logic in front-office-desk.tsx's createConsultationBill
- * (catalog appointment-type price, or the doctor's own consultationCharge for
- * a consultation category, or 0 for consuming an already-paid package
- * session) so staff can see roughly what they're about to charge BEFORE
- * submitting, and adjust it if needed. The real invoice total is always
- * computed server-side by calculateInvoiceTotals — this is a preview, not
- * the source of truth.
+ * The read-only fee line under a clinician row: what the charge core will
+ * put on the visit for this service and performer, or why it refuses.
+ * Nothing here is editable — price, VAT, commission and collect-at-check-in
+ * are the catalogue's answers, not the desk's.
  */
-export const getDefaultRowPrice = (
-  row: { clinicianType: "doctor" | "expert"; clinicianId: string; appointmentTypeId: string },
-  appointmentTypes: any[],
-  packages: any[],
-  doctors: any[],
-): number => {
-  if (!row.appointmentTypeId) return 0;
-  if (row.appointmentTypeId.startsWith("consume_pkg_")) return 0;
+export const describeRowFee = (
+  row: {
+    clinicianType: "doctor" | "expert";
+    clinicianId: string;
+    appointmentTypeId: string;
+  },
+  lists: {
+    appointmentTypes: any[];
+    packages: any[];
+    doctors: any[];
+    experts: any[];
+  },
+  pricing: { taxPercentage?: number; isTaxEnabled?: boolean },
+  /** Where the row sits, because submit treats the first row specially. */
+  position: {
+    index: number;
+    firstRowIsPackage: boolean;
+    startSessionInstantly: boolean;
+  } = { index: 0, firstRowIsPackage: false, startSessionInstantly: false },
+): RowFee => {
+  // Nothing to say until both halves of the row are chosen; a row without a
+  // clinician is ignored at submit anyway.
+  if (
+    !row.appointmentTypeId ||
+    !row.clinicianId ||
+    row.clinicianId === "unassigned"
+  ) {
+    return { status: "none", label: "", collectNow: 0 };
+  }
+  if (row.appointmentTypeId.startsWith("consume_pkg_")) {
+    return {
+      status: "session",
+      label: "Package session — prepaid, nothing to collect",
+      collectNow: 0,
+    };
+  }
   if (row.appointmentTypeId.startsWith("pkg_")) {
-    const pkg = packages.find((p) => `pkg_${p.id}` === row.appointmentTypeId);
-
-    return pkg?.price || 0;
-  }
-
-  const apptType = appointmentTypes.find((t) => t.id === row.appointmentTypeId);
-
-  if (!apptType) return 0;
-
-  const isConsultation = apptType.name?.toLowerCase().includes("consult");
-
-  if (isConsultation && row.clinicianType === "doctor" && row.clinicianId) {
-    const doc = doctors.find((d) => d.id === row.clinicianId);
-
-    if (doc?.consultationCharge !== undefined) {
-      return Number(doc.consultationCharge);
+    // Submit only sells the package on the first row.
+    if (position.index > 0) {
+      return {
+        status: "refused",
+        label:
+          "A package is sold from the first clinician row (or from Sell Package).",
+        collectNow: 0,
+      };
     }
-  }
+    const pkg = lists.packages.find(
+      (p) => `pkg_${p.id}` === row.appointmentTypeId,
+    );
+    const price = Number(pkg?.price) || 0;
+    const taxed = pkg?.isTaxable === true && pricing.isTaxEnabled;
+    const total = taxed
+      ? Math.round(price * (1 + (pricing.taxPercentage || 0) / 100) * 100) /
+        100
+      : price;
 
-  return Number(apptType.price) || 0;
+    return {
+      status: "package",
+      label: `Package sale — ${money(total)} collected now${taxed ? " (incl. VAT)" : ""}`,
+      collectNow: total,
+    };
+  }
+  // Behind a package sale, the other rows are charged on the first session
+  // visit — which only exists when that session starts now.
+  if (
+    position.index > 0 &&
+    position.firstRowIsPackage &&
+    !position.startSessionInstantly
+  ) {
+    return {
+      status: "deferred",
+      label:
+        "Charged when the package's first session is started (tick \"Start first session now\" to charge it today).",
+      collectNow: 0,
+    };
+  }
+  const type = lists.appointmentTypes.find(
+    (t) => t.id === row.appointmentTypeId,
+  );
+
+  if (!type) {
+    return {
+      status: "refused",
+      label: "This service is no longer in the catalogue.",
+      collectNow: 0,
+    };
+  }
+  const person =
+    row.clinicianType === "doctor"
+      ? lists.doctors.find((d) => d.id === row.clinicianId)
+      : lists.experts.find((e) => e.id === row.clinicianId);
+  const clinician: ChargeClinician | null = person
+    ? {
+        id: person.id,
+        name: person.name,
+        kind: row.clinicianType,
+        consultationCharge: person.consultationCharge,
+        defaultCommission: person.defaultCommission,
+      }
+    : null;
+  const preview = previewLineCharge(type, clinician, pricing);
+
+  if (preview.ok === false) {
+    return { status: "refused", label: refusalMessage(preview), collectNow: 0 };
+  }
+  if (preview.isFree) {
+    return { status: "free", label: "Free — nothing to collect", collectNow: 0 };
+  }
+  const breakdown =
+    preview.vat > 0
+      ? ` (${money(preview.price)} + VAT ${money(preview.vat)})`
+      : "";
+
+  return {
+    status: "charge",
+    label: `${money(preview.total)}${breakdown} · ${preview.collectAtCheckIn ? "collected at check-in" : "collected at settle"}`,
+    collectNow: preview.collectAtCheckIn ? preview.total : 0,
+  };
 };
 
 export interface QuickIntakeModalProps {
@@ -109,14 +199,13 @@ export interface QuickIntakeModalProps {
   addReferrerRow: () => void;
   updateReferrerRow: (index: number, key: string, value: any) => void;
   removeReferrerRow: (index: number) => void;
-  /** Clinic's default tax %, for the live total preview below — matches
-   * what appointmentBillingService.calculateInvoiceTotals will actually
-   * apply when "Apply Tax to Invoice" is checked. */
+  /** Clinic default VAT %, so each row's fee line previews the same VAT
+   * the charge core will put on the visit. */
   defaultTaxPercentage?: number;
-  /** Clinic-wide tax master switch — the preview must not show a nonzero
-   * tax when this is off, since calculateTaxBreakdown's isTaxEnabled gate
-   * (which actually governs what checkout bills) depends on it too. */
+  /** The clinic-wide tax master switch, same reason. */
   enableTax?: boolean;
+  /** Front-office defaults: the service a doctor or expert row starts with. */
+  frontOffice?: Partial<FrontOfficeSettings> | null;
 }
 
 export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
@@ -148,6 +237,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
   removeReferrerRow,
   defaultTaxPercentage = 0,
   enableTax = false,
+  frontOffice,
 }) => {
   // Escape-to-close and focus-on-open — matches the pattern already
   // established on the app's other modal shells (appointments-billing.tsx's
@@ -627,7 +717,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 clinicianId: "",
                                 ...getClinicianTypeDefaults(
                                   "doctor",
-                                  appointmentTypes,
+                                  frontOffice,
                                 ),
                               },
                             ],
@@ -677,23 +767,13 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                     ...prev,
                                     clinicians: prev.clinicians.map((c: any) => {
                                       if (c.id !== row.id) return c;
-                                      const updated = {
+                                      return {
                                         ...c,
                                         clinicianType: newType,
                                         clinicianId: "",
                                         ...getClinicianTypeDefaults(
                                           newType,
-                                          appointmentTypes,
-                                        ),
-                                      };
-
-                                      return {
-                                        ...updated,
-                                        price: getDefaultRowPrice(
-                                          updated,
-                                          appointmentTypes,
-                                          packages,
-                                          doctors,
+                                          frontOffice,
                                         ),
                                       };
                                     }),
@@ -716,19 +796,9 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                     ...prev,
                                     clinicians: prev.clinicians.map((c: any) => {
                                       if (c.id !== row.id) return c;
-                                      const updated = {
+                                      return {
                                         ...c,
                                         clinicianId: e.target.value,
-                                      };
-
-                                      return {
-                                        ...updated,
-                                        price: getDefaultRowPrice(
-                                          updated,
-                                          appointmentTypes,
-                                          packages,
-                                          doctors,
-                                        ),
                                       };
                                     }),
                                   }));
@@ -768,75 +838,18 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 selectedKey={row.appointmentTypeId || ""}
                                 onSelectionChange={(key) => {
                                   if (key) {
-                                    setQuickIntakeForm((prev: any) => {
-                                      const updatedClinicians = prev.clinicians.map(
-                                        (c: any) => {
-                                          if (c.id !== row.id) return c;
-                                          const updated = {
-                                            ...c,
-                                            appointmentTypeId: String(key),
-                                          };
-                                          // Previously "Charge Fee"/"Add
-                                          // Commission" defaulted purely from
-                                          // doctor-vs-expert, completely
-                                          // ignoring which specific service
-                                          // was picked. Now they default from
-                                          // the selected service's own
-                                          // settings instead — still editable
-                                          // by staff afterward for a one-off
-                                          // exception.
-                                          const at = appointmentTypes.find(
-                                            (t: any) => t.id === String(key),
-                                          );
-
-                                          if (at) {
-                                            updated.chargeConsultation = Boolean(
-                                              at.billAtFrontDesk,
-                                            );
-                                            updated.addCommission =
-                                              at.calculateCommission !== false;
-                                          }
-
-                                          return {
-                                            ...updated,
-                                            price: getDefaultRowPrice(
-                                              updated,
-                                              appointmentTypes,
-                                              packages,
-                                              doctors,
-                                            ),
-                                          };
-                                        },
-                                      );
-
-                                      // "Apply Tax to Invoice" is a GATE —
-                                      // calculateTaxBreakdown taxes nothing
-                                      // when it's off, even a row whose own
-                                      // Appointment Type is explicitly
-                                      // marked Taxable. Defaulting it off
-                                      // and leaving it there silently
-                                      // overrode that category setting.
-                                      // Auto-enable (never auto-disable, so
-                                      // a deliberate staff override stays
-                                      // respected) whenever any charging row
-                                      // is catalogue-taxable.
-                                      const anyRowTaxable = updatedClinicians.some(
-                                        (c: any) => {
-                                          if (!c.chargeConsultation) return false;
-                                          const at = appointmentTypes.find(
-                                            (t: any) => t.id === c.appointmentTypeId,
-                                          );
-
-                                          return at?.isTaxable === true;
-                                        },
-                                      );
-
-                                      return {
-                                        ...prev,
-                                        clinicians: updatedClinicians,
-                                        applyTax: prev.applyTax || anyRowTaxable,
-                                      };
-                                    });
+                                    setQuickIntakeForm((prev: any) => ({
+                                      ...prev,
+                                      clinicians: prev.clinicians.map(
+                                        (c: any) =>
+                                          c.id === row.id
+                                            ? {
+                                                ...c,
+                                                appointmentTypeId: String(key),
+                                              }
+                                            : c,
+                                      ),
+                                    }));
                                   }
                                 }}
                               >
@@ -865,235 +878,115 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                               </Autocomplete>
                             </div>
                           </div>
-                          {row.clinicianId &&
-                            row.clinicianId !== "unassigned" && (
-                              <div className="mt-2 flex items-center gap-4">
-                                <label className="flex items-center gap-1.5 cursor-pointer">
-                                  <input
-                                    checked={row.chargeConsultation}
-                                    className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                                    type="checkbox"
-                                    onChange={(e) => {
-                                      setQuickIntakeForm((prev: any) => ({
-                                        ...prev,
-                                        clinicians: prev.clinicians.map(
-                                          (c: any) =>
-                                            c.id === row.id
-                                              ? {
-                                                  ...c,
-                                                  chargeConsultation:
-                                                    e.target.checked,
-                                                }
-                                              : c,
-                                        ),
-                                      }));
-                                    }}
-                                  />
-                                  <span className="text-[11px] text-text-muted font-medium select-none">
-                                    Charge Fee
-                                  </span>
-                                </label>
-                                <label className="flex items-center gap-1.5 cursor-pointer">
-                                  <input
-                                    checked={row.addCommission}
-                                    className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                                    type="checkbox"
-                                    onChange={(e) => {
-                                      setQuickIntakeForm((prev: any) => ({
-                                        ...prev,
-                                        clinicians: prev.clinicians.map(
-                                          (c: any) =>
-                                            c.id === row.id
-                                              ? {
-                                                  ...c,
-                                                  addCommission:
-                                                    e.target.checked,
-                                                }
-                                              : c,
-                                        ),
-                                      }));
-                                    }}
-                                  />
-                                  <span className="text-[11px] text-text-muted font-medium select-none">
-                                    Add Commission
-                                  </span>
-                                </label>
-                              </div>
-                            )}
-                          {/* Previously invisible until after the invoice was
-                              already created — staff had no way to see, let
-                              alone adjust, what this row would actually
-                              charge. Auto-filled from the catalog/doctor's
-                              consultation fee, editable. */}
-                          {row.chargeConsultation &&
-                            row.clinicianId &&
-                            row.clinicianId !== "unassigned" && (
-                              <div className="mt-2 max-w-[200px]">
-                                <label className="block text-[11px] font-semibold text-text-muted mb-1">
-                                  Price (NPR)
-                                </label>
-                                <input
-                                  className="w-full h-8 px-2.5 text-[12.5px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
-                                  min={0}
-                                  type="number"
-                                  value={row.price ?? ""}
-                                  onChange={(e) => {
-                                    const n = parseFloat(e.target.value);
+                          {(() => {
+                            const fee = describeRowFee(
+                              {
+                                ...row,
+                                appointmentTypeId:
+                                  row.appointmentTypeId ||
+                                  quickIntakeForm.appointmentTypeId,
+                              },
+                              { appointmentTypes, packages, doctors, experts },
+                              {
+                                taxPercentage: defaultTaxPercentage,
+                                isTaxEnabled: enableTax,
+                              },
+                              {
+                                index: idx,
+                                firstRowIsPackage: String(
+                                  quickIntakeForm.clinicians?.[0]
+                                    ?.appointmentTypeId || "",
+                                ).startsWith("pkg_"),
+                                startSessionInstantly: Boolean(
+                                  quickIntakeForm.startSessionInstantly,
+                                ),
+                              },
+                            );
 
-                                    setQuickIntakeForm((prev: any) => ({
-                                      ...prev,
-                                      clinicians: prev.clinicians.map(
-                                        (c: any) =>
-                                          c.id === row.id
-                                            ? {
-                                                ...c,
-                                                price: isNaN(n) ? 0 : n,
-                                              }
-                                            : c,
-                                      ),
-                                    }));
-                                  }}
-                                />
-                              </div>
-                            )}
+                            if (fee.status === "none") return null;
+                            const tone =
+                              fee.status === "refused"
+                                ? "text-danger"
+                                : fee.status === "charge" ||
+                                    fee.status === "package"
+                                  ? "text-text-main"
+                                  : "text-text-muted";
+
+                            return (
+                              <p
+                                className={`mt-2 text-[11.5px] font-medium ${tone}`}
+                                data-testid="row-fee"
+                              >
+                                {fee.status === "refused" ? "⚠ " : ""}
+                                {fee.label}
+                              </p>
+                            );
+                          })()}
                         </div>
                       ),
                     )}
                   </div>
 
-                  {/* Invoice-level, not per-clinician — applies to whichever
-                      consultation bill this check-in creates. */}
-                  <label className="flex items-center gap-1.5 cursor-pointer mt-1">
-                    <input
-                      checked={quickIntakeForm.applyTax}
-                      className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                      type="checkbox"
-                      onChange={(e) =>
-                        setQuickIntakeForm((prev: any) => ({
-                          ...prev,
-                          applyTax: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="text-[11px] text-text-muted font-medium select-none">
-                      Apply Tax to Invoice
-                    </span>
-                  </label>
-
-                  {/* Invoice-level discount for whichever consultation bill
-                      this check-in creates — previously there was no way to
-                      apply a discount here at all. */}
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div>
-                      <label className="block text-[10.5px] font-semibold text-text-muted mb-1">
-                        Discount Type
-                      </label>
-                      <select
-                        className="w-full h-8 px-2 text-[12px] border border-border-base rounded bg-surface text-text-main"
-                        value={quickIntakeForm.discountType}
-                        onChange={(e) =>
-                          setQuickIntakeForm((prev: any) => ({
-                            ...prev,
-                            discountType: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="percent">Percentage (%)</option>
-                        <option value="flat">Flat (NPR)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10.5px] font-semibold text-text-muted mb-1">
-                        Discount Value
-                      </label>
-                      <input
-                        className="w-full h-8 px-2 text-[12px] border border-border-base rounded bg-surface text-text-main"
-                        min={0}
-                        type="number"
-                        value={quickIntakeForm.discountValue || ""}
-                        onChange={(e) =>
-                          setQuickIntakeForm((prev: any) => ({
-                            ...prev,
-                            discountValue: parseFloat(e.target.value) || 0,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  {/* Live estimate — previously staff committed to "Complete
-                      Check-In" with zero visibility into what invoice total
-                      they were about to create. This mirrors (client-side)
-                      the same math calculateInvoiceTotals applies
-                      server-side; that call remains the authoritative total
-                      actually billed. */}
+                  {/* What check-in collects: the sum of the rows' fee lines.
+                      Tax and discount are not asked here — VAT comes from each
+                      service's flag, and a discount is a permissioned decision
+                      taken at Settle, where the whole visit is known. */}
                   {(() => {
-                    const chargingRows = (quickIntakeForm.clinicians || []).filter(
-                      (c: any) =>
-                        c.chargeConsultation &&
-                        c.clinicianId &&
-                        c.clinicianId !== "unassigned",
+                    const allRows: any[] = quickIntakeForm.clinicians || [];
+                    const rows = allRows
+                      .map((c: any, index: number) => ({ c, index }))
+                      .filter(
+                        ({ c }) => c.clinicianId && c.clinicianId !== "unassigned",
+                      );
+                    const firstRowIsPackage = String(
+                      allRows[0]?.appointmentTypeId || "",
+                    ).startsWith("pkg_");
+                    const fees = rows.map(({ c, index }) =>
+                      describeRowFee(
+                        {
+                          ...c,
+                          appointmentTypeId:
+                            c.appointmentTypeId ||
+                            quickIntakeForm.appointmentTypeId,
+                        },
+                        { appointmentTypes, packages, doctors, experts },
+                        {
+                          taxPercentage: defaultTaxPercentage,
+                          isTaxEnabled: enableTax,
+                        },
+                        {
+                          index,
+                          firstRowIsPackage,
+                          startSessionInstantly: Boolean(
+                            quickIntakeForm.startSessionInstantly,
+                          ),
+                        },
+                      ),
                     );
 
-                    if (chargingRows.length === 0) return null;
-
-                    // Per-row isTaxable (from each row's own Appointment
-                    // Type) fed into the SAME calculateTaxBreakdown engine
-                    // calculateInvoiceTotals uses server-side — this used to
-                    // apply defaultTaxPercentage to the WHOLE combined
-                    // subtotal whenever Apply Tax was on, ignoring which
-                    // rows were actually taxable, so this preview could show
-                    // staff an inflated total that didn't match what was
-                    // actually billed once they submitted.
-                    const breakdown = calculateTaxBreakdown({
-                      items: chargingRows.map((c: any) => {
-                        const apptType = appointmentTypes.find(
-                          (t: any) => t.id === c.appointmentTypeId,
-                        );
-
-                        return {
-                          itemName: apptType?.name || "Service",
-                          quantity: 1,
-                          price: Number(c.price) || 0,
-                          isTaxable: apptType?.isTaxable === true,
-                          taxRate: apptType?.taxRate,
-                        };
-                      }),
-                      discountType: quickIntakeForm.discountType,
-                      discountValue: quickIntakeForm.discountValue || 0,
-                      defaultTaxPercentage,
-                      isTaxEnabled: Boolean(quickIntakeForm.applyTax) && enableTax,
-                    });
-
-                    const subtotal = breakdown.subtotal;
-                    const discountAmount = breakdown.totalDiscountAmount;
-                    const afterDiscount =
-                      breakdown.taxableAmount + breakdown.exemptAmount;
-                    const taxAmount = breakdown.taxAmount;
-                    const total = breakdown.totalAmount;
+                    if (fees.length === 0) return null;
+                    const collectNow = fees.reduce(
+                      (sum: number, f: RowFee) => sum + f.collectNow,
+                      0,
+                    );
+                    const refused = fees.filter(
+                      (f: RowFee) => f.status === "refused",
+                    );
 
                     return (
                       <div className="mt-1 p-2.5 rounded border border-border-base bg-surface-2/50 text-[12px] space-y-1">
-                        <div className="flex justify-between text-text-muted">
-                          <span>Subtotal</span>
-                          <span>NPR {subtotal.toLocaleString()}</span>
+                        <div className="flex justify-between font-bold text-text-main">
+                          <span>Collected at check-in</span>
+                          <span data-testid="intake-collect-now">
+                            NPR {collectNow.toLocaleString()}
+                          </span>
                         </div>
-                        {discountAmount > 0 && (
-                          <div className="flex justify-between text-text-muted">
-                            <span>Discount</span>
-                            <span>- NPR {discountAmount.toLocaleString()}</span>
-                          </div>
+                        {refused.length > 0 && (
+                          <p className="text-[11px] text-danger">
+                            Check-in will not charge the flagged row
+                            {refused.length > 1 ? "s" : ""} until it is fixed.
+                          </p>
                         )}
-                        {taxAmount > 0 && (
-                          <div className="flex justify-between text-text-muted">
-                            <span>Tax ({defaultTaxPercentage}%)</span>
-                            <span>NPR {taxAmount.toLocaleString()}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between font-bold text-text-main pt-1 border-t border-border-base">
-                          <span>Estimated Total</span>
-                          <span>NPR {total.toLocaleString()}</span>
-                        </div>
                       </div>
                     );
                   })()}
