@@ -37,7 +37,11 @@ import {
   IoCloseCircleOutline,
   IoEllipsisVerticalOutline,
 } from "react-icons/io5";
-import { IoBusinessOutline, IoMedkitOutline } from "react-icons/io5";
+import {
+  IoBusinessOutline,
+  IoMedkitOutline,
+  IoLockClosedOutline,
+} from "react-icons/io5";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
@@ -2099,7 +2103,20 @@ export default function PathologyBillingTab({
                     <div className="w-[32px]" />
                   </div>
 
-                  {formData.items.map((item, index) => (
+                  {formData.items.map((item, index) => {
+                    // A test type whose own catalog entry defines a tax
+                    // status is legally mandated, not a staff convenience —
+                    // it stays taxed (or exempt) exactly as catalogued no
+                    // matter what the invoice-level "Apply Tax" toggle says.
+                    // Only an item with no such catalog mandate is actually
+                    // governed by that toggle.
+                    const catalogMatch = testTypes.find(
+                      (tt) => tt.name.toLowerCase() === item.testName.toLowerCase(),
+                    );
+                    const isCatalogTaxLocked =
+                      catalogMatch?.isTaxable !== undefined;
+
+                    return (
                     <div
                       key={item.id}
                       className="grid grid-cols-1 md:grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_0.75fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
@@ -2237,9 +2254,18 @@ export default function PathologyBillingTab({
                       <div>
                         <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 flex items-center gap-1">
                           <input
-                            checked={item.isTaxable !== false}
-                            className="w-3 h-3 cursor-pointer accent-primary"
-                            title="Whether this test is taxable — defaults to taxable unless its catalog Test Type (or this box) explicitly marks it exempt"
+                            checked={
+                              isCatalogTaxLocked
+                                ? catalogMatch!.isTaxable === true
+                                : formData.applyTax && item.isTaxable !== false
+                            }
+                            className="w-3 h-3 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isCatalogTaxLocked || !formData.applyTax}
+                            title={
+                              isCatalogTaxLocked
+                                ? "Fixed by this test's catalog (Test Price) tax setting — not affected by Apply Tax"
+                                : "Whether this test is taxable, when Apply Tax is on"
+                            }
                             type="checkbox"
                             onChange={(e) =>
                               updateInvoiceItem(
@@ -2250,16 +2276,29 @@ export default function PathologyBillingTab({
                             }
                           />
                           <span className="md:hidden">Taxable · </span>Tax %
+                          {isCatalogTaxLocked && (
+                            <IoLockClosedOutline className="w-2.5 h-2.5 text-text-muted" />
+                          )}
                         </label>
                         <input
                           className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main disabled:opacity-50"
-                          disabled={!formData.applyTax || item.isTaxable === false}
+                          disabled={
+                            isCatalogTaxLocked ||
+                            !formData.applyTax ||
+                            item.isTaxable === false
+                          }
                           max={100}
                           min={0}
                           placeholder="0"
                           type="number"
                           value={
-                            item.taxRate ?? billingSettings?.defaultTaxPercentage ?? 0
+                            isCatalogTaxLocked
+                              ? (catalogMatch!.taxRate ??
+                                billingSettings?.defaultTaxPercentage ??
+                                0)
+                              : (item.taxRate ??
+                                billingSettings?.defaultTaxPercentage ??
+                                0)
                           }
                           onChange={(e) => {
                             const n = parseFloat(e.target.value);
@@ -2292,7 +2331,8 @@ export default function PathologyBillingTab({
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-default-500 text-sm">
@@ -2587,10 +2627,19 @@ export default function PathologyBillingTab({
                       Apply {billingSettings?.taxLabel || "VAT"} (
                       {billingSettings?.defaultTaxPercentage || 0}%)
                     </span>
-                    {formData.applyTax && (
+                    {calculations.taxAmount > 0 && (
                       <span>{formatCurrency(calculations.taxAmount)}</span>
                     )}
                   </label>
+                  {!formData.applyTax && calculations.taxAmount > 0 && (
+                    <p className="text-[11px] text-text-muted/80 -mt-1 pl-0.5">
+                      One or more tests are taxable per their catalog price
+                      setting, so {billingSettings?.taxLabel || "VAT"} still
+                      applies to those lines (marked{" "}
+                      <IoLockClosedOutline className="inline w-2.5 h-2.5" />{" "}
+                      above) even with this switched off.
+                    </p>
+                  )}
                   <div className="flex justify-between text-[16px] font-black text-primary border-t border-primary/20 pt-1 mt-1">
                     <span>Total:</span>
                     <span>{formatCurrency(calculations.totalAmount)}</span>
