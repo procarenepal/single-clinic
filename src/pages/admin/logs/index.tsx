@@ -33,6 +33,7 @@ import { AuditLog } from "@/types/models";
 import { clinicService } from "@/services/clinicService";
 import { Clinic } from "@/types/models";
 import { useAuthContext } from "@/context/AuthContext";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 
 const EVENT_TYPE_OPTIONS = [
   { key: "all", label: "All Events" },
@@ -258,10 +259,6 @@ export default function AdminLogsPage() {
     );
 
   const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-
-    if (!printWindow) return;
-
     const rows = logs
       .map((log) => {
         const clinic = clinics.find((c) => c.id === log.clinicId);
@@ -279,7 +276,7 @@ export default function AdminLogsPage() {
       })
       .join("");
 
-    printWindow.document.write(`
+    printHtmlViaIframe(`
       <!DOCTYPE html>
       <html>
         <head>
@@ -317,17 +314,9 @@ export default function AdminLogsPage() {
               ${rows}
             </tbody>
           </table>
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-              }, 300);
-            };
-          </script>
         </body>
       </html>
     `);
-    printWindow.document.close();
   };
 
   if (loading && logs.length === 0) {

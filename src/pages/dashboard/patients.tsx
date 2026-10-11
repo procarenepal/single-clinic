@@ -32,6 +32,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 // Custom UI
 import { title } from "@/components/primitives";
 import {
@@ -924,21 +925,13 @@ export default function PatientsPage() {
   };
 
   const printList = () => {
-    const w = window.open("", "_blank");
-
-    if (!w) {
-      addToast({ title: "Allow pop-ups to print", color: "warning" });
-
-      return;
-    }
-
     const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
     const headerHtml = layoutConfig
       ? getPrintHeaderHTML(layoutConfig, clinic)
       : "";
     const footerHtml = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
-    w.document.write(`<!DOCTYPE html><html><head><title>Patients</title>
+    printHtmlViaIframe(`<!DOCTYPE html><html><head><title>Patients</title>
       <style>
         ${brandingCSS}
         table{width:100%;border-collapse:collapse}
@@ -957,12 +950,7 @@ export default function PatientsPage() {
         )
         .join("")}
       </tbody></table></div>${footerHtml}</div>
-      <script>
-        window.addEventListener("load", () => { window.print(); });
-        window.addEventListener("afterprint", () => { window.close(); });
-      </script>
       </body></html>`);
-    w.document.close();
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
