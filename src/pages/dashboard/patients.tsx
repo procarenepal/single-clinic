@@ -1166,14 +1166,14 @@ export default function PatientsPage() {
           {/* ── Table ───────────────────────────────────────────────────── */}
           {loading ? (
             <div className="p-4">
-              <TableSkeleton cols={5} rows={10} />
+              <TableSkeleton cols={6} rows={10} />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-surface-2 border-b border-border-base">
-                    {["Patient", "Contact", "Status", "Reg Date", ""].map(
+                    {["S.N.", "Patient", "Contact", "Status", "Reg Date", ""].map(
                       (h) => (
                         <th
                           key={h}
@@ -1188,7 +1188,7 @@ export default function PatientsPage() {
                 <tbody className="divide-y divide-border-base">
                   {pagePatients.length === 0 ? (
                     <tr>
-                      <td className="py-16 text-center" colSpan={5}>
+                      <td className="py-16 text-center" colSpan={6}>
                         <IoPersonOutline className="w-8 h-8 mx-auto mb-2 text-text-muted/30" />
                         <p className="text-[13px] text-text-muted">
                           No patients found
@@ -1205,11 +1205,16 @@ export default function PatientsPage() {
                       </td>
                     </tr>
                   ) : (
-                    pagePatients.map((patient) => (
+                    pagePatients.map((patient, idx) => (
                       <tr
                         key={patient.id}
                         className={`hover:bg-surface-2 transition-colors ${patient.isCritical ? "crit-row" : ""}`}
                       >
+                        {/* S.N. column */}
+                        <td className="py-2.5 px-3 text-[12px] text-text-muted">
+                          {(page - 1) * PER_PAGE + idx + 1}
+                        </td>
+
                         {/* Patient column */}
                         <td className="py-2.5 px-3">
                           <div className="flex items-center gap-2.5">
