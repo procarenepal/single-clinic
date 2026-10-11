@@ -956,10 +956,13 @@ export default function PatientsPage() {
         <td>${p.isCritical ? "Critical" : "Normal"}</td><td>${fmt(p.createdAt)}</td></tr>`,
         )
         .join("")}
-      </tbody></table></div>${footerHtml}</div></body></html>`);
+      </tbody></table></div>${footerHtml}</div>
+      <script>
+        window.addEventListener("load", () => { window.print(); });
+        window.addEventListener("afterprint", () => { window.close(); });
+      </script>
+      </body></html>`);
     w.document.close();
-    w.print();
-    w.close();
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
