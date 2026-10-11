@@ -16,7 +16,11 @@ export interface DailyBillingSummary {
   id: string;
   type: "appointment" | "pharmacy" | "pathology";
   invoiceNumber: string;
+  /** Only set when the row really resolves to a patient record — a pharmacy walk-in name has no id to link. */
+  patientId?: string;
   patientName: string;
+  /** Only set for appointment invoices; pharmacy/pathology counters aren't a real clinician record. */
+  doctorId?: string;
   totalAmount: number;
   paidAmount: number; // Amount paid ON the selected date
   balanceAmount: number;
@@ -179,6 +183,9 @@ export const dailyReportService = {
         createdDate: Date | null,
         paymentHistory: any[] | undefined,
         status?: string,
+        /** Only a real record's id links; undefined renders as plain text. */
+        patientId?: string,
+        doctorId?: string,
         /**
          * The invoice's own lines. A unified counter invoice can carry
          * services, lab tests and medicines together, so revenue has to be
@@ -246,7 +253,9 @@ export const dailyReportService = {
             id,
             type,
             invoiceNumber,
+            patientId,
             patientName: patientName || "Unknown",
+            doctorId,
             totalAmount,
             paidAmount: paidToday, // Cash collected today
             balanceAmount,
@@ -283,6 +292,8 @@ export const dailyReportService = {
           billing.invoiceDate ? new Date(billing.invoiceDate) : null,
           billing.paymentHistory,
           (billing as any).status,
+          billing.patientId,
+          billing.doctorId,
           (billing as any).items,
         );
       });
@@ -335,6 +346,7 @@ export const dailyReportService = {
           billing.invoiceDate ? new Date(billing.invoiceDate) : null,
           billing.paymentHistory,
           (billing as any).status,
+          billing.patientId,
         );
       });
 

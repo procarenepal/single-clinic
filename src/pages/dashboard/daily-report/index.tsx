@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   IoDocumentTextOutline,
   IoDownloadOutline,
@@ -906,7 +906,12 @@ export default function DailyReportPage() {
                             className="border-b border-mountain-100 hover:bg-slate-50"
                           >
                             <td className="py-1.5 px-3 text-[13px] text-mountain-900">
-                              {patient.name}
+                              <Link
+                                className="text-primary hover:underline font-medium"
+                                to={`/dashboard/patients/${patient.id}`}
+                              >
+                                {patient.name}
+                              </Link>
                             </td>
                             <td className="py-1.5 px-3 text-[13px] text-mountain-700">
                               {patient.regNumber || "N/A"}
@@ -983,10 +988,32 @@ export default function DailyReportPage() {
                               )}
                             </td>
                             <td className="py-1.5 px-3 text-[13px] text-mountain-700">
-                              {getPatientNameById(appointment.patientId)}
+                              {patients.some(
+                                (p) => p.id === appointment.patientId,
+                              ) ? (
+                                <Link
+                                  className="text-primary hover:underline font-medium"
+                                  to={`/dashboard/patients/${appointment.patientId}`}
+                                >
+                                  {getPatientNameById(appointment.patientId)}
+                                </Link>
+                              ) : (
+                                getPatientNameById(appointment.patientId)
+                              )}
                             </td>
                             <td className="py-1.5 px-3 text-[13px] text-mountain-700">
-                              {getDoctorNameById(appointment.doctorId)}
+                              {doctors.some(
+                                (d) => d.id === appointment.doctorId,
+                              ) ? (
+                                <Link
+                                  className="text-primary hover:underline font-medium"
+                                  to={`/dashboard/doctors/${appointment.doctorId}`}
+                                >
+                                  {getDoctorNameById(appointment.doctorId)}
+                                </Link>
+                              ) : (
+                                getDoctorNameById(appointment.doctorId)
+                              )}
                             </td>
                             <td className="py-1.5 px-3">
                               <Chip
@@ -1062,13 +1089,42 @@ export default function DailyReportPage() {
                             className="border-b border-mountain-100 hover:bg-slate-50"
                           >
                             <td className="py-1.5 px-3 text-[13px] font-medium text-mountain-900">
-                              {billing.invoiceNumber}
+                              <Link
+                                className="text-primary hover:underline"
+                                to={
+                                  billing.type === "pharmacy"
+                                    ? `/dashboard/pharmacy/purchase/${billing.id}`
+                                    : billing.type === "pathology"
+                                      ? `/dashboard/pathology-billing/${billing.id}`
+                                      : `/dashboard/appointments-billing/${billing.id}`
+                                }
+                              >
+                                {billing.invoiceNumber}
+                              </Link>
                             </td>
                             <td className="py-1.5 px-3 text-[13px] text-mountain-700">
-                              {billing.patientName || "N/A"}
+                              {billing.patientId ? (
+                                <Link
+                                  className="text-primary hover:underline font-medium"
+                                  to={`/dashboard/patients/${billing.patientId}`}
+                                >
+                                  {billing.patientName || "N/A"}
+                                </Link>
+                              ) : (
+                                billing.patientName || "N/A"
+                              )}
                             </td>
                             <td className="py-1.5 px-3 text-[13px] text-mountain-700">
-                              {billing.doctorName || "N/A"}
+                              {billing.doctorId ? (
+                                <Link
+                                  className="text-primary hover:underline font-medium"
+                                  to={`/dashboard/doctors/${billing.doctorId}`}
+                                >
+                                  {billing.doctorName || "N/A"}
+                                </Link>
+                              ) : (
+                                billing.doctorName || "N/A"
+                              )}
                             </td>
                             <td className="py-1.5 px-3 text-[13px] font-semibold text-mountain-900">
                               {formatCurrency(billing.totalAmount || 0)}
