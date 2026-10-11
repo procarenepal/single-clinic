@@ -110,6 +110,12 @@ export interface QueueListProps {
   billings: any[];
   /** Clinic tax settings, so "owed" here is the same tax-inclusive figure the desk collects. */
   pricing: VisitPricingContext;
+  /** Wallet money not earmarked for another open visit, which reduces what is due. */
+  getStandingCredit?: (appt: any) => number;
+  /** When the wait clock starts: check-in, else the booked start. */
+  getWaitStart?: (appt: any) => Date | null;
+  /** Prints the Advance Receipt for a visit's deposits. */
+  onPrintAdvanceReceipt?: (appt: any) => void;
   getStageBadge: (stage: string, appt: any) => React.ReactNode;
   getPatientReg: (patientId: string) => string;
   getDoctorSpeciality: (appt: any) => string;
@@ -164,6 +170,9 @@ export const QueueList: React.FC<QueueListProps> = ({
   getGuidedAction,
   billings,
   pricing,
+  getStandingCredit,
+  getWaitStart,
+  onPrintAdvanceReceipt,
   getStageBadge,
   getPatientReg,
   getDoctorSpeciality,
@@ -257,7 +266,11 @@ export const QueueList: React.FC<QueueListProps> = ({
                           getPatientStage(appts[0]) === "expert") && (
                             <WaitTimeIndicator
                               onHold={appts[0].onHold}
-                              startTime={appts[0].createdAt}
+                              startTime={
+                                getWaitStart
+                                  ? getWaitStart(appts[0])
+                                  : appts[0].createdAt
+                              }
                             />
                           )}
                         {appts.some((a) => a.isUrgent) && (
@@ -280,8 +293,6 @@ export const QueueList: React.FC<QueueListProps> = ({
                     {(() => {
                       const lobbyAppts = appts.filter(a => getPatientStage(a) === "lobby");
                       const firstLobbyAppt = lobbyAppts.find(a => a.doctorId && a.doctorId !== "unassigned") || lobbyAppts[0];
-                      const scheduledAppts = appts.filter(a => getPatientStage(a) === "scheduled");
-                      const firstScheduledAppt = scheduledAppts.find(a => a.doctorId && a.doctorId !== "unassigned") || scheduledAppts[0];
                       
                       let visitActionNode = null;
                       
@@ -295,25 +306,6 @@ export const QueueList: React.FC<QueueListProps> = ({
                               onClick={visitAction.onClick}
                             >
                               {visitAction.icon}
-                              {visitAction.label}
-                            </button>
-                          );
-                        }
-                      } else if (firstScheduledAppt) {
-                        const visitAction = getGuidedAction(firstScheduledAppt);
-                        if (visitAction.label === "Check-In Patient" || visitAction.label === "Settle Consultation Bill") {
-                          const pending =
-                            visitAction.label === "Check-In Patient" &&
-                            isActionPending?.(`check-in-${firstScheduledAppt.id}`);
-
-                          visitActionNode = (
-                            <button
-                              className={`h-8 px-3 whitespace-nowrap rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors outline-none shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${visitAction.colorClass}`}
-                              disabled={pending}
-                              type="button"
-                              onClick={visitAction.onClick}
-                            >
-                              {pending ? <ButtonSpinner /> : visitAction.icon}
                               {visitAction.label}
                             </button>
                           );
@@ -524,6 +516,7 @@ export const QueueList: React.FC<QueueListProps> = ({
                       appt as any,
                       pricing,
                       "checkin",
+                      { standingCredit: getStandingCredit?.(appt) || 0 },
                     ).isDue;
 
                     return (
@@ -705,21 +698,46 @@ export const QueueList: React.FC<QueueListProps> = ({
                           
                           {/* Render sub-row action if it's not a global visit-level action */}
                           {(() => {
-                            const isVisitLevelAction = action.label === "Record Triage Vitals" || action.label === "Check-In Patient" || action.label === "Settle Consultation Bill";
+                            const isVisitLevelAction = action.label === "Record Triage Vitals" || action.label === "Settle Consultation Bill";
                             if (!isVisitLevelAction) {
+                              // A patient with two bookings today has two
+                              // rows and two Check In buttons.
+                              const pending =
+                                stage === "scheduled" &&
+                                isActionPending?.(`check-in-${appt.id}`);
+
                               return (
                                 <button
-                                  className={`h-8 px-3 whitespace-nowrap rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors outline-none ${action.colorClass}`}
+                                  className={`h-8 px-3 whitespace-nowrap rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors outline-none disabled:opacity-60 disabled:cursor-not-allowed ${action.colorClass}`}
+                                  data-testid={stage === "scheduled" ? "check-in" : undefined}
+                                  disabled={Boolean(pending)}
                                   type="button"
                                   onClick={action.onClick}
                                 >
-                                  {action.icon}
+                                  {pending ? <ButtonSpinner /> : action.icon}
                                   {action.label}
                                 </button>
                               );
                             }
                             return null;
                           })()}
+
+                          {onPrintAdvanceReceipt &&
+                            (appt.depositedAmount || 0) > 0 &&
+                            (stage === "lobby" ||
+                              stage === "triage-done" ||
+                              stage === "doctor" ||
+                              stage === "expert" ||
+                              stage === "billing") && (
+                              <button
+                                className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                                title="Print the advance receipt for this visit's deposit (not a tax invoice)"
+                                type="button"
+                                onClick={() => onPrintAdvanceReceipt(appt)}
+                              >
+                                Receipt
+                              </button>
+                            )}
 
                           {/* Undo check-in/mis-routing/premature triage —
                               pre-billing stages only, see front-office-desk.tsx */}

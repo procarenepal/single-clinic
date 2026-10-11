@@ -15,6 +15,7 @@
 import type {
   Appointment,
   AppointmentBillingItem,
+  AppointmentType,
   Doctor,
   Expert,
   TreatmentPackage,
@@ -28,6 +29,7 @@ import { patientPackageService } from "./patientPackageService";
 import { walletService } from "./walletService";
 import {
   buildPackageSessionLine,
+  refusalMessage,
   resolveVisitLine,
   withLinePrice,
   type ChargeClinician,
@@ -192,37 +194,115 @@ export async function ensureSessionLine(input: {
 }
 
 /**
- * Collect what the check-in scope still says is due, as a wallet deposit
- * tagged to the visit. The amount is claimed atomically first, so two desks
- * cannot both take it; if the wallet write then fails the claim is handed
- * back and the error rethrown, so the visit never looks paid for money that
- * was not taken. Returns the amount collected — 0 when nothing was due or
- * another desk collected it a moment ago.
+ * Collect what the check-in scope still says is due. Standing wallet credit
+ * is spent FIRST — claimed and deducted from the wallet, earmarked onto
+ * this visit by the same depositedAmount counter cash uses — then any
+ * remaining amount is taken as cash/card. Earmarking the credit matters:
+ * without an actual wallet deduction, "covered by credit" was never
+ * recorded anywhere, so the same balance could cover every other open
+ * visit too, forever, and no real money was ever collected for any of
+ * them. Each step is claimed atomically before its side effect, so two
+ * desks cannot both take it and a wallet write failure cannot silently
+ * inflate depositedAmount past what was actually secured.
  */
+export interface DepositCapture {
+  method: string;
+  reference?: string;
+}
+
 export async function collectCheckInDue(
   visit: { id: string; patientId: string },
   ctx: VisitLineContext,
-  method = "cash",
-): Promise<number> {
+  /** Null when nothing is to be taken as cash/card right now. */
+  capture: DepositCapture | null,
+  opts: { standingCredit?: number } = {},
+): Promise<{ collected: number; creditApplied: number; txnId: string | null }> {
+  let creditApplied = 0;
+  let creditTxnId: string | null = null;
+  const standingCredit = Math.max(0, opts.standingCredit || 0);
+
+  if (standingCredit > 0) {
+    // Claimed against the visit's TRUE remaining due (no credit netted in
+    // this gate read), capped at the credit on offer — so the claim can
+    // never exceed what the visit actually owes.
+    const creditClaim = await appointmentService.claimVisitDeposit(
+      visit.id,
+      standingCredit,
+      ctx.pricing,
+      "checkin",
+      {},
+    );
+
+    if (creditClaim > 0) {
+      try {
+        creditTxnId = await walletService.deductFunds(
+          visit.patientId,
+          ctx.clinicId,
+          creditClaim,
+          visit.id,
+          `Visit deposit — covered by wallet credit (appointment ${visit.id})`,
+          ctx.userId,
+          "appointment",
+        );
+        creditApplied = creditClaim;
+      } catch (err) {
+        await appointmentService
+          .releaseVisitDeposit(visit.id, creditClaim)
+          .catch((releaseErr) =>
+            console.error(
+              "Failed to release an unfulfilled credit claim:",
+              releaseErr,
+            ),
+          );
+        await appointmentService
+          .markCheckInDepositFailed(visit.id, true)
+          .catch((markErr) =>
+            console.error("Failed to mark the deposit as failed:", markErr),
+          );
+        throw err;
+      }
+      // Same reasoning as the cash path below: the ledger row is already
+      // written, so recording its id is bookkeeping that must not undo a
+      // collection that already happened.
+      await appointmentService
+        .attachVisitDepositTxn(visit.id, creditTxnId)
+        .catch((attachErr) =>
+          console.error(
+            "Failed to record the credit deduction's ledger row:",
+            attachErr,
+          ),
+        );
+    }
+  }
+
+  if (!capture) return { collected: 0, creditApplied, txnId: creditTxnId };
+
+  // The credit step above already earmarked its share onto depositedAmount,
+  // so a plain "due" claim here — no credit netted again — asks for exactly
+  // what remains in cash.
   const claimed = await appointmentService.claimVisitDeposit(
     visit.id,
     "due",
     ctx.pricing,
     "checkin",
+    {},
   );
 
-  if (claimed <= 0) return 0;
+  if (claimed <= 0) return { collected: 0, creditApplied, txnId: null };
+
+  let txnId: string;
 
   try {
-    await walletService.addFunds(
+    txnId = await walletService.addFunds(
       visit.patientId,
       ctx.clinicId,
       claimed,
-      method,
+      capture.method || "cash",
       `Visit deposit — collected at check-in (appointment ${visit.id})`,
       ctx.userId,
       visit.id,
       "appointment",
+      capture.reference,
     );
   } catch (err) {
     await appointmentService
@@ -233,8 +313,215 @@ export async function collectCheckInDue(
           releaseErr,
         ),
       );
+    await appointmentService
+      .markCheckInDepositFailed(visit.id, true)
+      .catch((markErr) =>
+        console.error("Failed to mark the deposit as failed:", markErr),
+      );
     throw err;
   }
 
-  return claimed;
+  // The ledger row is written; recording its id is bookkeeping and must
+  // not undo a collection that already happened.
+  await appointmentService
+    .attachVisitDepositTxn(visit.id, txnId)
+    .catch((attachErr) =>
+      console.error("Failed to record the deposit's ledger row:", attachErr),
+    );
+
+  return { collected: claimed, creditApplied, txnId };
+}
+
+export interface BookedRow {
+  clinicianId: string;
+  clinicianType?: "doctor" | "expert";
+  appointmentTypeId?: string;
+  /** For a package session: the PatientPackage consumed. */
+  patientPackageId?: string;
+}
+
+export interface CatalogueLists {
+  doctors: Doctor[];
+  experts: Expert[];
+  appointmentTypes: AppointmentType[];
+  packages: TreatmentPackage[];
+}
+
+/**
+ * Put each row's booked service on the visit through the charge core.
+ * Refusals are returned, never thrown: the visit proceeds either way and
+ * the desk is told exactly which line it would not invent. A sibling
+ * appointment (an extra clinician at Quick Intake) gets nothing: its fee
+ * lives on the patient's main visit.
+ */
+export async function appendBookedLines(input: {
+  appointment: { id: string; billedOnAppointmentId?: string | null };
+  rows: BookedRow[];
+  lists: CatalogueLists;
+  ctx: VisitLineContext;
+}): Promise<string[]> {
+  if (input.appointment.billedOnAppointmentId) return [];
+  const refusals: string[] = [];
+
+  for (const row of input.rows) {
+    if (!row.clinicianId || row.clinicianId === "unassigned") continue;
+    const clinician = await findClinician(row.clinicianId, row.clinicianType, {
+      doctors: input.lists.doctors,
+      experts: input.lists.experts,
+    });
+
+    if (!clinician) {
+      refusals.push("The selected clinician could not be found.");
+      continue;
+    }
+    const typeId = row.appointmentTypeId || "";
+
+    if (row.patientPackageId || typeId.startsWith("consume_pkg_")) {
+      const result = await ensureSessionLine({
+        appointment: { id: input.appointment.id },
+        patientPackageId:
+          row.patientPackageId || typeId.replace("consume_pkg_", ""),
+        packages: input.lists.packages,
+        performer: clinician,
+        ctx: input.ctx,
+      });
+
+      if (result.ok === false) refusals.push(refusalMessage(result));
+      continue;
+    }
+    if (!typeId || typeId === "default" || typeId.startsWith("pkg_")) continue;
+    const type = input.lists.appointmentTypes.find((t) => t.id === typeId);
+
+    if (!type) {
+      refusals.push(
+        `Service "${typeId}" is not in the catalogue; edit the appointment's service first.`,
+      );
+      continue;
+    }
+    const result = await ensureVisitLine({
+      appointment: { id: input.appointment.id },
+      type,
+      clinician,
+      origin: "booked",
+      ctx: input.ctx,
+    });
+
+    if (result.ok === false) refusals.push(refusalMessage(result));
+  }
+
+  return refusals;
+}
+
+export interface CheckInOutcome {
+  /** False when another desk had already checked the visit in. */
+  transitioned: boolean;
+  refusals: string[];
+  collected: number;
+  creditApplied: number;
+  txnId: string | null;
+  /** The fee is on the visit but the wallet write failed; "Retry fee" shows. */
+  depositFailed: boolean;
+  /** The booked line itself could not be written after check-in committed. */
+  lineAppendFailed: boolean;
+}
+
+/**
+ * Check a scheduled visit in: the arrival time, the booked line, the
+ * deposit — in that order. The arrival time is already durable once this
+ * function is called (checkInAppointment is a separate, independent
+ * transaction below), so a failure in either later step must never surface
+ * as "check-in failed" — the patient IS checked in; what failed is
+ * reported distinctly so staff can retry exactly that step, never the
+ * whole visit. A visit already invoiced by the old booking page gets no
+ * line and no money.
+ */
+export async function checkInVisit(input: {
+  appointment: {
+    id: string;
+    patientId: string;
+    billedOnAppointmentId?: string | null;
+    billingId?: string | null;
+    consultationBillingId?: string | null;
+  };
+  rows: BookedRow[];
+  lists: CatalogueLists;
+  ctx: VisitLineContext;
+  /** Null when nothing is to be taken as cash/card right now. */
+  capture: DepositCapture | null;
+  standingCredit?: number;
+}): Promise<CheckInOutcome> {
+  const { transitioned } = await appointmentService.checkInAppointment(
+    input.appointment.id,
+    input.ctx.now || new Date(),
+  );
+  const invoiced = Boolean(
+    input.appointment.billingId || input.appointment.consultationBillingId,
+  );
+  let refusals: string[] = [];
+  let lineAppendFailed = false;
+
+  if (!invoiced) {
+    try {
+      refusals = await appendBookedLines({
+        appointment: input.appointment,
+        rows: input.rows,
+        lists: input.lists,
+        ctx: input.ctx,
+      });
+    } catch (err) {
+      // checkInAppointment already committed above — this failure must not
+      // read back to the desk as "check-in failed" when it plainly did not.
+      console.error("Error appending the booked line at check-in:", err);
+      lineAppendFailed = true;
+      refusals = [
+        "The visit's service could not be added — add it from the queue before sending the patient in.",
+      ];
+    }
+  }
+
+  if (invoiced) {
+    return {
+      transitioned,
+      refusals,
+      collected: 0,
+      creditApplied: 0,
+      txnId: null,
+      depositFailed: false,
+      lineAppendFailed,
+    };
+  }
+  try {
+    // Standing credit must still be earmarked even when there is nothing to
+    // collect as cash (capture null) — collectCheckInDue handles that split
+    // internally, and self-corrects to 0 against live state when the line
+    // above never actually landed.
+    const { collected, creditApplied, txnId } = await collectCheckInDue(
+      { id: input.appointment.id, patientId: input.appointment.patientId },
+      input.ctx,
+      input.capture,
+      { standingCredit: input.standingCredit },
+    );
+
+    return {
+      transitioned,
+      refusals,
+      collected,
+      creditApplied,
+      txnId,
+      depositFailed: false,
+      lineAppendFailed,
+    };
+  } catch (err) {
+    console.error("Check-in deposit failed:", err);
+
+    return {
+      transitioned,
+      refusals,
+      collected: 0,
+      creditApplied: 0,
+      txnId: null,
+      depositFailed: true,
+      lineAppendFailed,
+    };
+  }
 }

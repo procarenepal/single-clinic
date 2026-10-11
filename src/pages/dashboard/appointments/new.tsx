@@ -18,7 +18,6 @@ import { patientService } from "@/services/patientService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
-import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { expertService } from "@/services/expertService";
 import {
   scheduleAppointmentReminder,
@@ -243,11 +242,6 @@ export default function NewAppointmentPage() {
   );
   const [loadingData, setLoadingData] = useState(true);
   const defaultBranchId = clinicId ?? null;
-  const [billingSettings, setBillingSettings] = useState<{
-    enableTax?: boolean;
-    defaultTaxPercentage?: number;
-  } | null>(null);
-  const [applyTax, setApplyTax] = useState(false);
 
   // Date conversion state
   const [dateConversionState, setDateConversionState] = useState({
@@ -408,7 +402,6 @@ export default function NewAppointmentPage() {
     appointmentBS: "",
     reason: "",
     notes: "",
-    buyerPan: "",
   });
 
   const [appointmentRows, setAppointmentRows] = useState<AppointmentRow[]>([
@@ -453,15 +446,6 @@ export default function NewAppointmentPage() {
           );
 
         setAppointmentTypes(appointmentTypesData);
-
-        try {
-          const settings =
-            await appointmentBillingService.getBillingSettings(clinicId);
-
-          setBillingSettings(settings);
-        } catch (settingsError) {
-          console.error("Error loading billing settings:", settingsError);
-        }
       } catch (error) {
         addToast({
           title: "Error",
@@ -601,149 +585,10 @@ export default function NewAppointmentPage() {
         }
       }
 
-      // Generate Invoice first if we have billable items
-      const selPat = patients.find((p) => p.id === appointmentInfo.patientId);
-
-      let newBillingId = "";
-      const billingItems: any[] = [];
-      let totalAmount = 0;
-
-      for (const row of appointmentRows) {
-        const selApptType = appointmentTypes.find(
-          (t) => t.id === row.appointmentTypeId,
-        );
-
-        if (selApptType && selApptType.price >= 0) {
-          const isDoctor = row.clinicianType === "doctor";
-          const selDoc = doctors.find((d) => d.id === row.clinicianId);
-          const selExp = experts.find((e) => e.id === row.clinicianId);
-          const clinicianToBill = isDoctor ? selDoc : selExp;
-          const clinicianName = clinicianToBill
-            ? clinicianToBill.name
-            : "Clinic";
-          const clinicianCommission = clinicianToBill?.defaultCommission || 0;
-
-          // Resolved through the shared helper rather than read field by
-          // field. Reading only name and price here meant an appointment type
-          // configured as taxable was billed EXEMPT — createBilling requires
-          // isTaxable === true to tax a line, and nothing set it — and the
-          // type's own commission rate and calculateCommission flag were
-          // ignored in favour of the clinician's blanket default. Appointment
-          // billing, its edit page, PatientBillingTab and the front-office
-          // desk all already resolve through this helper; this screen was the
-          // one booking path that did not.
-          const resolved =
-            appointmentBillingService.resolveItemFieldsFromAppointmentType(
-              selApptType,
-              clinicianCommission,
-            );
-
-          billingItems.push({
-            id: crypto.randomUUID(),
-            appointmentTypeId: selApptType.id,
-            appointmentTypeName: resolved.appointmentTypeName,
-            price: Number(resolved.price),
-            quantity: 1,
-            categoryId: resolved.categoryId,
-            commission: resolved.commission,
-            calculateCommission: resolved.calculateCommission,
-            isTaxable: resolved.isTaxable,
-            taxRate: resolved.taxRate,
-            doctorId: row.clinicianId,
-            doctorName: clinicianName,
-            amount: Number(resolved.price),
-          });
-          totalAmount += Number(resolved.price);
-        }
-      }
-
-      if (billingItems.length > 0) {
-        const processedReferrals: any[] = [];
-
-        if (selPat?.referrals && Array.isArray(selPat.referrals)) {
-          for (const ref of selPat.referrals) {
-            processedReferrals.push({
-              type: ref.type,
-              id: ref.id,
-              name: ref.name,
-              commissionPercentage: ref.commissionPercentage || 0,
-              commissionAmount:
-                (totalAmount * (ref.commissionPercentage || 0)) / 100,
-            });
-          }
-        }
-
-        const primaryPartner = processedReferrals.find(
-          (r) => r.type === "referral-partner",
-        );
-
-        const firstClinicianItem = billingItems[0];
-
-        // Apply the clinic's real tax settings instead of always billing
-        // untaxed — this invoice is created and IRD-synced immediately, so
-        // it must be correct from the start, not "fixed later" (mirrors
-        // the same fix already applied to front-office's own auto-created
-        // consultation invoices).
-        const taxPercentage = applyTax
-          ? billingSettings?.defaultTaxPercentage || 0
-          : 0;
-        const totals = appointmentBillingService.calculateInvoiceTotals(
-          billingItems as any,
-          "percent",
-          0,
-          taxPercentage,
-        );
-
-        const billingData = {
-          invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-          clinicId: clinicId,
-          branchId: defaultBranchId || clinicId,
-          patientId: selPat?.id || appointmentInfo.patientId,
-          patientName: selPat?.name || "Unknown Patient",
-          doctorId: firstClinicianItem.doctorId,
-          doctorName: firstClinicianItem.doctorName,
-          doctorType:
-            appointmentRows[0].clinicianType === "doctor"
-              ? "regular"
-              : "regular",
-          referralPartnerId: primaryPartner
-            ? primaryPartner.id
-            : selPat?.referralPartnerId || undefined,
-          referralCommissionAmount: primaryPartner
-            ? primaryPartner.commissionAmount
-            : undefined,
-          referrals: processedReferrals,
-          invoiceDate: new Date(),
-          items: billingItems,
-          subtotal: totals.subtotal,
-          itemDiscountAmount: 0,
-          mainDiscountAmount: 0,
-          discountType: "percent" as const,
-          discountValue: 0,
-          discountAmount: totals.totalDiscount,
-          taxPercentage,
-          taxAmount: totals.taxAmount,
-          taxableAmount: totals.taxableAmount,
-          exemptAmount: totals.exemptAmount,
-          totalAmount: totals.totalAmount,
-
-          buyerPan: appointmentInfo.buyerPan.trim(),
-          cbmsSyncStatus: "pending",
-          isPrinted: false,
-
-          status: "draft" as const,
-          paymentStatus: "unpaid" as const,
-          paidAmount: 0,
-          balanceAmount: totals.totalAmount,
-          createdBy: currentUser?.uid || "system",
-        };
-
-        const created = await appointmentBillingService.createBilling(
-          billingData as any,
-        );
-
-        newBillingId = created.id;
-      }
+      // Booking files nothing. The booked service goes on the visit when
+      // the patient checks in (and is collected then if the catalogue says
+      // so); the tax invoice is raised once, at Settle. Filing here meant a
+      // second invoice for every visit that had a procedure.
 
       // Create appointments
       for (const row of appointmentRows) {
@@ -771,12 +616,6 @@ export default function NewAppointmentPage() {
           appointmentData.reason = appointmentInfo.reason.trim();
         if (appointmentInfo.notes && appointmentInfo.notes.trim())
           appointmentData.notes = appointmentInfo.notes.trim();
-
-        if (newBillingId) {
-          appointmentData.billingId = newBillingId;
-          appointmentData.billingStatus = "unpaid";
-          appointmentData.paymentStatus = "unpaid";
-        }
 
         const appointmentId =
           await appointmentService.createAppointment(appointmentData);
@@ -1181,22 +1020,6 @@ export default function NewAppointmentPage() {
                 />
               </div>
             ))}
-
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                checked={applyTax}
-                className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                id="applyTaxNewAppt"
-                type="checkbox"
-                onChange={(e) => setApplyTax(e.target.checked)}
-              />
-              <label
-                className="text-[12px] text-text-muted font-medium cursor-pointer select-none"
-                htmlFor="applyTaxNewAppt"
-              >
-                Apply Tax to Invoice (if a fee applies)
-              </label>
-            </div>
 
             <div className="mt-2 flex flex-col gap-1.5 w-full">
               <label className="text-[13px] font-medium text-text-main">

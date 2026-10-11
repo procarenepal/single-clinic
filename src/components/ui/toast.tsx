@@ -40,11 +40,14 @@ export interface ToastOptions {
   color?: ToastColor;
   duration?: number; // ms — default 4000
   id?: string;
+  /** One follow-up the reader may take from the toast, e.g. print a receipt. */
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastItem
   extends Required<Pick<ToastOptions, "id" | "title" | "duration" | "color">> {
   description?: string;
+  action?: ToastOptions["action"];
   removing?: boolean;
 }
 
@@ -87,6 +90,7 @@ export const ToastProvider: React.FC<{ children?: ReactNode }> = ({
         description: opts.description,
         color: opts.color ?? "default",
         duration: opts.duration ?? 4000,
+        action: opts.action,
       };
 
       setToasts((prev) => [...prev.slice(-4), item]); // max 5 visible
@@ -209,6 +213,18 @@ const ToastEl: React.FC<{ toast: ToastItem; onDismiss: () => void }> = ({
           <p className="text-xs text-text-muted mt-0.5 leading-tight">
             {toast.description}
           </p>
+        )}
+        {toast.action && (
+          <button
+            className="mt-1.5 text-xs font-semibold text-primary hover:underline underline-offset-2"
+            type="button"
+            onClick={() => {
+              toast.action?.onClick();
+              onDismiss();
+            }}
+          >
+            {toast.action.label}
+          </button>
         )}
       </div>
 

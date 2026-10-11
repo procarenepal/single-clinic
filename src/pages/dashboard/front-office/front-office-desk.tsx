@@ -29,6 +29,7 @@ import {
 
 import { TriageModal } from "./TriageModal";
 import { RoutingModal, type RoutingFeeLine } from "./RoutingModal";
+import { CheckInSheet } from "./CheckInSheet";
 import { ProcedureModal } from "./ProcedureModal";
 import {
   QuickIntakeModal,
@@ -88,12 +89,29 @@ import { NotificationService } from "@/services/notificationService";
 import { sendCheckInSMS } from "@/services/sendMessageService";
 import SellPackageModal from "@/components/packages/SellPackageModal";
 import {
+  appendBookedLines,
+  checkInVisit,
   collectCheckInDue,
-  ensureSessionLine,
   ensureVisitLine,
   findClinician,
+  type BookedRow,
   type VisitLineContext,
 } from "@/services/visitLineService";
+import {
+  planCheckIn,
+  planCollectDue,
+  standingWalletCredit,
+  visitWaitStart,
+  type CheckInPlan,
+} from "@/services/core/checkInCore";
+import { isLineCollectableAtCheckIn } from "@/services/core/legacyVisitAdapters";
+import {
+  initialPaymentCapture,
+  paymentMethodLabel,
+  type PaymentCaptureValue,
+} from "@/components/billing/PaymentCapture";
+import { clinicService } from "@/services/clinicService";
+import { generateAdvanceReceiptHTML } from "@/utils/advanceReceiptPrinting";
 import {
   previewLineCharge,
   refusalMessage,
@@ -674,6 +692,16 @@ export default function FrontOfficeDesk() {
   >("default");
   const [routingDoctorId, setRoutingDoctorId] = useState("");
   const [routingExpertId, setRoutingExpertId] = useState("");
+
+  // The check-in sheet: open only when money changes hands.
+  const [checkInSheet, setCheckInSheet] = useState<{
+    appt: Appointment;
+    mode: "check-in" | "collect";
+    plan: CheckInPlan;
+    serviceName?: string;
+    performerName?: string;
+  } | null>(null);
+  const [checkInSaving, setCheckInSaving] = useState(false);
 
   // Procedure log modal state
   const [isProcedureModalOpen, setIsProcedureModalOpen] = useState(false);
@@ -1329,99 +1357,66 @@ export default function FrontOfficeDesk() {
     },
   });
 
-  interface CheckInRow {
-    clinicianId: string;
-    clinicianType?: "doctor" | "expert";
-    appointmentTypeId?: string;
-    /** For a package session: the PatientPackage consumed. */
-    patientPackageId?: string;
-  }
+  /**
+   * Wallet money not earmarked for any of this patient's open visits — it
+   * reduces what the desk collects, with no ledger row written.
+   */
+  const standingCreditFor = (patientId: string): number => {
+    const patient = patients.find((p) => p.id === patientId);
+    const open = appointments.filter(
+      (a) =>
+        a.patientId === patientId &&
+        !a.checkoutCompleted &&
+        !["completed", "cancelled", "no-show"].includes(
+          String(a.status || "").toLowerCase(),
+        ),
+    );
+
+    return standingWalletCredit(patient?.walletBalance, open);
+  };
+
+  const catalogueLists = () => ({ doctors, experts, appointmentTypes, packages });
 
   /**
-   * Put each row's booked service on the visit through the charge core,
-   * then collect what the check-in scope says is due.
-   *
-   * Replaces createConsultationBill, which priced from five places (a row
-   * override, the doctor's charge, the catalogue, NPR 700, NPR 500) and
-   * decided "is this the consultation" by the type's NAME. Refusals are
-   * returned and shown, never thrown: the patient is checked in either
-   * way, and the desk is told exactly which line it would not invent.
+   * Put each row's booked service on the visit, then collect what the
+   * check-in scope says is due with the default method. Routing and Quick
+   * Intake use this; a scheduled check-in goes through the sheet instead.
    */
   const appendCheckInLines = async (
     appointmentId: string,
     patientId: string,
-    rows: CheckInRow[],
+    rows: BookedRow[],
   ): Promise<{ refusals: string[]; collected: number }> => {
     if (!clinicId) return { refusals: [], collected: 0 };
-    // A sibling appointment (an extra clinician at Quick Intake) carries no
-    // lines of its own: its fee lives on the patient's main visit.
     const owner = appointments.find((a) => a.id === appointmentId);
-
-    if ((owner as any)?.billedOnAppointmentId) {
-      return { refusals: [], collected: 0 };
-    }
     const ctx = lineContext();
-    const refusals: string[] = [];
-
-    for (const row of rows) {
-      if (!row.clinicianId || row.clinicianId === "unassigned") continue;
-      const clinician = await findClinician(
-        row.clinicianId,
-        row.clinicianType,
-        { doctors, experts },
-      );
-
-      if (!clinician) {
-        refusals.push("The selected clinician could not be found.");
-        continue;
-      }
-      const typeId = row.appointmentTypeId || "";
-
-      if (row.patientPackageId || typeId.startsWith("consume_pkg_")) {
-        const result = await ensureSessionLine({
-          appointment: { id: appointmentId },
-          patientPackageId:
-            row.patientPackageId || typeId.replace("consume_pkg_", ""),
-          packages,
-          performer: clinician,
-          ctx,
-        });
-
-        if (result.ok === false) refusals.push(refusalMessage(result));
-        continue;
-      }
-      if (!typeId || typeId === "default" || typeId.startsWith("pkg_")) {
-        continue;
-      }
-      const type = appointmentTypes.find((t) => t.id === typeId);
-
-      if (!type) {
-        refusals.push(
-          `Service "${typeId}" is not in the catalogue; edit the appointment's service first.`,
-        );
-        continue;
-      }
-      const result = await ensureVisitLine({
-        appointment: { id: appointmentId },
-        type,
-        clinician,
-        origin: "booked",
-        ctx,
-      });
-
-      if (result.ok === false) refusals.push(refusalMessage(result));
-    }
+    const refusals = await appendBookedLines({
+      appointment: {
+        id: appointmentId,
+        billedOnAppointmentId: (owner as any)?.billedOnAppointmentId,
+      },
+      rows,
+      lists: catalogueLists(),
+      ctx,
+    });
 
     let collected = 0;
 
     try {
-      collected = await collectCheckInDue({ id: appointmentId, patientId }, ctx);
+      collected = (
+        await collectCheckInDue(
+          { id: appointmentId, patientId },
+          ctx,
+          initialPaymentCapture(billingSettings),
+          { standingCredit: standingCreditFor(patientId) },
+        )
+      ).collected;
     } catch (err) {
       console.error("Error collecting the check-in deposit:", err);
       addToast({
         title: "Deposit Not Collected",
         description:
-          "The fee is on the visit but the wallet deposit failed — collect it from the queue before sending the patient in.",
+          "The fee is on the visit but the wallet deposit failed — retry it from the queue before sending the patient in.",
         color: "warning",
       });
     }
@@ -1437,17 +1432,318 @@ export default function FrontOfficeDesk() {
     return { refusals, collected };
   };
 
-  // Collects what the check-in scope still owes, as a wallet deposit tagged
-  // to the visit — claimed atomically first, so two desks cannot both take
-  // it (see collectCheckInDue).
-  const handleCollectDeposit = async (appt: Appointment) =>
-    runGuarded(`collect-deposit-${appt.id}`, async () => {
+  /** The Advance Receipt for a visit's deposits — not a tax invoice. */
+  const printAdvanceReceipt = async (appt: Appointment) => {
+    try {
+      const [deposits, clinic, layoutConfig] = await Promise.all([
+        walletService.getDepositsForAppointment(appt.id),
+        clinicService.getClinicById(clinicId || appt.clinicId),
+        clinicService.getPrintLayoutConfig(clinicId || appt.clinicId),
+      ]);
+
+      if (deposits.length === 0) {
+        addToast({
+          title: "No Deposit on Record",
+          description: "Nothing has been collected for this visit yet.",
+          color: "warning",
+        });
+
+        return;
+      }
+      const patient = patients.find((p) => p.id === appt.patientId);
+      const lines: any[] = (appt as any).pendingVisitItems || [];
+      const html = generateAdvanceReceiptHTML(
+        {
+          receiptNo: deposits[0].id.slice(0, 8).toUpperCase(),
+          date: deposits[deposits.length - 1].createdAt,
+          patient: {
+            name: patient?.name || getPatientName(appt.patientId),
+            regNumber: patient?.regNumber,
+            mobile: patient?.mobile,
+          },
+          visit: {
+            serviceNames: lines
+              .filter((l) => isLineCollectableAtCheckIn(l, appt.appointmentTypeId))
+              .map((l) => l.appointmentTypeName)
+              .filter(Boolean),
+            performerName: getDoctorName(appt),
+          },
+          deposits: deposits.map((d) => ({
+            amount: d.amount,
+            method: paymentMethodLabel(billingSettings, d.paymentMethod || "cash"),
+            reference: d.paymentReference,
+            at: d.createdAt,
+          })),
+          receivedBy: userData?.displayName || undefined,
+        },
+        clinic,
+        layoutConfig,
+      );
+      const w = window.open("", "_blank", "width=900,height=700");
+
+      if (!w) {
+        addToast({
+          title: "Pop-up Blocked",
+          description: "Allow pop-ups for this site to print the receipt.",
+          color: "warning",
+        });
+
+        return;
+      }
+      w.document.write(html);
+      w.document.close();
+    } catch (err) {
+      console.error("Error printing the advance receipt:", err);
+      addToast({
+        title: "Receipt Not Printed",
+        description: "Could not prepare the advance receipt. Please try again.",
+        color: "danger",
+      });
+    }
+  };
+
+  /** What checking this visit in means for money, from the booked service. */
+  const checkInPlanFor = (appt: Appointment) => {
+    const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
+    const performerId = hasDoctor
+      ? appt.doctorId
+      : appt.assignedExpertId && appt.assignedExpertId !== "unassigned"
+        ? appt.assignedExpertId
+        : "";
+    const person = hasDoctor
+      ? doctors.find((d) => d.id === performerId)
+      : experts.find((e) => e.id === performerId);
+    const clinician = person
+      ? {
+          id: person.id,
+          name: person.name,
+          kind: (hasDoctor ? "doctor" : "expert") as "doctor" | "expert",
+          consultationCharge: (person as Doctor).consultationCharge,
+          defaultCommission: person.defaultCommission,
+        }
+      : null;
+    const type = appointmentTypes.find((t) => t.id === appt.appointmentTypeId);
+    const invoice = appt.billingId
+      ? billings.find((b) => b.id === appt.billingId)
+      : null;
+    const plan = planCheckIn(
+      appt as any,
+      type,
+      clinician,
+      lineContext().pricing,
+      {
+        standingCredit: standingCreditFor(appt.patientId),
+        invoiceNumber: invoice?.invoiceNumber,
+      },
+    );
+
+    return {
+      plan,
+      serviceName: type?.name || getApptTypeLabel(appt.appointmentTypeId),
+      performerName: person?.name,
+      rows: performerId
+        ? [
+            {
+              clinicianId: performerId,
+              clinicianType: (hasDoctor ? "doctor" : "expert") as
+                | "doctor"
+                | "expert",
+              appointmentTypeId: appt.appointmentTypeId,
+              patientPackageId: appt.patientPackageId,
+            },
+          ]
+        : [],
+    };
+  };
+
+  /** Check In: the sheet when a fee is collectable now, else one click. */
+  const openCheckIn = (appt: Appointment) => {
+    const { plan, serviceName, performerName } = checkInPlanFor(appt);
+
+    if (plan.kind === "collect" && plan.collectNow > 0) {
+      setCheckInSheet({ appt, mode: "check-in", plan, serviceName, performerName });
+
+      return;
+    }
+    void performCheckIn(appt, null);
+  };
+
+  const performCheckIn = (appt: Appointment, capture: PaymentCaptureValue | null) =>
+    runGuarded(`check-in-${appt.id}`, async () => {
+      if (
+        capture &&
+        checkInSheet &&
+        !confirmMatchesLiveAmount(appt, "check-in", checkInSheet.plan.kind === "collect" ? checkInSheet.plan.collectNow : 0)
+      ) {
+        return;
+      }
+      setCheckInSaving(true);
       try {
-        const collected = await collectCheckInDue(
+        const { rows } = checkInPlanFor(appt);
+        const outcome = await checkInVisit({
+          appointment: {
+            id: appt.id,
+            patientId: appt.patientId,
+            billedOnAppointmentId: (appt as any).billedOnAppointmentId,
+            billingId: appt.billingId,
+            consultationBillingId: (appt as any).consultationBillingId,
+          },
+          rows,
+          lists: catalogueLists(),
+          ctx: lineContext(),
+          capture: capture ? { method: capture.method, reference: capture.reference } : null,
+          standingCredit: standingCreditFor(appt.patientId),
+        });
+
+        setCheckInSheet(null);
+        if (outcome.transitioned) {
+          sendCheckInSMS(
+            appt.patientId,
+            appt.clinicId || clinicId || "standalone",
+            appt.id,
+            appt.branchId || branchId || undefined,
+          ).catch((err) => console.error("Auto check-in SMS failed:", err));
+        }
+        if (outcome.depositFailed) {
+          addToast({
+            title: "Checked In — Fee Not Collected",
+            description:
+              "The payment could not be recorded. The patient is in the lobby; use Retry fee on their row before sending them in.",
+            color: "danger",
+            duration: 12000,
+          });
+        } else if (outcome.collected > 0) {
+          addToast({
+            title: "Checked In",
+            description: `NPR ${outcome.collected.toFixed(2)} collected. Patient is in the lobby.`,
+            color: "success",
+            duration: 8000,
+            action: {
+              label: "Print advance receipt",
+              onClick: () => void printAdvanceReceipt(appt),
+            },
+          });
+        } else {
+          addToast({
+            title: outcome.transitioned ? "Checked In" : "Already Checked In",
+            description: outcome.transitioned
+              ? "Patient is in the lobby."
+              : "Another desk checked this patient in a moment ago.",
+            color: outcome.transitioned ? "success" : "warning",
+          });
+        }
+        if (outcome.refusals.length > 0) {
+          addToast({
+            title: outcome.lineAppendFailed
+              ? "Checked In — Service Not Added"
+              : "Checked in, but the fee could not be charged",
+            description: outcome.refusals.join(" "),
+            color: "danger",
+            duration: 15000,
+          });
+        }
+      } catch (err) {
+        console.error("Error checking in patient:", err);
+        addToast({
+          title: "Check-in Failed",
+          description: "Could not update status. Please try again.",
+          color: "danger",
+        });
+      } finally {
+        setCheckInSaving(false);
+      }
+    });
+
+  /** What is still due on a visit already in the lobby, right now. */
+  const collectDuePlanFor = (appt: Appointment) => {
+    const lines: any[] = (appt as any).pendingVisitItems || [];
+    const gate = getVisitPaymentGate(
+      appt as any,
+      lineContext().pricing,
+      "checkin",
+    );
+    const base = lines
+      .filter((l) => isLineCollectableAtCheckIn(l, appt.appointmentTypeId))
+      .reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
+    const plan = planCollectDue({
+      owed: gate.owed,
+      base,
+      deposited: gate.deposited,
+      standingCredit: standingCreditFor(appt.patientId),
+    });
+
+    return {
+      plan,
+      serviceName: lines
+        .filter((l) => isLineCollectableAtCheckIn(l, appt.appointmentTypeId))
+        .map((l) => l.appointmentTypeName)
+        .join(", "),
+    };
+  };
+
+  /** Collect (or retry) a fee still due on a visit already in the lobby. */
+  const openCollectDue = (appt: Appointment) => {
+    const { plan, serviceName } = collectDuePlanFor(appt);
+
+    setCheckInSheet({
+      appt,
+      mode: "collect",
+      plan,
+      serviceName,
+      performerName: getDoctorName(appt),
+    });
+  };
+
+  /**
+   * The sheet can sit open a while; if another action (a second desk, a
+   * concurrent line change) moved the live amount away from what is
+   * displayed, confirming now would let a clerk physically collect the
+   * stale figure from the patient while the system claims a different one
+   * — with no trace of the gap. Compare and refuse rather than let that
+   * happen silently.
+   */
+  const confirmMatchesLiveAmount = (
+    appt: Appointment,
+    mode: "check-in" | "collect",
+    displayedCollectNow: number,
+  ): boolean => {
+    const live =
+      mode === "collect"
+        ? collectDuePlanFor(appt).plan
+        : checkInPlanFor(appt).plan;
+    const liveNow = live.kind === "collect" ? live.collectNow : 0;
+
+    if (Math.abs(liveNow - displayedCollectNow) < 0.01) return true;
+    addToast({
+      title: "Amount Changed",
+      description: `The amount due changed since this was opened (now NPR ${liveNow.toFixed(2)}) — please confirm with the patient and try again.`,
+      color: "warning",
+      duration: 12000,
+    });
+    setCheckInSheet(null);
+
+    return false;
+  };
+
+  const performCollectDue = (appt: Appointment, capture: PaymentCaptureValue | null) =>
+    runGuarded(`collect-deposit-${appt.id}`, async () => {
+      if (!capture) return;
+      if (
+        checkInSheet &&
+        !confirmMatchesLiveAmount(appt, "collect", checkInSheet.plan.kind === "collect" ? checkInSheet.plan.collectNow : 0)
+      ) {
+        return;
+      }
+      setCheckInSaving(true);
+      try {
+        const { collected } = await collectCheckInDue(
           { id: appt.id, patientId: appt.patientId },
           { ...lineContext(), clinicId: clinicId || appt.clinicId },
+          { method: capture.method, reference: capture.reference },
+          { standingCredit: standingCreditFor(appt.patientId) },
         );
 
+        setCheckInSheet(null);
         if (collected <= 0) {
           addToast({
             title: "Nothing Due",
@@ -1459,78 +1755,24 @@ export default function FrontOfficeDesk() {
           return;
         }
         addToast({
-          title: "Deposit Collected",
+          title: "Fee Collected",
           description: `NPR ${collected.toFixed(2)} collected for this visit.`,
           color: "success",
+          duration: 8000,
+          action: {
+            label: "Print advance receipt",
+            onClick: () => void printAdvanceReceipt(appt),
+          },
         });
       } catch (err) {
-        console.error("Error collecting deposit:", err);
+        console.error("Error collecting the fee:", err);
         addToast({
-          title: "Deposit Not Collected",
-          description: "Could not record the deposit. Please try again.",
+          title: "Fee Not Collected",
+          description: "The payment could not be recorded. Please try again.",
           color: "danger",
         });
-      }
-    });
-
-  // Dynamic state machine triggers
-  const handleCheckIn = async (appointmentId: string) =>
-    runGuarded(`check-in-${appointmentId}`, async () => {
-      try {
-        const appt = appointments.find((a) => a.id === appointmentId);
-
-        if (!appt) {
-          throw new Error("Appointment not found");
-        }
-
-        await appointmentService.updateAppointmentStatus(
-          appointmentId,
-          "confirmed",
-        );
-
-        // The booked service goes on the visit for whoever will perform it
-        // and the check-in fee is collected — unless this visit already
-        // carries an invoice filed before the one-invoice model.
-        const hasExistingBill =
-          !!appt.billingId || !!(appt as any).consultationBillingId;
-        const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
-        const performerId = hasDoctor
-          ? appt.doctorId
-          : appt.assignedExpertId && appt.assignedExpertId !== "unassigned"
-            ? appt.assignedExpertId
-            : "";
-
-        if (performerId && !hasExistingBill) {
-          await appendCheckInLines(appointmentId, appt.patientId, [
-            {
-              clinicianId: performerId,
-              clinicianType: hasDoctor ? "doctor" : "expert",
-              appointmentTypeId: appt.appointmentTypeId,
-              patientPackageId: appt.patientPackageId,
-            },
-          ]);
-        }
-
-        // Trigger Check-In SMS in background without blocking UI
-        sendCheckInSMS(
-          appt.patientId,
-          appt.clinicId || clinicId || "standalone",
-          appointmentId,
-          appt.branchId || branchId || undefined,
-        ).catch((err) => console.error("Auto check-in SMS failed:", err));
-
-        addToast({
-          title: "Checked In Successfully",
-          description: "Patient has been marked as Arrived and placed in Lobby.",
-          color: "success",
-        });
-      } catch (err) {
-        console.error("Error checking in patient:", err);
-        addToast({
-          title: "Check-in Failed",
-          description: "Could not update status. Please try again.",
-          color: "danger",
-        });
+      } finally {
+        setCheckInSaving(false);
       }
     });
 
@@ -2825,11 +3067,17 @@ export default function FrontOfficeDesk() {
         isTaxEnabled: Boolean(billingSettings?.enableTax),
       },
       "checkin",
+      { standingCredit: standingCreditFor(appt.patientId) },
     );
 
     if (!gate.isDue) return null;
 
-    return { items, owed: gate.owed, deposited: gate.deposited };
+    return {
+      items,
+      owed: gate.owed,
+      deposited: gate.deposited,
+      dueAmount: gate.dueAmount,
+    };
   };
 
   // Which exclusive cabins are currently occupied, and by whom — used to
@@ -2884,19 +3132,16 @@ export default function FrontOfficeDesk() {
       }
       if (
         !appt.onHold &&
-        appt.createdAt &&
         (stage === "lobby" ||
           stage === "triage-done" ||
           stage === "doctor" ||
           stage === "expert")
       ) {
-        const dObj = (appt.createdAt as any).seconds
-          ? new Date((appt.createdAt as any).seconds * 1000)
-          : new Date(appt.createdAt);
+        const start = visitWaitStart(appt as any);
 
         if (
-          !isNaN(dObj.getTime()) &&
-          Math.floor((new Date().getTime() - dObj.getTime()) / 60000) > 30
+          start &&
+          Math.floor((new Date().getTime() - start.getTime()) / 60000) > 30
         ) {
           return true;
         }
@@ -4736,21 +4981,23 @@ export default function FrontOfficeDesk() {
           onClick: () => { },
         };
       }
+      const due = consBill.dueAmount;
+
       return {
-        label: "Collect Deposit",
+        label: `${(appt as any).checkInDepositFailedAt ? "Retry fee" : "Collect"} NPR ${due.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         icon: <IoCardOutline className="w-4 h-4" />,
         colorClass: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
-        onClick: () => handleCollectDeposit(appt),
+        onClick: () => openCollectDue(appt),
       };
     }
 
     switch (stage) {
       case "scheduled":
         return {
-          label: "Check-In Patient",
+          label: "Check In",
           icon: <IoCheckmarkCircleOutline className="w-4 h-4" />,
           colorClass: "bg-primary text-white hover:bg-primary/90",
-          onClick: () => handleCheckIn(appt.id),
+          onClick: () => openCheckIn(appt),
         };
       case "lobby":
         return {
@@ -5521,6 +5768,9 @@ export default function FrontOfficeDesk() {
               getPatientReg={getPatientReg}
               getPatientStage={getPatientStage}
               getStageBadge={getStageBadge}
+              getStandingCredit={(a) => standingCreditFor(a.patientId)}
+              getWaitStart={(a) => visitWaitStart(a)}
+              onPrintAdvanceReceipt={printAdvanceReceipt}
               handleCompleteCheckout={handleCompleteCheckout}
               handleCompleteConsultation={handleCompleteConsultation}
               handleOpenProcedure={handleOpenProcedure}
@@ -5543,6 +5793,30 @@ export default function FrontOfficeDesk() {
 
       {/* Render the cabin routing popup modal */}
       {renderRoutingModal()}
+      {checkInSheet && (
+        <CheckInSheet
+          depositFailed={Boolean(
+            (checkInSheet.appt as any).checkInDepositFailedAt,
+          )}
+          isOpen
+          mode={checkInSheet.mode}
+          patientName={getPatientName(checkInSheet.appt.patientId)}
+          performerName={checkInSheet.performerName}
+          plan={checkInSheet.plan}
+          regNumber={getPatientReg(checkInSheet.appt.patientId)}
+          saving={checkInSaving}
+          serviceName={checkInSheet.serviceName}
+          settings={billingSettings}
+          onClose={() => {
+            if (!checkInSaving) setCheckInSheet(null);
+          }}
+          onConfirm={(capture) =>
+            checkInSheet.mode === "collect"
+              ? performCollectDue(checkInSheet.appt, capture)
+              : performCheckIn(checkInSheet.appt, capture)
+          }
+        />
+      )}
 
       {/* Render the procedure log popup modal */}
       {renderProcedureModal()}

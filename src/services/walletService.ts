@@ -33,7 +33,7 @@ export function buildWalletDeductionRow(input: {
   clinicId: string;
   amount: number;
   referenceId: string;
-  referenceType: "invoice" | "package";
+  referenceType: "invoice" | "package" | "appointment";
   notes: string;
   createdBy: string;
   now: Date;
@@ -70,6 +70,8 @@ export const walletService = {
     // dedup. Omitted by the existing manual-top-up caller in PatientWalletTab.tsx.
     referenceId?: string,
     referenceType?: "invoice" | "package" | "appointment",
+    /** The card / eSewa / bank transaction id, when the method needs one. */
+    paymentReference?: string,
   ): Promise<string> {
     try {
       const now = new Date();
@@ -96,6 +98,9 @@ export const walletService = {
         createdBy,
         ...(referenceId ? { referenceId } : {}),
         ...(referenceType ? { referenceType } : {}),
+        ...(paymentReference?.trim()
+          ? { paymentReference: paymentReference.trim() }
+          : {}),
       };
 
       await runTransaction(db, async (dbTransaction) => {
@@ -142,8 +147,10 @@ export const walletService = {
     // site (paying an invoice with wallet funds) keeps working unchanged —
     // patientPackageService's session-consumption deduction passes
     // "package" explicitly, since its "invoiceId" argument is actually a
-    // patientPackage id with no invoice page to link to.
-    referenceType: "invoice" | "package" = "invoice",
+    // patientPackage id with no invoice page to link to. visitLineService
+    // passes "appointment" when standing credit is spent at check-in,
+    // before any invoice exists.
+    referenceType: "invoice" | "package" | "appointment" = "invoice",
   ): Promise<string> {
     try {
       const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
@@ -200,7 +207,7 @@ export const walletService = {
       clinicId: string;
       amount: number;
       referenceId: string;
-      referenceType: "invoice" | "package";
+      referenceType: "invoice" | "package" | "appointment";
       notes: string;
       createdBy: string;
       now: Date;
@@ -345,6 +352,31 @@ export const walletService = {
   /**
    * Get wallet transaction history for a specific patient
    */
+  /** The deposits taken for one visit, oldest first — the Advance Receipt's rows. */
+  async getDepositsForAppointment(
+    appointmentId: string,
+  ): Promise<WalletTransaction[]> {
+    const q = query(
+      collection(db, WALLET_TRANSACTIONS_COLLECTION),
+      where("referenceId", "==", appointmentId),
+      where("referenceType", "==", "appointment"),
+      where("type", "==", "deposit"),
+    );
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs
+      .map((d) => {
+        const data = d.data();
+
+        return {
+          id: d.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        } as WalletTransaction;
+      })
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  },
+
   async getPatientTransactions(
     patientId: string,
     clinicId: string,

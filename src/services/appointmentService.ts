@@ -17,6 +17,7 @@ import {
   DocumentSnapshot,
   runTransaction,
   increment,
+  arrayUnion,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
@@ -551,6 +552,8 @@ export const appointmentService = {
      * clinician (the check-in deposit), "all" is the whole visit.
      */
     scope: VisitGateScope = "all",
+    /** Standing wallet credit that reduces what is due (never a ledger row). */
+    opts: { standingCredit?: number } = {},
   ): Promise<number> {
     if (requestedAmount !== "due" && !(requestedAmount > 0)) return 0;
 
@@ -564,7 +567,7 @@ export const appointmentService = {
       }
 
       const data = snap.data();
-      const gate = getVisitPaymentGate(data as any, pricing, scope);
+      const gate = getVisitPaymentGate(data as any, pricing, scope, opts);
       const alreadyDeposited = gate.deposited;
       const stillDue = gate.dueAmount;
       const claimable =
@@ -580,6 +583,67 @@ export const appointmentService = {
       });
 
       return claimable;
+    });
+  },
+
+  /**
+   * Move a scheduled visit to the lobby, once. Two desks clicking Check In
+   * both land here; only the first transitions. The deposit claim is a
+   * separate transaction, so the second desk takes no money of its own.
+   */
+  async checkInAppointment(
+    appointmentId: string,
+    now: Date,
+  ): Promise<{ transitioned: boolean; status: string; clinicId?: string }> {
+    const appointmentRef = doc(db, "appointments", appointmentId);
+    const result = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(appointmentRef);
+
+      if (!snap.exists()) {
+        throw new Error("Appointment not found");
+      }
+      const data = snap.data();
+      const status = String(data.status || "");
+
+      if (status !== "scheduled") {
+        return { transitioned: false, status, clinicId: data.clinicId };
+      }
+      transaction.update(appointmentRef, {
+        status: "confirmed",
+        checkedInAt: Timestamp.fromDate(now),
+        updatedAt: Timestamp.now(),
+      });
+
+      return { transitioned: true, status: "confirmed", clinicId: data.clinicId };
+    });
+
+    if (result.clinicId) {
+      cacheService.invalidateClinicAppointments(result.clinicId);
+    }
+
+    return result;
+  },
+
+  /** Record the ledger row behind a collected deposit; a success clears any failure marker. */
+  async attachVisitDepositTxn(
+    appointmentId: string,
+    txnId: string,
+  ): Promise<void> {
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      depositTxnIds: arrayUnion(txnId),
+      checkInDepositFailedAt: null,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  /** Mark (or clear) a failed deposit so every desk shows "Retry fee". */
+  async markCheckInDepositFailed(
+    appointmentId: string,
+    failed: boolean,
+  ): Promise<void> {
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      checkInDepositFailedAt: failed ? Timestamp.now() : null,
+      updatedAt: Timestamp.now(),
     });
   },
 

@@ -613,6 +613,12 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                             <span className="capitalize">
                               {t.paymentMethod}
                             </span>
+                            {t.paymentReference && (
+                              <span className="text-text-muted/80">
+                                {" "}
+                                · Ref {t.paymentReference}
+                              </span>
+                            )}
                           </>
                         ) : t.type === "refund" ? (
                           // A refund references what it reverses: a package

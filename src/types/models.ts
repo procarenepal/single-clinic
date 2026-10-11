@@ -478,6 +478,8 @@ export interface Appointment {
   depositedAmount?: number;
   /** The wallet ledger rows behind depositedAmount. Invariant: their amounts sum to it. */
   depositTxnIds?: string[];
+  /** Set when the last check-in deposit attempt failed after the fee was put on the visit; cleared when one succeeds. */
+  checkInDepositFailedAt?: Date | null;
   checkoutCompleted?: boolean;
   /** When the patient actually arrived; wait time and escalation run from here, not from creation. */
   checkedInAt?: Date;
