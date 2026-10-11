@@ -235,6 +235,12 @@ export default function ExpertProfilePage() {
               ({
                 id: `billing-${b.id}`,
                 patientId: b.patientId,
+                // A walk-in sale's patientId is the shared "walk-in"
+                // sentinel, not a real patient document, so it can never be
+                // resolved through the usual patients lookup below. The
+                // billing record itself already carries the name typed in
+                // at sale time — same snapshot the commission record uses.
+                patientName: b.patientName,
                 doctorId: b.doctorId || "unassigned", // Expert is not technically a doctor here, but maybe in items
                 assignedExpertId: expertId,
                 clinicId: b.clinicId,
@@ -1350,7 +1356,9 @@ export default function ExpertProfilePage() {
                         >
                           <td className="px-5 py-3">
                             <div className="font-medium text-[13.5px] text-text-main">
-                              {patientNames[appointment.patientId] || "Unknown"}
+                              {patientNames[appointment.patientId] ||
+                                (appointment as any).patientName ||
+                                "Unknown"}
                             </div>
                           </td>
                           <td className="px-5 py-3 text-[13px] text-text-muted">

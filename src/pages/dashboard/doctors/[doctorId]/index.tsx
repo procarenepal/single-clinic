@@ -346,6 +346,12 @@ export default function DoctorProfilePage() {
               ({
                 id: `billing-${b.id}`,
                 patientId: b.patientId,
+                // A walk-in sale's patientId is the shared "walk-in"
+                // sentinel, not a real patient document, so it can never be
+                // resolved through the usual patients lookup below. The
+                // billing record itself already carries the name typed in
+                // at sale time.
+                patientName: b.patientName,
                 doctorId: doctorId,
                 clinicId: b.clinicId,
                 appointmentDate: b.invoiceDate || b.createdAt,
@@ -1609,7 +1615,9 @@ export default function DoctorProfilePage() {
                         >
                           <td className="px-5 py-3">
                             <div className="font-medium text-[13.5px] text-text-main">
-                              {patientNames[appointment.patientId] || "Unknown"}
+                              {patientNames[appointment.patientId] ||
+                                (appointment as any).patientName ||
+                                "Unknown"}
                             </div>
                           </td>
                           <td className="px-5 py-3 text-[13px] text-text-muted">
