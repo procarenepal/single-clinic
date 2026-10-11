@@ -48,6 +48,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 
 const TAB_KEYS = [
   "tests",
@@ -2328,21 +2329,6 @@ export default function PathologyPage() {
         <tfoot><tr><td><div class="footer-spacer"></div></td></tr></tfoot>
       </table>
 
-      <script>
-        window.addEventListener('load', function() {
-          setTimeout(function() {
-            window.print();
-          }, 500);
-        });
-        window.addEventListener('afterprint', function() {
-          window.close();
-        });
-        window.addEventListener('beforeunload', function() {
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage('printComplete', '*');
-          }
-        });
-      </script>
     </body>
   </html>`;
   };
@@ -2516,26 +2502,12 @@ export default function PathologyPage() {
       layoutConfig?.defaultPathologyPrintWithoutLetterhead ?? false;
     const hideLetterhead = options?.hideLetterhead ?? defaultHide;
 
-    const printWindow = window.open("", "_blank", "width=900,height=1200");
-
-    if (!printWindow) {
-      addToast({
-        title: "Error",
-        description:
-          "Unable to open print window. Please allow popups and try again.",
-        color: "danger",
-      });
-
-      return;
-    }
-
     const reportHtml = buildPathologyReportHtml(test, clinic, layoutConfig, {
       hideLetterhead,
       categories,
     });
 
-    printWindow.document.write(reportHtml);
-    printWindow.document.close();
+    printHtmlViaIframe(reportHtml);
   };
 
   const [seeding, setSeeding] = useState(false);
@@ -3469,23 +3441,14 @@ export default function PathologyPage() {
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
                 onPrintReport={() => {
-                  const printWindow = window.open(
-                    "",
-                    "_blank",
-                    "width=900,height=1200",
+                  const reportHtml = buildDailyReportHtml(
+                    dailyReportData,
+                    selectedDate,
+                    clinic,
+                    layoutConfig,
                   );
 
-                  if (printWindow) {
-                    const reportHtml = buildDailyReportHtml(
-                      dailyReportData,
-                      selectedDate,
-                      clinic,
-                      layoutConfig,
-                    );
-
-                    printWindow.document.write(reportHtml);
-                    printWindow.document.close();
-                  }
+                  printHtmlViaIframe(reportHtml);
                 }}
               />
             )}

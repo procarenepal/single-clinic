@@ -29,7 +29,7 @@ export function printHtmlViaIframe(html: string, printDelayMs = 500) {
   iframeDoc.write(html);
   iframeDoc.close();
 
-  setTimeout(() => {
+  const doPrint = () => {
     const win = iframe.contentWindow;
 
     if (!win) {
@@ -50,5 +50,17 @@ export function printHtmlViaIframe(html: string, printDelayMs = 500) {
 
     win.focus();
     win.print();
-  }, printDelayMs);
+  };
+
+  // Wait for web fonts (e.g. the clinic's branding typeface) to finish
+  // loading before measuring/printing — otherwise the first print can use
+  // fallback-font metrics. fonts.ready resolves immediately if there's
+  // nothing left to load, so this never adds delay beyond printDelayMs.
+  const fonts = (iframeDoc as any).fonts;
+
+  if (fonts?.ready) {
+    fonts.ready.then(() => setTimeout(doPrint, printDelayMs));
+  } else {
+    setTimeout(doPrint, printDelayMs);
+  }
 }

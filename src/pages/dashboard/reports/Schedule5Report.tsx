@@ -5,6 +5,7 @@ import { IoDownloadOutline, IoPrintOutline, IoServerOutline } from "react-icons/
 import { Button } from "@/components/ui/button";
 import { billingApi, Schedule5Record } from "@/services/api/billingApi";
 import { userService } from "@/services/userService";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 
 /**
  * The Schedule 5 (अनुसूची ५) master invoice table, sourced from the Java
@@ -168,19 +169,10 @@ export const Schedule5Report: React.FC = () => {
     </thead>
     <tbody>${rowsHtml}</tbody>
   </table>
-  <script>
-    window.addEventListener("load", () => { window.print(); });
-    window.addEventListener("afterprint", () => { window.close(); });
-  </script>
 </body>
 </html>`;
 
-    const printWindow = window.open("", "_blank", "width=1000,height=700");
-
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-    }
+    printHtmlViaIframe(html);
   };
 
   return (

@@ -31,6 +31,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { adToBS } from "@/utils/dateConverter";
 import { generateInvoiceHTML, PrintFormat } from "@/utils/invoicePrinting";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import {
   getLastPaymentMethod,
   setLastPaymentMethod,
@@ -339,19 +340,6 @@ export default function PathologyInvoiceDetailPage() {
       billingApi.recordPrint((invoice as any).javaInvoiceId).catch(console.error);
     }
 
-    const printWindow = window.open("", "_blank", "width=800,height=600");
-
-    if (!printWindow) {
-      addToast({
-        title: "Error",
-        description:
-          "Unable to open print window. Please check your browser settings.",
-        color: "danger",
-      });
-
-      return;
-    }
-
     const printedByText = userData
       ? `${userData.displayName} (${userData.role})`
       : "";
@@ -364,8 +352,7 @@ export default function PathologyInvoiceDetailPage() {
       printedByText,
     );
 
-    printWindow.document.write(printContent);
-    printWindow.document.close();
+    printHtmlViaIframe(printContent);
   };
 
   const handlePaymentOpen = () => {

@@ -308,6 +308,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { clinicService } from "@/services/clinicService";
 import { addToast } from "@/components/ui/toast";
@@ -3384,19 +3385,6 @@ export default function PharmacyPage() {
       return;
     }
 
-    const printWindow = window.open("", "_blank", "width=800,height=600");
-
-    if (!printWindow) {
-      addToast({
-        title: "Error",
-        description:
-          "Unable to open print window. Please check your browser settings.",
-        color: "danger",
-      });
-
-      return;
-    }
-
     // Calculate summary
     const totalDebits = supplierLedgerEntries.reduce(
       (sum, entry) => sum + entry.debitAmount,
@@ -3505,19 +3493,10 @@ export default function PharmacyPage() {
 
     ${footerHtml}
   </div>
-  <script>
-    window.onload = function() {
-      setTimeout(function() {
-        window.print();
-        window.onafterprint = function() { window.close(); };
-      }, 500);
-    };
-  </script>
 </body>
 </html>`;
 
-    printWindow.document.write(printContent);
-    printWindow.document.close();
+    printHtmlViaIframe(printContent);
   };
 
   const handleDeleteSupplierPayment = async (paymentId: string) => {

@@ -26,6 +26,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { Supplier, SupplierPurchaseRecord } from "@/types/models";
 
 interface PurchaseRecordFormData {
@@ -364,10 +365,6 @@ export default function PurchaseRecordsTab({
         ? await clinicService.getPrintLayoutConfig(clinicId)
         : null;
 
-      const printWindow = window.open("", "_blank");
-
-      if (!printWindow) return;
-
       const brandingCSS = printConfig ? getPrintBrandingCSS(printConfig) : "";
       const headerHTML = printConfig
         ? getPrintHeaderHTML(printConfig, clinic)
@@ -502,20 +499,11 @@ export default function PurchaseRecordsTab({
           </div>
 
           ${footerHTML}
-
-          <script>
-            window.onload = () => {
-              setTimeout(() => {
-                window.print();
-              }, 400);
-            };
-          </script>
         </body>
         </html>
       `;
 
-      printWindow.document.write(html);
-      printWindow.document.close();
+      printHtmlViaIframe(html);
     } catch (error) {
       console.error("Error printing invoice:", error);
       addToast({

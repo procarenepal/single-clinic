@@ -127,7 +127,6 @@ export const generateAdvanceReceiptHTML = (
       <div>Patient / Guardian</div>
     </div>
   </div>
-  <script>window.onload = function () { window.print(); };</script>
 </body>
 </html>`;
 };

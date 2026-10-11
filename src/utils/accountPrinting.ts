@@ -8,6 +8,7 @@ import {
 
 import { AccountBill, Clinic } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
+import { printHtmlViaIframe } from "./printHtmlViaIframe";
 
 /**
  * Generates and prints a professional expense/purchase bill.
@@ -17,14 +18,6 @@ export const printAccountBill = (
   clinic: Clinic,
   config: PrintLayoutConfig,
 ) => {
-  const printWindow = window.open("", "_blank");
-
-  if (!printWindow) {
-    alert("Please allow popups to print the bill.");
-
-    return;
-  }
-
   const billDate =
     bill.billDate instanceof Date
       ? bill.billDate
@@ -300,21 +293,9 @@ export const printAccountBill = (
         
         ${getPrintFooterHTML(config)}
       </div>
-
-      <script>
-        window.onload = () => {
-          setTimeout(() => {
-            window.print();
-          }, 600);
-        };
-        window.onafterprint = () => {
-          window.close();
-        };
-      </script>
     </body>
     </html>
   `;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  printHtmlViaIframe(html);
 };

@@ -16,6 +16,7 @@ import { TextDocument } from "@/types/textEditor";
 import { textEditorService } from "@/services/textEditorService";
 import { clinicService } from "@/services/clinicService";
 import { useAuthContext } from "@/context/AuthContext";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import "react-quill/dist/quill.snow.css";
 import "@/styles/quill-custom.css";
 
@@ -300,36 +301,7 @@ export const TextEditorComponent: React.FC<TextEditorComponentProps> = ({
         userData,
       });
 
-      // Create and open print window
-      const printWindow = window.open("", "_blank");
-
-      if (!printWindow) {
-        addToast({
-          title: "Error",
-          description: "Popup blocked. Please allow popups for this site.",
-          color: "danger",
-        });
-
-        return;
-      }
-
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-
-      // Handle print completion
-      const handlePrintComplete = () => {
-        printWindow.close();
-      };
-
-      printWindow.addEventListener("afterprint", handlePrintComplete);
-      printWindow.addEventListener("beforeunload", handlePrintComplete);
-
-      // Auto-trigger print after content loads
-      printWindow.addEventListener("load", () => {
-        setTimeout(() => {
-          printWindow.print();
-        }, 500);
-      });
+      printHtmlViaIframe(printContent);
     } catch (error) {
       console.error("Error generating print:", error);
       addToast({
@@ -676,24 +648,6 @@ export const TextEditorComponent: React.FC<TextEditorComponentProps> = ({
       ${layoutConfig?.footerText ? `<p>${layoutConfig.footerText}</p>` : ""}
     </div>
   </div>
-  
-  <script>
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        window.print();
-      }, 500);
-    });
-    
-    window.addEventListener('afterprint', function() {
-      window.close();
-    });
-    
-    window.addEventListener('beforeunload', function() {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage('printComplete', '*');
-      }
-    });
-  </script>
 </body>
 </html>`;
   };

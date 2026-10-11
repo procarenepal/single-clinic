@@ -103,6 +103,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { clinicService } from "@/services/clinicService";
 import { leaveRequestService } from "@/services/leaveRequestService";
 import { leaveTypeService } from "@/services/leaveTypeService";
@@ -494,11 +495,7 @@ export default function HRPage() {
 
     const primaryColor = effectiveConfig.primaryColor || "#0ea5e9";
 
-    const printWindow = window.open("", "_blank");
-
-    if (!printWindow) return;
-
-    printWindow.document.write(`
+    const printHtml = `
       <html>
         <head>
           <title>Payroll Summary Report</title>
@@ -660,18 +657,11 @@ export default function HRPage() {
             
             ${getPrintFooterHTML(effectiveConfig)}
           </div>
-          <script>
-            window.onload = function() {
-              setTimeout(() => { 
-                window.print();
-                setTimeout(() => { window.close(); }, 500);
-              }, 300);
-            }
-          </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    printHtmlViaIframe(printHtml);
   };
 
   const loadData = async () => {

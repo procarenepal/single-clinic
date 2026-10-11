@@ -8,6 +8,7 @@ import {
 
 import { StaffMember, AccountBill, Clinic } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
+import { printHtmlViaIframe } from "./printHtmlViaIframe";
 
 /**
  * Generates and prints a professional, high-density salary slip for a staff member.
@@ -19,25 +20,6 @@ export const printSalarySlip = (
   clinic: Clinic,
   config: PrintLayoutConfig,
 ) => {
-  // Create a hidden iframe to print directly from the current window, avoiding about:blank URLs
-  const iframe = document.createElement("iframe");
-
-  iframe.style.position = "absolute";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "none";
-  iframe.style.visibility = "hidden";
-
-  document.body.appendChild(iframe);
-
-  const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
-
-  if (!iframeDoc) {
-    console.error("Could not access iframe document");
-
-    return;
-  }
-
   // Defensive date parsing helper
   const parseDefensiveDate = (dateVal: any): Date => {
     if (!dateVal) return new Date();
@@ -332,18 +314,5 @@ export const printSalarySlip = (
 
   `;
 
-  iframeDoc.open();
-  iframeDoc.write(html);
-  iframeDoc.close();
-
-  // Print using the iframe context and clean up afterward to avoid popup/blank tab issues
-  setTimeout(() => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-      document.body.removeChild(iframe);
-    } catch (e) {
-      console.error("Failed to print via iframe:", e);
-    }
-  }, 500);
+  printHtmlViaIframe(html);
 };

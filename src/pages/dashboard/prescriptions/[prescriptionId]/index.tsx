@@ -30,6 +30,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 
 interface PrescriptionWithDetails extends Prescription {
   patientName?: string;
@@ -189,7 +190,6 @@ export default function PrescriptionDetailPage() {
 
   const handlePrint = () => {
     if (!prescription) return;
-    const printWindow = window.open("", "_blank", "width=800,height=600");
 
     const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
     const headerHtml =
@@ -204,9 +204,8 @@ export default function PrescriptionDetailPage() {
           : 180;
     const topMarginMm = layoutConfig?.contentTopMarginWithoutLetterheadMm || 10;
 
-    if (printWindow) {
-      const itemsHtml =
-        prescription.items
+    const itemsHtml =
+      prescription.items
           ?.map(
             (item) =>
               `<tr>
@@ -531,28 +530,10 @@ export default function PrescriptionDetailPage() {
   </div>
 
   ${footerHtml ? `<div class="footer-fixed">${footerHtml}</div>` : ""}
-  
-  <script>
-    window.onload = function() { 
-      setTimeout(function() { 
-        window.print(); 
-        window.onafterprint = function() { window.close(); };
-      }, 500); 
-    };
-  </script>
 </body>
 </html>`;
 
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-    } else {
-      addToast({
-        title: "Error",
-        description:
-          "Unable to open print window. Please check your browser settings.",
-        color: "danger",
-      });
-    }
+    printHtmlViaIframe(printContent);
   };
 
   const handleDownload = () =>

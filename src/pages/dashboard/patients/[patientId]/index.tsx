@@ -35,6 +35,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { Patient } from "@/types/models";
 // ── Custom UI (zero HeroUI) ───────────────────────────────────────────────────
 import { Button } from "@/components/ui/button";
@@ -364,20 +365,13 @@ export default function PatientDetailPage() {
         isBillingEnabled,
       });
 
-      const printWindow = window.open("", "_blank", "width=1200,height=800");
+      printHtmlViaIframe(printContent);
 
-      if (printWindow) {
-        printWindow.document.write(printContent);
-        printWindow.document.close();
-
-        addToast({
-          title: "Report Generated",
-          description: "Comprehensive patient report generated successfully",
-          color: "success",
-        });
-      } else {
-        throw new Error("Unable to open print window");
-      }
+      addToast({
+        title: "Report Generated",
+        description: "Comprehensive patient report generated successfully",
+        color: "success",
+      });
     } catch (error) {
       console.error("Error generating comprehensive print:", error);
       addToast({
@@ -744,15 +738,6 @@ export default function PatientDetailPage() {
   </div>
 
   ${footerHtml ? `<div class="footer-fixed">${footerHtml}</div>` : ""}
-  
-  <script>
-    window.onload = function() {
-      setTimeout(function() {
-        window.print();
-        window.onafterprint = function() { window.close(); };
-      }, 500);
-    };
-  </script>
 </body>
 </html>`;
   };

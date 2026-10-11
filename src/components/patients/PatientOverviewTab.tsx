@@ -26,6 +26,7 @@ import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui";
 import { generatePatientSlipHTML, PrintFormat } from "@/utils/invoicePrinting";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import {
   getPrintBrandingCSS,
   getPrintHeaderHTML,
@@ -263,28 +264,12 @@ export default function PatientOverviewTab({
 
   // ── Print ──────────────────────────────────────────────────────────────────
   const openPrint = (type: "slip" | "rx") => {
-    const w = window.open("", "_blank", "width=800,height=600");
+    const content =
+      type === "slip"
+        ? generatePatientSlipHTML(patient, clinic, printFormat, layoutConfig)
+        : generatePrint(patient, type);
 
-    if (w) {
-      if (type === "slip") {
-        const content = generatePatientSlipHTML(
-          patient,
-          clinic,
-          printFormat,
-          layoutConfig,
-        );
-
-        w.document.write(content);
-      } else {
-        w.document.write(generatePrint(patient, type));
-      }
-      w.document.close();
-    } else
-      addToast({
-        title: "Error",
-        description: "Pop-up blocked. Please allow pop-ups.",
-        color: "danger",
-      });
+    printHtmlViaIframe(content);
   };
 
   const generatePrint = (patient: Patient, type: "slip" | "rx") => {
@@ -307,7 +292,7 @@ export default function PatientOverviewTab({
     const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
     if (type === "slip")
-      return `<!DOCTYPE html><html><head><title>Patient Slip - ${patient.name}</title><style>${brandingCSS}</style></head><body><div class="print-container">${headerHTML}<div class="content">${table}</div>${footerHTML}</div><script>window.onload=()=>setTimeout(()=>window.print(),500);window.onafterprint=()=>window.close();<\/script></body></html>`;
+      return `<!DOCTYPE html><html><head><title>Patient Slip - ${patient.name}</title><style>${brandingCSS}</style></head><body><div class="print-container">${headerHTML}<div class="content">${table}</div>${footerHTML}</div></body></html>`;
 
     return `<!DOCTYPE html><html><head><title>RX — ${patient.name}</title><style>${brandingCSS}
       .container{height:100vh;padding:10mm;box-sizing:border-box;display:flex;flex-direction:column}
@@ -316,7 +301,7 @@ export default function PatientOverviewTab({
       ${headerHTML}
       <div class="content">${table}<div style="text-align:center;margin:20px 0"><h2 style="font-size:18px;font-weight:600;text-transform:uppercase">Medical Prescription</h2></div></div>
       ${footerHTML}
-    </div><script>window.onload=()=>setTimeout(()=>window.print(),500);window.onafterprint=()=>window.close();<\/script></body></html>`;
+    </div></body></html>`;
   };
 
   // ── Delete ─────────────────────────────────────────────────────────────────

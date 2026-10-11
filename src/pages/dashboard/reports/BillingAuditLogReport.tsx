@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { addToast } from "@/components/ui/toast";
 import { billingApi, BillingAuditLogEntry } from "@/services/api/billingApi";
 import { userService } from "@/services/userService";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 
 /**
  * The billing backend's automatic log-archive of every write action against
@@ -112,19 +113,10 @@ export const BillingAuditLogReport: React.FC = () => {
     </thead>
     <tbody>${rowsHtml}</tbody>
   </table>
-  <script>
-    window.addEventListener("load", () => { window.print(); });
-    window.addEventListener("afterprint", () => { window.close(); });
-  </script>
 </body>
 </html>`;
 
-    const printWindow = window.open("", "_blank", "width=1000,height=700");
-
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-    }
+    printHtmlViaIframe(html);
   };
 
   // Exports the FULL audit log (not just the current page) — fetches every

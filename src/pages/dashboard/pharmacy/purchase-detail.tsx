@@ -28,6 +28,7 @@ import {
   generatePharmacyInvoiceHTML,
   PrintFormat,
 } from "@/utils/invoicePrinting";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { useAuthContext } from "@/context/AuthContext";
 
 // Custom Clinic Clarity UI
@@ -1062,81 +1063,55 @@ export default function PurchaseDetailPage() {
       billingApi.recordPrint((purchase as any).javaInvoiceId).catch(console.error);
     }
 
-    // Create a new window for printing
-    const printWindow = window.open("", "_blank", "width=800,height=600");
+    const displayItems = getDisplayItems(purchase.items);
+    const printedByText = userData
+      ? `${userData.displayName} (${userData.role})`
+      : "";
 
-    if (printWindow) {
-      const displayItems = getDisplayItems(purchase.items);
-      const printedByText = userData
-        ? `${userData.displayName} (${userData.role})`
-        : "";
+    const printContent = generatePharmacyInvoiceHTML(
+      {
+        invoiceNumber: purchase.purchaseNo,
+        invoiceDate: purchase.purchaseDate,
+        patientName: purchase.patientName || "Cash Customer",
+        patientPanVat: purchase.patientPanVat,
+        patientPhone: purchase.patientPhone,
+        patientAddress: purchase.patientAddress,
+        subtotal: purchase.total,
+        discountAmount: purchase.discount,
+        taxPercentage: purchase.taxPercentage,
+        taxAmount: purchase.taxAmount,
+        taxableAmount: purchase.taxableAmount,
+        totalAmount: purchase.netAmount,
+        paidAmount,
+        balanceAmount: dueAmount,
+        irdSynced: purchase.irdSynced,
+        paymentMethod: purchase.paymentType,
+        items: displayItems.map((item) => ({
+          name: item.medicineName,
+          subtext:
+            [
+              item.expiryDate ? `Exp: ${item.expiryDate}` : null,
+              item.batchNumber ? `Batch: ${item.batchNumber}` : null,
+            ]
+              .filter(Boolean)
+              .join(" | ") || undefined,
+          quantity: item.quantity,
+          price: item.salePrice,
+          amount: item.amount,
+        })),
+      },
+      format as PrintFormat,
+      clinic,
+      layoutConfig,
+      copyNumber,
+      printedByText,
+    );
 
-      const printContent = generatePharmacyInvoiceHTML(
-        {
-          invoiceNumber: purchase.purchaseNo,
-          invoiceDate: purchase.purchaseDate,
-          patientName: purchase.patientName || "Cash Customer",
-          patientPanVat: purchase.patientPanVat,
-          patientPhone: purchase.patientPhone,
-          patientAddress: purchase.patientAddress,
-          subtotal: purchase.total,
-          discountAmount: purchase.discount,
-          taxPercentage: purchase.taxPercentage,
-          taxAmount: purchase.taxAmount,
-          taxableAmount: purchase.taxableAmount,
-          totalAmount: purchase.netAmount,
-          paidAmount,
-          balanceAmount: dueAmount,
-          irdSynced: purchase.irdSynced,
-          paymentMethod: purchase.paymentType,
-          items: displayItems.map((item) => ({
-            name: item.medicineName,
-            subtext:
-              [
-                item.expiryDate ? `Exp: ${item.expiryDate}` : null,
-                item.batchNumber ? `Batch: ${item.batchNumber}` : null,
-              ]
-                .filter(Boolean)
-                .join(" | ") || undefined,
-            quantity: item.quantity,
-            price: item.salePrice,
-            amount: item.amount,
-          })),
-        },
-        format as PrintFormat,
-        clinic,
-        layoutConfig,
-        copyNumber,
-        printedByText,
-      );
-
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-    } else {
-      addToast({
-        title: "Error",
-        description:
-          "Unable to open print window. Please check your browser settings.",
-        color: "danger",
-      });
-    }
+    printHtmlViaIframe(printContent);
   };
 
   const handlePrintReturn = (ret: MedicinePurchaseReturn) => {
     if (!purchase) return;
-
-    const printWindow = window.open("", "_blank", "width=800,height=600");
-
-    if (!printWindow) {
-      addToast({
-        title: "Error",
-        description:
-          "Unable to open print window. Please check your browser settings.",
-        color: "danger",
-      });
-
-      return;
-    }
 
     const printedByText = userData
       ? `${userData.displayName} (${userData.role})`
@@ -1175,8 +1150,7 @@ export default function PurchaseDetailPage() {
       printedByText,
     );
 
-    printWindow.document.write(printContent);
-    printWindow.document.close();
+    printHtmlViaIframe(printContent);
   };
 
   if (loading) {

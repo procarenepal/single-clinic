@@ -112,6 +112,7 @@ import {
 } from "@/components/billing/PaymentCapture";
 import { clinicService } from "@/services/clinicService";
 import { generateAdvanceReceiptHTML } from "@/utils/advanceReceiptPrinting";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import {
   previewLineCharge,
   refusalMessage,
@@ -1479,19 +1480,7 @@ export default function FrontOfficeDesk() {
         clinic,
         layoutConfig,
       );
-      const w = window.open("", "_blank", "width=900,height=700");
-
-      if (!w) {
-        addToast({
-          title: "Pop-up Blocked",
-          description: "Allow pop-ups for this site to print the receipt.",
-          color: "warning",
-        });
-
-        return;
-      }
-      w.document.write(html);
-      w.document.close();
+      printHtmlViaIframe(html);
     } catch (err) {
       console.error("Error printing the advance receipt:", err);
       addToast({

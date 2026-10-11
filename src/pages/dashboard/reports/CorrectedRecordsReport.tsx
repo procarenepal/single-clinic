@@ -4,6 +4,7 @@ import NepaliDate from "nepali-datetime";
 import { IoDownloadOutline, IoPrintOutline, IoWarningOutline } from "react-icons/io5";
 import { Button } from "@/components/ui/button";
 import { AppointmentBilling, PathologyBilling, MedicinePurchase } from "@/types/models";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 
 interface CorrectedRecordsReportProps {
   billings: AppointmentBilling[];
@@ -182,19 +183,10 @@ export const CorrectedRecordsReport: React.FC<CorrectedRecordsReportProps> = ({
       ${rowsHtml}
     </tbody>
   </table>
-  <script>
-    window.addEventListener("load", () => { window.print(); });
-    window.addEventListener("afterprint", () => { window.close(); });
-  </script>
 </body>
 </html>`;
 
-    const printWindow = window.open("", "_blank", "width=1000,height=700");
-
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-    }
+    printHtmlViaIframe(html);
   };
 
   return (

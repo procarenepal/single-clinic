@@ -52,6 +52,7 @@ import {
   generateAppointmentInvoiceHTML,
   PrintFormat,
 } from "@/utils/invoicePrinting";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { Select, SelectItem } from "@/components/ui/select";
 
 // ── UI Helpers (spec: flat, compact, border-based) ─────────────────────────
@@ -724,32 +725,19 @@ export default function InvoiceDetailPage() {
       billingApi.recordPrint((invoice as any).javaInvoiceId).catch(console.error);
     }
 
-    // Create a new window for printing
-    const printWindow = window.open("", "_blank", "width=800,height=600");
+    const printedByText = userData ? `${userData.displayName} (${userData.role})` : "";
+    const printContent = generateAppointmentInvoiceHTML(
+      invoice,
+      clinic,
+      layoutConfig,
+      patient,
+      printFormat,
+      undefined,
+      copyNumber,
+      printedByText
+    );
 
-    if (printWindow) {
-      const printedByText = userData ? `${userData.displayName} (${userData.role})` : "";
-      const printContent = generateAppointmentInvoiceHTML(
-        invoice,
-        clinic,
-        layoutConfig,
-        patient,
-        printFormat,
-        undefined,
-        copyNumber,
-        printedByText
-      );
-
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-    } else {
-      addToast({
-        title: "Error",
-        description:
-          "Unable to open print window. Please check your browser settings.",
-        color: "danger",
-      });
-    }
+    printHtmlViaIframe(printContent);
   };
 
   const handleCancelInvoice = async (reason: string) => {

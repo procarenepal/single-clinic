@@ -25,6 +25,7 @@ import {
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { clinicService } from "@/services/clinicService";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { title } from "@/components/primitives";
@@ -474,10 +475,6 @@ export default function PrescriptionsPage() {
 
   const printPrescriptions = () => {
     try {
-      const printWindow = window.open("", "_blank");
-
-      if (!printWindow) throw new Error();
-
       const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
       const headerHTML = layoutConfig
         ? getPrintHeaderHTML(layoutConfig, clinic)
@@ -513,11 +510,7 @@ export default function PrescriptionsPage() {
         </body></html>
       `;
 
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-      printWindow.addEventListener("onafterprint", () => printWindow.close());
+      printHtmlViaIframe(printContent);
     } catch (e) {
       addToast({
         title: "Error",

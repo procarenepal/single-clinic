@@ -565,14 +565,6 @@ export const generateUnifiedInvoiceHTML = (
     `
     }
   </div>
-  
-  <script>
-    window.onload = () => {
-      document.fonts.ready.then(() => {
-        setTimeout(() => { window.print(); window.close(); }, 800);
-      });
-    }
-  </script>
 </body>
 </html>`;
 };
@@ -949,14 +941,6 @@ export const generatePatientSlipHTML = (
       <p>${new Date().toLocaleString()}</p>
     </div>
   </div>
-  
-  <script>
-    window.onload = () => {
-      document.fonts.ready.then(() => {
-        setTimeout(() => { window.print(); window.close(); }, 800);
-      });
-    }
-  </script>
 </body>
 </html>`;
 };

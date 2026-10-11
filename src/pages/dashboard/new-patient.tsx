@@ -63,6 +63,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Divider } from "@/components/ui/divider";
 import { addToast } from "@/components/ui/toast";
 import { title } from "@/components/primitives";
+import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 
 // Date utils
 import {
@@ -1785,9 +1786,7 @@ const NewPatientPage: React.FC = () => {
 
   // ── Print OPD Ticket ───────────────────────────────────────────────────────
   const printOpdTicket = () => {
-    const printWindow = window.open("", "_blank", "width=400,height=600");
-
-    if (!printWindow || !opdTicket) return;
+    if (!opdTicket) return;
     const html = `
 <!DOCTYPE html>
 <html>
@@ -1836,10 +1835,7 @@ const NewPatientPage: React.FC = () => {
 </body>
 </html>`;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 300);
+    printHtmlViaIframe(html);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
