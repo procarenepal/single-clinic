@@ -9,12 +9,13 @@ import {
   IoSaveOutline,
   IoWarningOutline,
   IoCheckmarkCircleOutline,
+  IoTimeOutline,
 } from "react-icons/io5";
 
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { MedicalReportField } from "@/types/models";
+import { MedicalReportField, MedicalReportResponse } from "@/types/models";
 import { medicalReportFieldService } from "@/services/medicalReportFieldService";
 import { MedicalReportResponseService } from "@/services/medicalReportResponseService";
 import { appointmentService } from "@/services/appointmentService";
@@ -98,6 +99,78 @@ function YesNoField({
   );
 }
 
+// ── Saved-report display helpers ──────────────────────────────────────────────
+const isFilled = (v: any): boolean =>
+  Array.isArray(v)
+    ? v.length > 0
+    : typeof v === "string"
+      ? v.trim() !== ""
+      : v !== null && v !== undefined;
+
+/** A saved answer as readable text (checkbox lists joined, yes/no capitalized). */
+function formatAnswer(field: MedicalReportField, value: any): string {
+  if (Array.isArray(value)) return value.join(", ");
+  if (field.fieldType === "yes-no")
+    return String(value).replace(/^./, (c) => c.toUpperCase());
+  if (field.fieldType === "date") {
+    const d = new Date(value);
+
+    return isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
+  }
+
+  return String(value);
+}
+
+/** One previously saved report, read-only. */
+function SavedReportCard({
+  report,
+  fields,
+  compact,
+}: {
+  report: MedicalReportResponse;
+  fields: MedicalReportField[];
+  compact: boolean;
+}) {
+  const answered = fields.filter((f) =>
+    isFilled(report.fieldValues?.[f.fieldKey]),
+  );
+  const savedAt = report.submittedAt || report.updatedAt;
+
+  return (
+    <div className="min-w-0 border border-border-base rounded bg-surface overflow-hidden">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-2 bg-surface-2 border-b border-border-base/50 text-[11.5px] text-text-muted">
+        <IoTimeOutline className="w-3.5 h-3.5 shrink-0" />
+        <span className="font-medium text-text-main">
+          {savedAt.getTime() > 0
+            ? `${savedAt.toLocaleDateString()} ${savedAt.toLocaleTimeString()}`
+            : "Earlier report"}
+        </span>
+        {report.submittedByName && <span>· by {report.submittedByName}</span>}
+      </div>
+      {answered.length === 0 ? (
+        <p className="px-3 py-3 text-[12px] text-text-muted">
+          No answers were recorded in this report.
+        </p>
+      ) : (
+        <dl
+          className={`grid grid-cols-1 ${compact ? "" : "lg:grid-cols-2"} gap-x-6 gap-y-3 p-3`}
+        >
+          {answered.map((f) => (
+            <div key={f.id} className="min-w-0">
+              <dt className="text-[11px] font-medium text-text-muted">
+                {f.fieldLabel}
+              </dt>
+              <dd className="text-[12.5px] text-text-main whitespace-pre-wrap break-words">
+                {formatAnswer(f, report.fieldValues[f.fieldKey])}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export const PatientMedicalReportTab: React.FC<
   PatientMedicalReportTabProps
@@ -105,6 +178,7 @@ export const PatientMedicalReportTab: React.FC<
   const { currentUser, userData: authUserData } = useAuthContext();
   const [fields, setFields] = useState<MedicalReportField[]>([]);
   const [responses, setResponses] = useState<Record<string, any>>({});
+  const [reports, setReports] = useState<MedicalReportResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -117,9 +191,16 @@ export const PatientMedicalReportTab: React.FC<
   const loadFieldsAndResponses = async () => {
     setLoading(true);
     try {
-      const [flds, existing, appointments, patient] = await Promise.all([
+      const [flds, savedReports, appointments, patient] = await Promise.all([
         medicalReportFieldService.getFields(clinicId),
-        MedicalReportResponseService.getPatientResponses(clinicId, patientId),
+        MedicalReportResponseService.getPatientReports(
+          clinicId,
+          patientId,
+        ).catch((error) => {
+          // Nothing readable yet is normal for a patient's first visit.
+          if (error?.code === "permission-denied") return [];
+          throw error;
+        }),
         appointmentService.getAppointmentsByPatient(patientId),
         patientService.getPatientById(patientId),
       ]);
@@ -137,10 +218,15 @@ export const PatientMedicalReportTab: React.FC<
 
       setFields(uniqueFields);
 
-      let initialResponses = existing?.fieldValues || {};
+      setReports(savedReports);
+
+      // The form is always for a new report, so it starts empty. Only the very
+      // first report is pre-filled from the appointment / patient profile.
+      const initialResponses: Record<string, any> = {};
+      const isFirstReport = savedReports.length === 0;
 
       // Auto-populate from recent appointments if fields are empty
-      if (appointments && appointments.length > 0) {
+      if (isFirstReport && appointments && appointments.length > 0) {
         // Sort to get the most recent appointment
         const sortedAppts = [...appointments].sort(
           (a, b) =>
@@ -169,7 +255,7 @@ export const PatientMedicalReportTab: React.FC<
       }
 
       // Auto-populate from patient profile if fields are empty
-      if (patient) {
+      if (isFirstReport && patient) {
         if (!initialResponses["blood-group"] && patient.bloodGroup) {
           initialResponses["blood-group"] = patient.bloodGroup;
           setHasChanges(true);
@@ -186,10 +272,9 @@ export const PatientMedicalReportTab: React.FC<
         }
       }
 
-      if (existing) {
-        setLastSaved(existing.updatedAt ? new Date(existing.updatedAt) : null);
-      }
+      const latest = savedReports[0];
 
+      setLastSaved(latest ? latest.submittedAt || latest.updatedAt : null);
       setResponses(initialResponses);
     } catch {
       addToast({
@@ -210,16 +295,36 @@ export const PatientMedicalReportTab: React.FC<
 
   const handleSave = async () => {
     if (!currentUser || isReadOnly) return;
+
+    // Drop empty answers; there is nothing worth saving if none are left.
+    const answers = Object.fromEntries(
+      Object.entries(responses).filter(([, v]) => isFilled(v)),
+    );
+
+    if (Object.keys(answers).length === 0) {
+      addToast({
+        title: "Nothing to save",
+        description: "Fill in at least one field first.",
+        color: "warning",
+      });
+
+      return;
+    }
     setSaving(true);
     try {
-      await MedicalReportResponseService.savePatientResponses(
+      const saved = await MedicalReportResponseService.addPatientReport(
         clinicId,
         patientId,
-        responses,
+        answers,
         currentUser.uid,
+        authUserData?.displayName,
       );
+
+      // List it below and clear the form for the next report.
+      setReports((prev) => [saved, ...prev]);
+      setResponses({});
       setHasChanges(false);
-      setLastSaved(new Date());
+      setLastSaved(saved.submittedAt);
       addToast({ title: "Medical report saved", color: "success" });
     } catch {
       addToast({ title: "Save failed", color: "danger" });
@@ -399,14 +504,16 @@ export const PatientMedicalReportTab: React.FC<
     <div className="flex flex-col gap-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-section-title text-text-main">Medical Report</h2>
           <p className="text-[12.5px] text-text-muted">
-            Complete the medical report fields configured by your clinic
+            {isReadOnly
+              ? "Saved medical reports"
+              : "Complete the medical report fields configured by your clinic. Each save adds a report below."}
           </p>
         </div>
         {!isReadOnly && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-x-3 gap-y-2 w-full sm:w-auto shrink-0">
             {lastSaved &&
               lastSaved instanceof Date &&
               !isNaN(lastSaved.getTime()) && (
@@ -433,12 +540,12 @@ export const PatientMedicalReportTab: React.FC<
       </div>
 
       {/* Grid fields */}
-      {gridFields.length > 0 && (
+      {!isReadOnly && gridFields.length > 0 && (
         <div
           className={`grid grid-cols-1 ${compactLayout ? "" : "lg:grid-cols-2"} gap-4`}
         >
           {gridFields.map((f) => (
-            <div key={f.id}>
+            <div key={f.id} className="min-w-0">
               {f.fieldType === "yes-no" ? (
                 <FieldWrapper field={f}>{renderField(f)}</FieldWrapper>
               ) : (
@@ -450,7 +557,7 @@ export const PatientMedicalReportTab: React.FC<
       )}
 
       {/* Full-width fields (radio/checkbox groups) */}
-      {fullWidthFields.length > 0 && (
+      {!isReadOnly && fullWidthFields.length > 0 && (
         <div className="flex flex-col gap-4">
           {fullWidthFields.map((f) => (
             <FieldWrapper key={f.id} field={f}>
@@ -469,6 +576,27 @@ export const PatientMedicalReportTab: React.FC<
           </span>
         </div>
       )}
+
+      {/* Saved reports, newest first */}
+      <div className="flex flex-col gap-3 pt-2 border-t border-border-base/60">
+        <h3 className="text-[13px] font-semibold text-text-main">
+          Saved Reports{reports.length > 0 && ` (${reports.length})`}
+        </h3>
+        {reports.length === 0 ? (
+          <p className="text-[12px] text-text-muted">
+            No reports saved yet. Saved reports will be listed here.
+          </p>
+        ) : (
+          reports.map((report) => (
+            <SavedReportCard
+              key={report.id}
+              compact={compactLayout}
+              fields={fields}
+              report={report}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 };

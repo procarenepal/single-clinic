@@ -16,7 +16,85 @@ import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION_NAME = "medicalReportResponses";
 
+// Firestore hands back Timestamps; callers want plain Dates.
+const toDate = (value: any): Date =>
+  value?.toDate ? value.toDate() : value ? new Date(value) : new Date(0);
+
+const toReport = (snap: {
+  id: string;
+  data: () => any;
+}): MedicalReportResponse => {
+  const data = snap.data();
+
+  return {
+    ...data,
+    id: snap.id,
+    submittedAt: toDate(data.submittedAt),
+    updatedAt: toDate(data.updatedAt),
+  } as MedicalReportResponse;
+};
+
 export class MedicalReportResponseService {
+  /**
+   * Add a new medical report entry for a patient. Every save is its own
+   * record, so earlier reports are kept and can be listed.
+   */
+  static async addPatientReport(
+    clinicId: string,
+    patientId: string,
+    fieldValues: Record<string, any>,
+    submittedBy: string,
+    submittedByName?: string,
+  ): Promise<MedicalReportResponse> {
+    try {
+      const now = new Date();
+      const docRef = doc(collection(db, COLLECTION_NAME));
+      const report: MedicalReportResponse = {
+        id: docRef.id,
+        clinicId,
+        branchId: clinicId,
+        patientId,
+        fieldValues,
+        submittedBy,
+        ...(submittedByName ? { submittedByName } : {}),
+        submittedAt: now,
+        updatedAt: now,
+      };
+
+      await setDoc(docRef, report);
+
+      return report;
+    } catch (error) {
+      console.error("Error adding patient report:", error);
+      throw new Error("Failed to save medical report");
+    }
+  }
+
+  /**
+   * All saved medical reports for a patient, newest first.
+   * (Sorted here rather than in the query to avoid needing a composite index.)
+   */
+  static async getPatientReports(
+    clinicId: string,
+    patientId: string,
+  ): Promise<MedicalReportResponse[]> {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("patientId", "==", patientId),
+      // Required for Firestore to authorise the read (see currentClinic.ts).
+      where("clinicId", "==", resolveClinicId()),
+    );
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs
+      .map(toReport)
+      .sort(
+        (a, b) =>
+          (b.submittedAt || b.updatedAt).getTime() -
+          (a.submittedAt || a.updatedAt).getTime(),
+      );
+  }
+
   /**
    * Save or update patient responses to medical report fields
    */
@@ -52,31 +130,18 @@ export class MedicalReportResponseService {
   }
 
   /**
-   * Get patient responses for medical report
+   * Get the patient's most recent medical report (null if there is none yet).
+   * Used where a single summary is needed, e.g. the printed profile.
    */
   static async getPatientResponses(
     clinicId: string,
     patientId: string,
   ): Promise<MedicalReportResponse | null> {
     try {
-      // Use a query instead of direct document access to avoid permission issues with non-existent docs
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where("patientId", "==", patientId),
-        // Required for Firestore to authorise the read (see currentClinic.ts).
-        where("clinicId", "==", resolveClinicId()),
-      );
+      const reports = await this.getPatientReports(clinicId, patientId);
 
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        const doc = querySnapshot.docs[0];
-
-        return doc.data() as MedicalReportResponse;
-      }
-
-      // No document found, return null (this is normal for new patients)
-      return null;
+      // No report found, return null (this is normal for new patients)
+      return reports[0] ?? null;
     } catch (error) {
       console.error("Error getting patient responses:", error);
       console.error("Error details:", {

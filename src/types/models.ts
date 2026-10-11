@@ -656,6 +656,7 @@ export interface MedicalReportResponse {
   patientId: string;
   fieldValues: Record<string, any>; // Field key to value mapping
   submittedBy: string;
+  submittedByName?: string; // Display name of the submitter, for listing
   submittedAt: Date;
   updatedAt: Date;
 }
