@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle as CheckCircleIcon } from "lucide-react";
 import {
@@ -416,6 +416,38 @@ export default function NewAppointmentPage() {
   ]);
 
   const [patientSearchInput, setPatientSearchInput] = useState("");
+
+  // The doctor last filled in automatically from the patient's record, so a
+  // later patient change can replace it without overwriting a manual choice.
+  const autoFilledDoctorId = useRef("");
+
+  // Default the first clinician row to the patient's assigned doctor. It stays
+  // editable: the row is only touched when it is empty or still holds the
+  // doctor we filled in ourselves.
+  useEffect(() => {
+    if (loadingData) return;
+    const patient = patients.find((p) => p.id === appointmentInfo.patientId);
+
+    if (!patient) return;
+
+    const assignedDoctorId = doctors.some((d) => d.id === patient.doctorId)
+      ? patient.doctorId
+      : "";
+
+    const previouslyFilled = autoFilledDoctorId.current;
+
+    autoFilledDoctorId.current = assignedDoctorId;
+    setAppointmentRows((prev) => {
+      const [first, ...rest] = prev;
+
+      if (first.clinicianType !== "doctor") return prev;
+      if (first.clinicianId && first.clinicianId !== previouslyFilled)
+        return prev;
+      if (first.clinicianId === assignedDoctorId) return prev;
+
+      return [{ ...first, clinicianId: assignedDoctorId }, ...rest];
+    });
+  }, [appointmentInfo.patientId, patients, doctors, loadingData]);
 
   useEffect(() => {
     const loadData = async () => {

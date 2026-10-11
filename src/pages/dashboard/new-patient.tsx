@@ -64,6 +64,12 @@ import { Divider } from "@/components/ui/divider";
 import { addToast } from "@/components/ui/toast";
 import { title } from "@/components/primitives";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import {
+  capitalizeWords,
+  caretAfterTransform,
+  formatBsDateInput,
+  handleEnterToNext,
+} from "@/utils/formInput";
 
 // Date utils
 import {
@@ -101,35 +107,73 @@ function Field({
   );
 }
 
-/** Flat text input for native HTML inputs (date, time, number, text) */
+/**
+ * Flat text input for native HTML inputs (date, time, number, text).
+ * Enter moves to the next field; `transform` rewrites what is typed as it is
+ * typed (e.g. capitalizing words, or formatting a date).
+ * `readOnly` blocks edits but, unlike `disabled`, keeps keyboard focus.
+ */
 function FlatInput({
   type = "text",
   value,
   onChange,
   placeholder,
   disabled,
+  readOnly,
   className = "",
   endContent,
+  transform,
 }: {
   type?: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  readOnly?: boolean;
   className?: string;
   endContent?: React.ReactNode;
+  transform?: (v: string) => string;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const caretRef = useRef<number | null>(null);
+
+  // Rewriting the value makes the browser jump the caret to the end; put it back
+  // so fixing a letter mid-text doesn't throw the cursor away.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+
+    if (caretRef.current !== null && el && document.activeElement === el) {
+      el.setSelectionRange(caretRef.current, caretRef.current);
+    }
+    caretRef.current = null;
+  });
+
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         className={`w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main
           placeholder:text-text-muted/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20
-          disabled:bg-surface-2 disabled:text-text-muted ${endContent ? "pr-20" : ""} ${className}`}
+          disabled:bg-surface-2 disabled:text-text-muted read-only:bg-surface-2 read-only:text-text-muted ${endContent ? "pr-20" : ""} ${className}`}
         disabled={disabled}
         placeholder={placeholder}
+        readOnly={readOnly}
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const typed = e.target.value;
+          const next = transform ? transform(typed) : typed;
+
+          if (next !== typed) {
+            caretRef.current = caretAfterTransform(
+              typed,
+              next,
+              e.target.selectionStart ?? typed.length,
+            );
+          }
+          onChange(next);
+        }}
+        onKeyDown={handleEnterToNext}
       />
       {endContent && (
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
@@ -160,6 +204,7 @@ function FlatSelect({
       disabled={disabled}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={handleEnterToNext}
     >
       {children}
     </select>
@@ -1988,6 +2033,7 @@ const NewPatientPage: React.FC = () => {
                 <Field required label="Full Name">
                   <FlatInput
                     placeholder="Patient's full name"
+                    transform={capitalizeWords}
                     value={profile.name}
                     onChange={(v) => setProfile((p) => ({ ...p, name: v }))}
                   />
@@ -1998,6 +2044,7 @@ const NewPatientPage: React.FC = () => {
                   <Field label="Address" required={!isQuickMode}>
                     <FlatInput
                       placeholder="Home address"
+                      transform={capitalizeWords}
                       value={profile.address}
                       onChange={(v) =>
                         setProfile((p) => ({ ...p, address: v }))
@@ -2063,13 +2110,13 @@ const NewPatientPage: React.FC = () => {
                 {!isQuickMode && (
                   <Field hint="Auto-converts to BS" label="Date of Birth (AD)">
                     <FlatInput
-                      disabled={
-                        dateConv.isConverting && dateConv.field === "dob"
-                      }
                       endContent={
                         dateConv.isConverting && dateConv.field === "dob" ? (
                           <Spinner size="xs" />
                         ) : undefined
+                      }
+                      readOnly={
+                        dateConv.isConverting && dateConv.field === "dob"
                       }
                       type="date"
                       value={profile.dob}
@@ -2096,9 +2143,6 @@ const NewPatientPage: React.FC = () => {
                     label="Date of Birth (BS)"
                   >
                     <FlatInput
-                      disabled={
-                        dateConv.isConverting && dateConv.field === "bsDate"
-                      }
                       endContent={
                         dateConv.isConverting && dateConv.field === "bsDate" ? (
                           <Spinner size="xs" />
@@ -2107,7 +2151,11 @@ const NewPatientPage: React.FC = () => {
                           <CheckIcon className="w-3.5 h-3.5 text-health-600" />
                         ) : undefined
                       }
-                      placeholder="2080/06/15"
+                      placeholder="YYYY/MM/DD"
+                      readOnly={
+                        dateConv.isConverting && dateConv.field === "bsDate"
+                      }
+                      transform={formatBsDateInput}
                       value={profile.bsDate}
                       onChange={(v) =>
                         handleProfileChange({
@@ -2639,7 +2687,11 @@ const NewPatientPage: React.FC = () => {
                 {/* Doctor */}
                 <Field
                   required
-                  hint={currentDoctorId ? "Auto-selected" : ""}
+                  hint={
+                    currentDoctorId
+                      ? "Auto-selected"
+                      : "Defaults to the assigned doctor — you can change it"
+                  }
                   label="Doctor"
                 >
                   <DoctorSelect
@@ -2819,7 +2871,14 @@ const NewPatientPage: React.FC = () => {
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
-                    if (validateStep()) setStep(2);
+                    if (!validateStep()) return;
+                    // Step 2's doctor starts as the one assigned in step 1
+                    // (still editable there, which also updates the profile).
+                    setAppt((p) => ({
+                      ...p,
+                      doctor: profile.doctor || p.doctor,
+                    }));
+                    setStep(2);
                   }}
                 >
                   Save Patient & Create Appointment
