@@ -2,7 +2,7 @@
  * Expert Profile Page
  */
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   IoArrowBackOutline,
   IoCallOutline,
@@ -1588,9 +1588,29 @@ export default function ExpertProfilePage() {
                     <tbody className="text-[13px] divide-y divide-border-base/50">
                       {filteredCommissions.map((c) => (
                         <tr key={c.id}>
-                          <td className="p-3">#{c.invoiceNumber}</td>
+                          <td className="p-3">
+                            <Link
+                              className="text-primary hover:underline"
+                              to={
+                                c.billingType === "pathology"
+                                  ? `/dashboard/pathology-billing/${c.billingId}`
+                                  : `/dashboard/appointments-billing/${c.billingId}`
+                              }
+                            >
+                              #{c.invoiceNumber}
+                            </Link>
+                          </td>
                           <td className="p-3 font-medium text-text-main">
-                            {c.patientName}
+                            {patients.some((p) => p.id === c.patientId) ? (
+                              <Link
+                                className="text-primary hover:underline"
+                                to={`/dashboard/patients/${c.patientId}`}
+                              >
+                                {c.patientName}
+                              </Link>
+                            ) : (
+                              c.patientName
+                            )}
                           </td>
                           <td className="p-3 text-text-muted">
                             {(c.serviceNames || []).join(", ") ||

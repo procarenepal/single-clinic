@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   IoArrowBackOutline,
   IoCallOutline,
@@ -1862,9 +1862,16 @@ export default function DoctorProfilePage() {
                     >
                       <div>
                         <div className="flex items-center gap-3 mb-1">
-                          <span className="font-bold text-[15px] font-mono text-text-main">
+                          <Link
+                            className="font-bold text-[15px] font-mono text-text-main hover:text-primary hover:underline"
+                            to={
+                              commission.billingType === "pathology"
+                                ? `/dashboard/pathology-billing/${commission.billingId}`
+                                : `/dashboard/appointments-billing/${commission.billingId}`
+                            }
+                          >
                             {commission.invoiceNumber}
-                          </span>
+                          </Link>
                           <span
                             className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${getCommissionStatusColor(commission.status)}`}
                           >
@@ -1880,8 +1887,17 @@ export default function DoctorProfilePage() {
                           )}
                         </div>
                         <p className="text-[13.5px] font-medium text-text-main">
-                          {commission.patientName} -{" "}
-                          {(commission.serviceNames || []).join(", ")}
+                          {patients.some((p) => p.id === commission.patientId) ? (
+                            <Link
+                              className="hover:text-primary hover:underline"
+                              to={`/dashboard/patients/${commission.patientId}`}
+                            >
+                              {commission.patientName}
+                            </Link>
+                          ) : (
+                            commission.patientName
+                          )}{" "}
+                          - {(commission.serviceNames || []).join(", ")}
                         </p>
                         <p className="text-[12px] text-text-muted mt-1">
                           Rate:{" "}
