@@ -244,7 +244,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="relative z-10 mr-2 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity [&>svg]:w-4 [&>svg]:h-4">
                 {item.icon}
               </span>
-              <span className="relative z-10 truncate">{item.title}</span>
+              <span className="relative z-10 truncate" title={item.title}>{item.title}</span>
               {item.title === "Pharmacy" && pendingPrescriptionCount > 0 && (
                 <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
                   {pendingPrescriptionCount}
@@ -300,7 +300,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <span className="relative z-10 mr-2 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity [&>svg]:w-4 [&>svg]:h-4">
               {item.icon}
             </span>
-            <span className="relative z-10 truncate">{item.title}</span>
+            <span className="relative z-10 truncate" title={item.title}>{item.title}</span>
             {item.title === "Pharmacy" && pendingPrescriptionCount > 0 && (
               <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
                 {pendingPrescriptionCount}

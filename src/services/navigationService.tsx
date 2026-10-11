@@ -25,7 +25,14 @@ export interface NavigationResult {
 
 class NavigationService {
   /**
-   * Helper to assign categories based on title
+   * Which top-level section a page belongs to. Every title the clinic
+   * actually has is listed explicitly below, by role — a page not yet in
+   * any list still falls to ADMIN (so a brand-new page never breaks the
+   * sidebar), but that fallback is logged so it gets a real bucket instead
+   * of quietly growing ADMIN into a dumping ground again, which is exactly
+   * how it had accumulated 17 unrelated items (operational screens like
+   * Billing Counter and Daily Report alongside pure configuration) before
+   * this list existed.
    */
   private assignCategory(title: string): NavItem["category"] {
     const CORE = [
@@ -45,18 +52,40 @@ class NavigationService {
       "Pharmacy",
       "Pathology",
     ];
+    // Where the clinic actually transacts, day to day — including the two
+    // report/counter screens staff use constantly, not just the modules
+    // whose names happen to start with "Billing".
     const OPERATIONS = [
       "Communication",
       "Billing",
+      "Billing Counter",
       "Appointment Billing",
       "Front Office",
       "Accounts",
       "Inventory",
+      "Daily Report",
+      "Patient Follow-ups",
+    ];
+    // Configuration and clinic-wide administration — reached rarely, not
+    // part of a normal day's workflow.
+    const ADMIN = [
+      "HR Management",
+      "Reports",
+      "Text Editor",
+      "Settings",
+      "Audit Logs",
     ];
 
     if (CORE.includes(title)) return "MAIN";
     if (CLINICAL.includes(title)) return "CLINICAL";
     if (OPERATIONS.includes(title)) return "OPERATIONS";
+    if (ADMIN.includes(title)) return "ADMIN";
+
+    if (import.meta.env?.DEV) {
+      console.warn(
+        `[navigationService] "${title}" has no explicit sidebar category — defaulting to ADMIN. Add it to assignCategory's lists.`,
+      );
+    }
 
     return "ADMIN";
   }
@@ -187,7 +216,11 @@ class NavigationService {
         )
           return;
 
-        if (page.path !== "/dashboard" && !page.parentId) {
+        if (
+          page.path !== "/dashboard" &&
+          !page.parentId &&
+          page.showInSidebar !== false
+        ) {
           // Filter children
           const accessibleChildren = availablePages
             .filter(
@@ -391,7 +424,11 @@ class NavigationService {
         )
           return;
 
-        if (page.path !== "/dashboard" && !page.parentId) {
+        if (
+          page.path !== "/dashboard" &&
+          !page.parentId &&
+          page.showInSidebar !== false
+        ) {
           // Filter out billing-related pages if billing is disabled
           if (!isBillingEnabled && this.isBillingRelatedPage(page.path)) {
             return;
