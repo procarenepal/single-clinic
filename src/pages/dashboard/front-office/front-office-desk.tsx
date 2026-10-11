@@ -5100,6 +5100,7 @@ export default function FrontOfficeDesk() {
           label: "Settle Billing Invoice",
           icon: <IoCardOutline className="w-4 h-4" />,
           colorClass: "bg-saffron-500 text-white hover:bg-saffron-600",
+          pendingKey: `settle-billing-${appt.id}`,
           onClick: () => handleSettleBilling(appt),
         };
       case "pharmacy":

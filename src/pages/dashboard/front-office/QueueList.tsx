@@ -106,6 +106,8 @@ export interface QueueListProps {
     icon: React.ReactNode;
     colorClass: string;
     onClick: () => void;
+    /** When set, isActionPending(pendingKey) drives this button's spinner/disabled state. */
+    pendingKey?: string;
   };
   billings: any[];
   /** Clinic tax settings, so "owed" here is the same tax-inclusive figure the desk collects. */
@@ -703,8 +705,10 @@ export const QueueList: React.FC<QueueListProps> = ({
                               // A patient with two bookings today has two
                               // rows and two Check In buttons.
                               const pending =
-                                stage === "scheduled" &&
-                                isActionPending?.(`check-in-${appt.id}`);
+                                (stage === "scheduled" &&
+                                  isActionPending?.(`check-in-${appt.id}`)) ||
+                                (action.pendingKey &&
+                                  isActionPending?.(action.pendingKey));
 
                               return (
                                 <button
