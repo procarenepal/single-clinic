@@ -40,6 +40,7 @@ import {
 } from "@/services/unifiedBillingService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { pathologyService } from "@/services/pathologyService";
 import { medicineService } from "@/services/medicineService";
@@ -50,6 +51,7 @@ import {
   AppointmentBillingSettings,
   AppointmentType,
   Doctor,
+  Expert,
   Medicine,
   PathologyTestType,
   Patient,
@@ -94,6 +96,7 @@ export default function BillingCounterPage() {
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
   const [apptTypes, setApptTypes] = useState<AppointmentType[]>([]);
   const [labTests, setLabTests] = useState<PathologyTestType[]>([]);
   const [medicines, setMedicines] = useState<Medicine[]>([]);
@@ -143,9 +146,10 @@ export default function BillingCounterPage() {
       try {
         // Every catalogue is clinic-scoped; an empty one simply means nothing
         // of that kind is configured yet, which must not break the others.
-        const [p, d, at, lt, med, st] = await Promise.all([
+        const [p, d, ex, at, lt, med, st] = await Promise.all([
           patientService.getPatientsByClinic(clinicId).catch(() => []),
           doctorService.getDoctorsByClinic(clinicId).catch(() => []),
+          expertService.getExpertsByClinic(clinicId).catch(() => []),
           appointmentTypeService
             .getAppointmentTypesByClinic(clinicId)
             .catch(() => []),
@@ -162,6 +166,7 @@ export default function BillingCounterPage() {
 
         setPatients(p);
         setDoctors(d);
+        setExperts(ex);
         setApptTypes(at);
         setLabTests(lt);
         setMedicines(med);
@@ -316,12 +321,35 @@ export default function BillingCounterPage() {
     }));
   }, [pickKind, apptTypes, labTests, medicines]);
 
+  // A line can be performed by either a doctor or a non-doctor expert
+  // (aesthetician, therapist, etc.) — AppointmentBillingItem already carries
+  // performerKind for exactly this, this screen just never offered experts
+  // as an option. One combined, kind-tagged list drives every clinician
+  // picker below.
+  const clinicians = useMemo(
+    () => [
+      ...doctors.map((d) => ({
+        id: d.id,
+        name: d.name,
+        kind: "doctor" as const,
+        defaultCommission: d.defaultCommission,
+      })),
+      ...experts.map((e) => ({
+        id: e.id,
+        name: e.name,
+        kind: "expert" as const,
+        defaultCommission: e.defaultCommission,
+      })),
+    ],
+    [doctors, experts],
+  );
+
   // A clinic configures commission per clinician, with a clinic-wide default
   // behind it, and the billing screen this counter replaced applied that
   // automatically. Starting every line at 0 instead would silently pay
   // treating clinicians nothing, with nothing on screen to say so.
   const defaultCommissionFor = (clinicianId: string | undefined) =>
-    doctors.find((d) => d.id === clinicianId)?.defaultCommission ??
+    clinicians.find((c) => c.id === clinicianId)?.defaultCommission ??
     settings?.defaultCommission ??
     0;
 
@@ -384,7 +412,7 @@ export default function BillingCounterPage() {
 
     if (!entry) return;
 
-    const doctor = doctors.find((d) => d.id === doctorId);
+    const clinician = clinicians.find((c) => c.id === doctorId);
     const isService = pickKind === "service";
     const resolved = isService
       ? resolveServiceFields(entry.id, doctorId)
@@ -411,7 +439,8 @@ export default function BillingCounterPage() {
           ? resolved?.calculateCommission !== false
           : false,
         doctorId: isService ? doctorId || undefined : undefined,
-        doctorName: isService ? doctor?.name : undefined,
+        doctorName: isService ? clinician?.name : undefined,
+        performerKind: isService ? clinician?.kind : undefined,
         stockType: pickKind === "medicine" ? "regular" : undefined,
         isTaxable: resolved ? resolved.isTaxable === true : entry.taxable,
         taxRate: resolved
@@ -526,7 +555,7 @@ export default function BillingCounterPage() {
       setSubmitting(true);
 
       const firstService = items.find((it) => it.lineKind === "service");
-      const doctor = doctors.find((d) => d.id === doctorId);
+      const clinician = clinicians.find((c) => c.id === doctorId);
 
       const data: Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt"> = {
         invoiceNumber: "", // assigned by the Java ledger inside createBilling
@@ -543,7 +572,7 @@ export default function BillingCounterPage() {
         patientPanVat: customerPan.trim(),
         buyerPan: customerPan.trim(),
         doctorId: firstService?.doctorId || doctorId || "",
-        doctorName: firstService?.doctorName || doctor?.name || "",
+        doctorName: firstService?.doctorName || clinician?.name || "",
         doctorType: "regular",
         items,
         // Recomputed here, not trusted from the row state: lines can be added
@@ -729,8 +758,10 @@ export default function BillingCounterPage() {
                 setDoctorId(String(Array.from(k)[0] ?? ""))
               }
             >
-              {doctors.map((d) => (
-                <SelectItem key={d.id}>{d.name}</SelectItem>
+              {clinicians.map((c) => (
+                <SelectItem key={c.id}>
+                  {c.kind === "expert" ? `${c.name} (Expert)` : c.name}
+                </SelectItem>
               ))}
             </Select>
             <Select
@@ -875,8 +906,8 @@ export default function BillingCounterPage() {
                               className="w-full rounded border border-border-base bg-surface px-1 py-1 text-xs"
                               value={it.doctorId || ""}
                               onChange={(e) => {
-                                const picked = doctors.find(
-                                  (d) => d.id === e.target.value,
+                                const picked = clinicians.find(
+                                  (c) => c.id === e.target.value,
                                 );
 
                                 // The appointment type's own rate still wins
@@ -890,6 +921,7 @@ export default function BillingCounterPage() {
                                 patchLine(it.id, {
                                   doctorId: e.target.value || undefined,
                                   doctorName: picked?.name,
+                                  performerKind: picked?.kind,
                                   commission:
                                     rate?.commission ??
                                     defaultCommissionFor(e.target.value),
@@ -897,9 +929,11 @@ export default function BillingCounterPage() {
                               }}
                             >
                               <option value="">— none —</option>
-                              {doctors.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  {d.name}
+                              {clinicians.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.kind === "expert"
+                                    ? `${c.name} (Expert)`
+                                    : c.name}
                                 </option>
                               ))}
                             </select>
