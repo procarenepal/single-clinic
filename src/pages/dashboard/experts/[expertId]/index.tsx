@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
+import { specialityService } from "@/services/specialityService";
 import { expertCommissionService } from "@/services/expertCommissionService";
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
@@ -80,6 +81,12 @@ export default function ExpertProfilePage() {
   const { clinicId, currentUser } = useAuthContext();
 
   const [expert, setExpert] = useState<Expert | null>(null);
+  // expert.speciality stores the catalogue KEY the edit form saved (e.g.
+  // "general-practice"), not a display name — resolved against the
+  // speciality catalogue so the profile shows "General Practice" instead of
+  // that raw key (or, before specialityService's dropdown fallback was
+  // fixed, a raw Firestore document id).
+  const [specialityLabel, setSpecialityLabel] = useState<string>("");
   const [commissions, setCommissions] = useState<ExpertCommission[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -159,11 +166,13 @@ export default function ExpertProfilePage() {
         return;
       }
       setExpert(data);
+      setSpecialityLabel(data.speciality || "");
 
       const loadTasks = [
         loadCommissions().catch(() => {}),
         loadAppointments().catch(() => {}),
         loadPatients().catch(() => {}),
+        resolveSpecialityLabel(data.speciality).catch(() => {}),
       ];
 
       await Promise.allSettled(loadTasks);
@@ -176,6 +185,17 @@ export default function ExpertProfilePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resolveSpecialityLabel = async (specialityKey?: string) => {
+    if (!specialityKey || !clinicId) return;
+    const options =
+      await specialityService.getActiveSpecialitiesForDropdown(clinicId);
+    const match = options.find((o) => o.key === specialityKey);
+
+    // No match (e.g. the speciality was later deactivated or renamed) keeps
+    // showing the raw stored value rather than going blank.
+    if (match) setSpecialityLabel(match.label);
   };
 
   const loadCommissions = async () => {
@@ -833,8 +853,8 @@ export default function ExpertProfilePage() {
                   Active
                 </span>
               </div>
-              <p className="text-text-muted font-medium text-[13.5px] mt-0.5 capitalize">
-                {expert.speciality}
+              <p className="text-text-muted font-medium text-[13.5px] mt-0.5">
+                {specialityLabel}
               </p>
             </div>
           </div>
@@ -965,7 +985,7 @@ export default function ExpertProfilePage() {
                 <div className="flex justify-between">
                   <span className="text-text-muted">Speciality</span>
                   <span className="font-semibold text-text-main">
-                    {expert.speciality}
+                    {specialityLabel}
                   </span>
                 </div>
                 <div className="flex justify-between">

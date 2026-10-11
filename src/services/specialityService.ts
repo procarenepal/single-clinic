@@ -177,7 +177,19 @@ export const specialityService = {
       const specialities = await this.getSpecialities(true, clinicId);
 
       return specialities.map((speciality) => ({
-        key: speciality.key || speciality.id,
+        // A record saved without a key (e.g. written outside the forms that
+        // generate one) must never fall back to the raw Firestore document
+        // id — that id is what then gets stored on whichever doctor/expert
+        // picks it, and displayed verbatim on their profile. Derive the same
+        // human-readable slug the creation forms already generate from the
+        // name instead.
+        key:
+          speciality.key ||
+          (speciality.name || speciality.id)
+            .toLowerCase()
+            .trim()
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-"),
         label: speciality.name,
       }));
     } catch (error) {
