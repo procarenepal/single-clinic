@@ -1188,6 +1188,17 @@ export default function BillingCounterPage() {
               />
               Apply {settings?.defaultTaxPercentage ?? 0}% VAT to taxable lines
             </label>
+            {applyTax && items.length > 0 && totals.taxableAmount === 0 && (
+              <p className="text-xs text-text-muted">
+                No line on this invoice is currently marked Taxable, so VAT
+                is NPR 0 even with this checked — this toggle only applies
+                tax to lines already marked Taxable above, it never marks a
+                line taxable on its own. Tick the Tax checkbox on a line to
+                charge VAT on it, or fix its tax setting in the catalogue
+                (Appointment Types / Test Prices / Medicine) if it should
+                always be taxable.
+              </p>
+            )}
             {hasMedicineLine ? (
               <p className="text-xs text-text-muted">
                 This bill dispenses medicine, so stock is deducted when it is
