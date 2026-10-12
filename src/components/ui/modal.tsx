@@ -100,10 +100,10 @@ export function Modal({
     <ModalContext.Provider
       value={{ onClose, isDismissable, hideCloseButton, scrollBehavior, size }}
     >
-      {/* Backdrop — semi-transparent, clinical */}
+      {/* Backdrop — semi-transparent, blurred, clinical */}
       <div
         aria-hidden="true"
-        className={`fixed inset-0 z-[9998] bg-mountain-900/30 ${classNames?.backdrop || ""}`}
+        className={`fixed inset-0 z-[9998] bg-mountain-900/30 backdrop-blur-sm ${classNames?.backdrop || ""}`}
         onMouseDown={() => {
           if (isDismissable) onClose();
         }}
