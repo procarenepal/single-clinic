@@ -100,6 +100,16 @@ export function Modal({
     <ModalContext.Provider
       value={{ onClose, isDismissable, hideCloseButton, scrollBehavior, size }}
     >
+      {/*
+        Backdrop and wrapper share one z-index on purpose: a later-opened
+        (nested) modal's whole portal — its backdrop AND its content — must
+        paint above an earlier modal's whole portal. A higher z-index on
+        every wrapper than every backdrop would let the first modal's
+        content float above the second modal's backdrop blur regardless of
+        mount order, since z-index value always wins over DOM order. Equal
+        z-index falls back to document order, where React already appends
+        each later-opened modal's portal after the earlier one's.
+      */}
       {/* Backdrop — semi-transparent, blurred, clinical */}
       <div
         aria-hidden="true"
@@ -110,7 +120,7 @@ export function Modal({
       />
       {/* Centering wrapper */}
       <div
-        className={`fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 overflow-hidden pointer-events-none ${classNames?.wrapper || ""}`}
+        className={`fixed inset-0 z-[9998] grid place-items-center p-4 sm:p-6 overflow-hidden pointer-events-none ${classNames?.wrapper || ""}`}
       >
         {children}
       </div>
