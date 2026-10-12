@@ -41,16 +41,16 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@heroui/modal";
-import { Select, SelectItem } from "@heroui/select";
-import { Input, Textarea } from "@heroui/input";
-import { Button } from "@heroui/button";
+} from "@/components/ui/modal";
+import { Select, SelectItem } from "@/components/ui/select";
+import { Input, Textarea } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@heroui/dropdown";
+} from "@/components/ui/dropdown";
 
 import { printAccountBill } from "@/utils/accountPrinting";
 import { toCsv } from "@/utils/csv";
@@ -1082,23 +1082,13 @@ export default function AccountsPage() {
                               <IoEllipsisHorizontal className="w-5 h-5" />
                             </button>
                           </DropdownTrigger>
-                          <DropdownMenu
-                            aria-label="Bill actions"
-                            disabledKeys={
-                              isPayrollBill(bill) || !isEffective(bill)
-                                ? ["correct"]
-                                : []
-                            }
-                            onAction={(key) => {
-                              if (key === "view") setDetailBill(bill);
-                              if (key === "correct") openCorrectBill(bill);
-                            }}
-                          >
+                          <DropdownMenu aria-label="Bill actions">
                             <DropdownItem
                               key="view"
                               startContent={
                                 <IoEyeOutline className="w-4 h-4" />
                               }
+                              onClick={() => setDetailBill(bill)}
                             >
                               View details
                             </DropdownItem>
@@ -1111,9 +1101,13 @@ export default function AccountsPage() {
                                     ? "Managed from HR payroll"
                                     : "Saves a new bill; the original is kept"
                               }
+                              isDisabled={
+                                isPayrollBill(bill) || !isEffective(bill)
+                              }
                               startContent={
                                 <IoCreateOutline className="w-4 h-4" />
                               }
+                              onClick={() => openCorrectBill(bill)}
                             >
                               Correct bill
                             </DropdownItem>
@@ -1130,468 +1124,494 @@ export default function AccountsPage() {
       </div>
       {/* Add Bill Modal */}
       <Modal
-        classNames={{
-          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
-          header: "border-b border-[rgb(var(--color-border))]",
-          footer: "border-t border-[rgb(var(--color-border))]",
-        }}
         isOpen={isBillModalOpen}
         size="2xl"
-        onOpenChange={handleBillModalChange}
+        onClose={() => handleBillModalChange(false)}
       >
         <ModalContent>
-          {(onClose) => (
-            <form onSubmit={handleSaveBill}>
-              <ModalHeader className="flex flex-col gap-1">
-                <h2 className="text-[18px] font-bold text-[rgb(var(--color-text))]">
+          <form onSubmit={handleSaveBill}>
+            <ModalHeader>
+              <div>
+                <p className="text-[14px] font-bold text-text-main">
                   {correctingBill
                     ? "Correct Purchase Bill"
                     : "Record Purchase Bill"}
-                </h2>
-                <p className="text-[12px] text-[rgb(var(--color-text-muted))] font-normal">
+                </p>
+                <p className="text-[11.5px] text-text-muted">
                   {correctingBill
                     ? `Correcting bill #${correctingBill.billNumber}. The original is kept and marked as corrected; this saves a new bill that replaces it.`
                     : "Enter details of the purchase or expense bill."}
                 </p>
-              </ModalHeader>
-              <ModalBody className="py-6">
-                <div className="grid grid-cols-2 gap-4">
-                  {correctingBill && (
-                    <div className="col-span-2">
-                      <p className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                        Reason for correction *
-                      </p>
-                      <Textarea
-                        minRows={2}
-                        aria-label="Reason for correction"
-                        placeholder="e.g. Wrong amount entered, vendor reissued the bill..."
-                        size="sm"
-                        value={correctionReason}
-                        onChange={(e) => setCorrectionReason(e.target.value)}
-                      />
-                    </div>
-                  )}
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Category
-                    </label>
-                    <Select
-                      className="max-w-full"
-                      placeholder="Select category"
-                      selectedKeys={[billForm.category]}
-                      size="sm"
-                      onChange={(e) =>
-                        setBillForm({
-                          ...billForm,
-                          category: e.target.value as any,
-                        })
-                      }
-                    >
-                      {categories
-                        .filter((c) => c.id !== "all")
-                        .map((cat) => (
-                          <SelectItem key={cat.id}>{cat.label}</SelectItem>
-                        ))}
-                    </Select>
-                  </div>
-
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Vendor / Supplier
-                    </label>
-                    <div className="flex gap-2">
-                      <Select
-                        className="flex-1"
-                        placeholder="Select vendor"
-                        selectedKeys={
-                          billForm.vendorId ? [billForm.vendorId] : []
-                        }
-                        size="sm"
-                        onChange={(e) => {
-                          const v = vendors.find(
-                            (vend) => vend.id === e.target.value,
-                          );
-
-                          setBillForm({
-                            ...billForm,
-                            vendorId: e.target.value,
-                            vendorName: v?.name || "",
-                          });
-                        }}
-                      >
-                        {vendors.map((v) => (
-                          <SelectItem key={v.id}>{v.name}</SelectItem>
-                        ))}
-                      </Select>
-                      <button
-                        className="p-2 border border-[rgb(var(--color-border))] rounded-lg hover:bg-[rgb(var(--color-surface-2))] text-primary transition-colors"
-                        type="button"
-                        onClick={() => setIsVendorModalOpen(true)}
-                      >
-                        <IoAddOutline size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Bill Number
-                    </label>
-                    <div className="flex gap-2">
-                      <Input
-                        className="flex-1"
-                        placeholder="e.g. INV-2024-001"
-                        size="sm"
-                        value={billForm.billNumber}
-                        onChange={(e) =>
-                          setBillForm({
-                            ...billForm,
-                            billNumber: e.target.value,
-                          })
-                        }
-                      />
-                      <Button
-                        className="font-bold text-[10px] min-w-[50px] h-8 rounded-xl"
-                        size="sm"
-                        variant="flat"
-                        onPress={generateBillNumber}
-                      >
-                        Auto
-                      </Button>
-                    </div>
-                  </div>
-
-                  {["equipment", "office_supply", "other"].includes(
-                    billForm.category,
-                  ) && (
-                    <div className="col-span-2">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                        Item / Inventory Name
-                      </label>
-                      <Input
-                        placeholder="e.g. Laptop, Mobile, Oxygen Cylinder, Calculator..."
-                        size="sm"
-                        value={billForm.itemName}
-                        onChange={(e) =>
-                          setBillForm({ ...billForm, itemName: e.target.value })
-                        }
-                      />
-                    </div>
-                  )}
-
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Bill Date
-                    </label>
-                    <Input
-                      size="sm"
-                      type="date"
-                      value={billForm.billDate}
-                      onChange={(e) =>
-                        setBillForm({ ...billForm, billDate: e.target.value })
-                      }
-                    />
-                  </div>
-
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Total Amount (Rs.)
-                    </label>
-                    <Input
-                      placeholder="0.00"
-                      size="sm"
-                      startContent={
-                        <span className="text-[12px] text-text-muted">Rs.</span>
-                      }
-                      type="number"
-                      value={billForm.totalAmount}
-                      onChange={(e) =>
-                        setBillForm({
-                          ...billForm,
-                          totalAmount: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Paid Amount (Rs.)
-                    </label>
-                    <Input
-                      placeholder="0.00"
-                      size="sm"
-                      startContent={
-                        <span className="text-[12px] text-text-muted">Rs.</span>
-                      }
-                      type="number"
-                      value={billForm.paidAmount}
-                      onChange={(e) =>
-                        setBillForm({ ...billForm, paidAmount: e.target.value })
-                      }
-                    />
-                  </div>
-
+              </div>
+            </ModalHeader>
+            <ModalBody>
+              <div className="grid grid-cols-2 gap-4 py-1">
+                {correctingBill && (
                   <div className="col-span-2">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Description / Notes
-                    </label>
+                    <p className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5">
+                      Reason for correction *
+                    </p>
                     <Textarea
-                      minRows={2}
-                      placeholder="Brief details about the purchase..."
+                      aria-label="Reason for correction"
+                      placeholder="e.g. Wrong amount entered, vendor reissued the bill..."
+                      rows={2}
+                      value={correctionReason}
+                      onChange={(e) => setCorrectionReason(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="col-span-2 flex items-center gap-2 text-[11px] font-bold text-text-muted uppercase tracking-wider -mb-1">
+                  <IoReceiptOutline className="w-3.5 h-3.5" />
+                  Bill identification
+                </div>
+
+                <div className="col-span-2 md:col-span-1">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Category
+                  </label>
+                  <Select
+                    placeholder="Select category"
+                    selectedKeys={[billForm.category]}
+                    size="sm"
+                    onChange={(e) =>
+                      setBillForm({
+                        ...billForm,
+                        category: e.target.value as any,
+                      })
+                    }
+                  >
+                    {categories
+                      .filter((c) => c.id !== "all")
+                      .map((cat) => (
+                        <SelectItem key={cat.id}>{cat.label}</SelectItem>
+                      ))}
+                  </Select>
+                </div>
+
+                <div className="col-span-2 md:col-span-1">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Vendor / Supplier
+                  </label>
+                  <div className="flex gap-2">
+                    <Select
+                      className="flex-1"
+                      placeholder="Select vendor"
+                      selectedKeys={
+                        billForm.vendorId ? [billForm.vendorId] : []
+                      }
                       size="sm"
-                      value={billForm.description}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const v = vendors.find(
+                          (vend) => vend.id === e.target.value,
+                        );
+
                         setBillForm({
                           ...billForm,
-                          description: e.target.value,
-                        })
-                      }
-                    />
+                          vendorId: e.target.value,
+                          vendorName: v?.name || "",
+                        });
+                      }}
+                    >
+                      {vendors.map((v) => (
+                        <SelectItem key={v.id}>{v.name}</SelectItem>
+                      ))}
+                    </Select>
+                    <Button
+                      isIconOnly
+                      color="primary"
+                      size="sm"
+                      title="Add a new vendor"
+                      type="button"
+                      variant="bordered"
+                      onPress={() => setIsVendorModalOpen(true)}
+                    >
+                      <IoAddOutline size={18} />
+                    </Button>
                   </div>
                 </div>
-              </ModalBody>
-              <ModalFooter>
-                <Button
-                  className="text-[13px] font-bold"
-                  variant="light"
-                  onPress={onClose}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="text-[13px] font-bold px-6 shadow-lg shadow-primary/20"
-                  color="primary"
-                  isLoading={saving}
-                  type="submit"
-                >
-                  {correctingBill ? "Save Correction" : "Save Bill"}
-                </Button>
-              </ModalFooter>
-            </form>
-          )}
+
+                <div className="col-span-2 md:col-span-1">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Bill Number
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      className="flex-1"
+                      placeholder="e.g. INV-2024-001"
+                      size="sm"
+                      value={billForm.billNumber}
+                      onChange={(e) =>
+                        setBillForm({
+                          ...billForm,
+                          billNumber: e.target.value,
+                        })
+                      }
+                    />
+                    <Button
+                      className="font-bold text-[11px] shrink-0"
+                      size="sm"
+                      variant="flat"
+                      type="button"
+                      onPress={generateBillNumber}
+                    >
+                      Auto
+                    </Button>
+                  </div>
+                </div>
+
+                {["equipment", "office_supply", "other"].includes(
+                  billForm.category,
+                ) && (
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                      Item / Inventory Name
+                    </label>
+                    <Input
+                      placeholder="e.g. Laptop, Mobile, Oxygen Cylinder, Calculator..."
+                      size="sm"
+                      value={billForm.itemName}
+                      onChange={(e) =>
+                        setBillForm({ ...billForm, itemName: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
+
+                <div className="col-span-2 md:col-span-1">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Bill Date
+                  </label>
+                  <Input
+                    size="sm"
+                    type="date"
+                    value={billForm.billDate}
+                    onChange={(e) =>
+                      setBillForm({ ...billForm, billDate: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="col-span-2 flex items-center gap-2 text-[11px] font-bold text-text-muted uppercase tracking-wider pt-2 -mb-1 border-t border-border-base">
+                  <IoBarChartOutline className="w-3.5 h-3.5 mt-2" />
+                  <span className="mt-2">Amounts</span>
+                </div>
+
+                <div className="col-span-2 md:col-span-1">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Total Amount (Rs.)
+                  </label>
+                  <Input
+                    placeholder="0.00"
+                    size="sm"
+                    startContent={
+                      <span className="text-[12px] text-text-muted">Rs.</span>
+                    }
+                    type="number"
+                    value={billForm.totalAmount}
+                    onChange={(e) =>
+                      setBillForm({
+                        ...billForm,
+                        totalAmount: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="col-span-2 md:col-span-1">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Paid Amount (Rs.)
+                  </label>
+                  <Input
+                    placeholder="0.00"
+                    size="sm"
+                    startContent={
+                      <span className="text-[12px] text-text-muted">Rs.</span>
+                    }
+                    type="number"
+                    value={billForm.paidAmount}
+                    onChange={(e) =>
+                      setBillForm({ ...billForm, paidAmount: e.target.value })
+                    }
+                  />
+                </div>
+
+                {billForm.totalAmount && (
+                  <div className="col-span-2 flex items-center justify-between rounded-md bg-surface-2 border border-border-base px-3 py-2">
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Balance due
+                    </span>
+                    <span
+                      className={`text-[14px] font-bold ${
+                        (parseFloat(billForm.totalAmount) || 0) -
+                          (parseFloat(billForm.paidAmount) || 0) >
+                        0
+                          ? "text-warning"
+                          : "text-success"
+                      }`}
+                    >
+                      Rs.{" "}
+                      {(
+                        (parseFloat(billForm.totalAmount) || 0) -
+                        (parseFloat(billForm.paidAmount) || 0)
+                      ).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+
+                <div className="col-span-2">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Description / Notes
+                  </label>
+                  <Textarea
+                    placeholder="Brief details about the purchase..."
+                    rows={2}
+                    value={billForm.description}
+                    onChange={(e) =>
+                      setBillForm({
+                        ...billForm,
+                        description: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                className="text-[13px] font-bold"
+                type="button"
+                variant="light"
+                onPress={() => handleBillModalChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="text-[13px] font-bold px-6 shadow-lg shadow-primary/20"
+                color="primary"
+                isLoading={saving}
+                type="submit"
+              >
+                {correctingBill ? "Save Correction" : "Save Bill"}
+              </Button>
+            </ModalFooter>
+          </form>
         </ModalContent>
       </Modal>
 
       {/* Add Vendor Modal */}
       <Modal
-        classNames={{
-          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
-        }}
         isOpen={isVendorModalOpen}
         size="md"
-        onOpenChange={setIsVendorModalOpen}
+        onClose={() => setIsVendorModalOpen(false)}
       >
         <ModalContent>
-          {(onClose) => (
-            <form onSubmit={handleSaveVendor}>
-              <ModalHeader className="flex flex-col gap-1">
-                <h2 className="text-[16px] font-bold text-[rgb(var(--color-text))]">
-                  Add New Vendor
-                </h2>
-              </ModalHeader>
-              <ModalBody className="py-4">
-                <div className="space-y-4">
+          <form onSubmit={handleSaveVendor}>
+            <ModalHeader>
+              <p className="text-[14px] font-bold text-text-main">
+                Add New Vendor
+              </p>
+            </ModalHeader>
+            <ModalBody>
+              <div className="space-y-4 py-1">
+                <div>
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Vendor Name
+                  </label>
+                  <Input
+                    placeholder="Full Name / Company Name"
+                    size="sm"
+                    value={vendorForm.name}
+                    onChange={(e) =>
+                      setVendorForm({ ...vendorForm, name: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Vendor Name
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                      Phone
                     </label>
                     <Input
-                      placeholder="Full Name / Company Name"
+                      placeholder="Contact number"
                       size="sm"
-                      value={vendorForm.name}
-                      onChange={(e) =>
-                        setVendorForm({ ...vendorForm, name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                        Phone
-                      </label>
-                      <Input
-                        placeholder="Contact number"
-                        size="sm"
-                        value={vendorForm.phone}
-                        onChange={(e) =>
-                          setVendorForm({
-                            ...vendorForm,
-                            phone: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                        Email
-                      </label>
-                      <Input
-                        placeholder="Email address"
-                        size="sm"
-                        type="email"
-                        value={vendorForm.email}
-                        onChange={(e) =>
-                          setVendorForm({
-                            ...vendorForm,
-                            email: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Address
-                    </label>
-                    <Input
-                      placeholder="Office address"
-                      size="sm"
-                      value={vendorForm.address}
+                      value={vendorForm.phone}
                       onChange={(e) =>
                         setVendorForm({
                           ...vendorForm,
-                          address: e.target.value,
+                          phone: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                      Email
+                    </label>
+                    <Input
+                      placeholder="Email address"
+                      size="sm"
+                      type="email"
+                      value={vendorForm.email}
+                      onChange={(e) =>
+                        setVendorForm({
+                          ...vendorForm,
+                          email: e.target.value,
                         })
                       }
                     />
                   </div>
                 </div>
-              </ModalBody>
-              <ModalFooter>
-                <Button size="sm" variant="light" onPress={onClose}>
-                  Cancel
-                </Button>
-                <Button
-                  className="font-bold"
-                  color="primary"
-                  isLoading={saving}
-                  size="sm"
-                  type="submit"
-                >
-                  Add Vendor
-                </Button>
-              </ModalFooter>
-            </form>
-          )}
+                <div>
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Address
+                  </label>
+                  <Input
+                    placeholder="Office address"
+                    size="sm"
+                    value={vendorForm.address}
+                    onChange={(e) =>
+                      setVendorForm({
+                        ...vendorForm,
+                        address: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                size="sm"
+                type="button"
+                variant="light"
+                onPress={() => setIsVendorModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="font-bold"
+                color="primary"
+                isLoading={saving}
+                size="sm"
+                type="submit"
+              >
+                Add Vendor
+              </Button>
+            </ModalFooter>
+          </form>
         </ModalContent>
       </Modal>
       {/* Record Payment Modal */}
       <Modal
-        classNames={{
-          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
-        }}
         isOpen={isPaymentModalOpen}
         size="md"
-        onOpenChange={setIsPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
       >
         <ModalContent>
-          {(onClose) => (
-            <form onSubmit={handleRecordPayment}>
-              <ModalHeader className="flex flex-col gap-1">
-                <h2 className="text-[17px] font-semibold text-primary tracking-tight">
+          <form onSubmit={handleRecordPayment}>
+            <ModalHeader>
+              <div>
+                <p className="text-[14px] font-bold text-text-main">
                   Record payment
-                </h2>
-                <p className="text-[11.5px] text-[rgb(var(--color-text-muted))] font-medium">
+                </p>
+                <p className="text-[11.5px] text-text-muted">
                   Record a new payment for {selectedBill?.vendorName}
                 </p>
-              </ModalHeader>
-              <ModalBody className="py-4">
-                <div className="space-y-4">
-                  <div className="p-3 bg-[rgb(var(--color-surface-2))] rounded-xl border border-[rgb(var(--color-border))]">
-                    <p className="text-[9px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1">
-                      Current outstanding
-                    </p>
-                    <p className="text-[16px] font-semibold text-rose-500 tracking-tighter">
-                      Rs. {selectedBill?.dueAmount.toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] mb-1.5 block">
-                      Payment amount (Rs.)
-                    </label>
-                    <Input
-                      classNames={{ inputWrapper: "rounded-xl" }}
-                      placeholder="0.00"
-                      size="sm"
-                      startContent={
-                        <span className="text-[12px] text-text-muted">Rs.</span>
-                      }
-                      type="number"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] mb-1.5 block">
-                      Payment method
-                    </label>
-                    <Select
-                      className="max-w-full"
-                      classNames={{ trigger: "rounded-xl" }}
-                      placeholder="Select method"
-                      selectedKeys={[paymentMethod]}
-                      size="sm"
-                      onChange={(e) =>
-                        e.target.value && setPaymentMethod(e.target.value)
-                      }
-                    >
-                      {PAYMENT_METHODS.map((method) => (
-                        <SelectItem key={method}>{method}</SelectItem>
-                      ))}
-                    </Select>
-                  </div>
+              </div>
+            </ModalHeader>
+            <ModalBody>
+              <div className="space-y-4 py-1">
+                <div className="p-3 bg-surface-2 rounded-md border border-border-base">
+                  <p className="text-[9px] font-semibold text-text-muted uppercase tracking-wider mb-1">
+                    Current outstanding
+                  </p>
+                  <p className="text-[16px] font-semibold text-danger tracking-tighter">
+                    Rs. {selectedBill?.dueAmount.toLocaleString()}
+                  </p>
                 </div>
-              </ModalBody>
-              <ModalFooter>
-                <Button
-                  className="font-semibold text-[12.5px] rounded-xl"
-                  size="sm"
-                  variant="light"
-                  onPress={onClose}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="font-semibold text-[12.5px] rounded-xl px-6"
-                  color="primary"
-                  isLoading={saving}
-                  size="sm"
-                  type="submit"
-                >
-                  Record payment
-                </Button>
-              </ModalFooter>
-            </form>
-          )}
+
+                <div>
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Payment amount (Rs.)
+                  </label>
+                  <Input
+                    placeholder="0.00"
+                    size="sm"
+                    startContent={
+                      <span className="text-[12px] text-text-muted">Rs.</span>
+                    }
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5 block">
+                    Payment method
+                  </label>
+                  <Select
+                    placeholder="Select method"
+                    selectedKeys={[paymentMethod]}
+                    size="sm"
+                    onChange={(e) =>
+                      e.target.value && setPaymentMethod(e.target.value)
+                    }
+                  >
+                    {PAYMENT_METHODS.map((method) => (
+                      <SelectItem key={method}>{method}</SelectItem>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                className="font-semibold text-[12.5px]"
+                size="sm"
+                type="button"
+                variant="light"
+                onPress={() => setIsPaymentModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="font-semibold text-[12.5px] px-6"
+                color="primary"
+                isLoading={saving}
+                size="sm"
+                type="submit"
+              >
+                Record payment
+              </Button>
+            </ModalFooter>
+          </form>
         </ModalContent>
       </Modal>
 
       {/* Bill Details Modal */}
       <Modal
-        classNames={{
-          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
-        }}
         isOpen={!!detailBill}
         scrollBehavior="inside"
         size="lg"
-        onOpenChange={(open) => !open && setDetailBill(null)}
+        onClose={() => setDetailBill(null)}
       >
         <ModalContent>
-          {(onClose) =>
-            detailBill && (
-              <>
-                <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-[17px] font-semibold text-primary tracking-tight">
+          {detailBill && (
+            <>
+              <ModalHeader>
+                <div>
+                  <p className="text-[14px] font-bold text-text-main">
                     {detailBill.vendorName}
-                  </h2>
-                  <p className="text-[11.5px] text-[rgb(var(--color-text-muted))] font-medium">
+                  </p>
+                  <p className="text-[11.5px] text-text-muted">
                     Bill #{detailBill.billNumber}
                   </p>
-                </ModalHeader>
-                <ModalBody className="py-4">
+                </div>
+              </ModalHeader>
+              <ModalBody>
+                <div className="space-y-4 py-1">
                   <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
                     <DetailRow
                       label="Category"
@@ -1634,28 +1654,28 @@ export default function AccountsPage() {
                   </dl>
 
                   {detailBill.correction && (
-                    <div className="rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] p-3 text-[12px] space-y-0.5">
-                      <p className="font-semibold text-[rgb(var(--color-text))]">
+                    <div className="rounded-md border border-border-base bg-surface-2 p-3 text-[12px] space-y-0.5">
+                      <p className="font-semibold text-text-main">
                         This bill was corrected and is no longer effective
                       </p>
-                      <p className="text-[rgb(var(--color-text-muted))]">
+                      <p className="text-text-muted">
                         Reason: {detailBill.correction.reason}
                       </p>
-                      <p className="text-[rgb(var(--color-text-muted))]">
+                      <p className="text-text-muted">
                         By {detailBill.correction.correctedByName || "—"} on{" "}
                         {format(
                           new Date(detailBill.correction.correctedAt),
                           "MMM dd, yyyy h:mm a",
                         )}
                       </p>
-                      <p className="text-[rgb(var(--color-text-muted))]">
+                      <p className="text-text-muted">
                         Replaced by bill #
                         {detailBill.correction.replacedByBillNumber}
                       </p>
                     </div>
                   )}
                   {detailBill.correctsBillId && (
-                    <p className="text-[12px] text-[rgb(var(--color-text-muted))]">
+                    <p className="text-[12px] text-text-muted">
                       This bill corrects bill #
                       {bills.find((b) => b.id === detailBill.correctsBillId)
                         ?.billNumber ?? "—"}
@@ -1663,34 +1683,34 @@ export default function AccountsPage() {
                     </p>
                   )}
 
-                  <div className="mt-2">
-                    <h3 className="text-[12px] font-semibold text-[rgb(var(--color-text))] mb-2">
+                  <div>
+                    <h3 className="text-[12px] font-semibold text-text-main mb-2">
                       Payment history
                     </h3>
                     {detailPaidAtEntry > 0 && (
-                      <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-2">
+                      <p className="text-[12px] text-text-muted mb-2">
                         Paid when the bill was recorded:{" "}
-                        <span className="font-medium text-[rgb(var(--color-text))]">
+                        <span className="font-medium text-text-main">
                           Rs. {detailPaidAtEntry.toLocaleString()}
                         </span>
                       </p>
                     )}
                     {detailPayments.length === 0 ? (
-                      <p className="text-[12px] text-[rgb(var(--color-text-muted))]">
+                      <p className="text-[12px] text-text-muted">
                         No later payments recorded.
                       </p>
                     ) : (
-                      <ul className="divide-y divide-[rgb(var(--color-border))] border border-[rgb(var(--color-border))] rounded-xl overflow-hidden">
+                      <ul className="divide-y divide-border-base border border-border-base rounded-md overflow-hidden">
                         {detailPayments.map((p, i) => (
                           <li
                             key={i}
                             className="flex items-center justify-between gap-3 px-3 py-2 text-[12.5px]"
                           >
-                            <span className="text-[rgb(var(--color-text-muted))]">
+                            <span className="text-text-muted">
                               {format(new Date(p.date), "MMM dd, yyyy h:mm a")}
                               {p.method && ` · ${p.method}`}
                             </span>
-                            <span className="font-semibold text-[rgb(var(--color-text))]">
+                            <span className="font-semibold text-text-main">
                               Rs. {p.amount.toLocaleString()}
                             </span>
                           </li>
@@ -1698,20 +1718,20 @@ export default function AccountsPage() {
                       </ul>
                     )}
                   </div>
-                </ModalBody>
-                <ModalFooter>
-                  <Button
-                    className="font-semibold text-[12.5px] rounded-xl"
-                    size="sm"
-                    variant="light"
-                    onPress={onClose}
-                  >
-                    Close
-                  </Button>
-                </ModalFooter>
-              </>
-            )
-          }
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button
+                  className="font-semibold text-[12.5px]"
+                  size="sm"
+                  variant="light"
+                  onPress={() => setDetailBill(null)}
+                >
+                  Close
+                </Button>
+              </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
     </div>
@@ -1721,10 +1741,10 @@ export default function AccountsPage() {
 function DetailRow({ label, value }: { label: string; value?: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider">
+      <dt className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
         {label}
       </dt>
-      <dd className="text-[13px] text-[rgb(var(--color-text))] break-words whitespace-pre-wrap">
+      <dd className="text-[13px] text-text-main break-words whitespace-pre-wrap">
         {value || "—"}
       </dd>
     </div>
