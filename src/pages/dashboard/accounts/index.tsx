@@ -12,6 +12,19 @@ import {
   IoBarChartOutline,
   IoCreateOutline,
   IoEyeOutline,
+  IoBusinessOutline,
+  IoPricetagsOutline,
+  IoCallOutline,
+  IoMailOutline,
+  IoBanOutline,
+  IoRefreshOutline,
+  IoInformationCircleOutline,
+  IoMedkitOutline,
+  IoHardwareChipOutline,
+  IoFlashOutline,
+  IoPeopleOutline,
+  IoHomeOutline,
+  IoBriefcaseOutline,
 } from "react-icons/io5";
 import {
   Chart as ChartJS,
@@ -112,6 +125,60 @@ export default function AccountsPage() {
     { id: "office_supply", label: "Office Supplies" },
     { id: "other", label: "Other" },
   ];
+
+  // Fixed accounting categories (plan, memory, etc.) — "salary" in particular
+  // is load-bearing: isPayrollBill() below checks the literal string to keep
+  // payroll bills managed from HR instead of corrected here. Not an editable
+  // catalogue, so the Categories tab is a reference view, not a CRUD one.
+  const CATEGORY_META: Record<
+    string,
+    { label: string; icon: React.ReactNode; description: string }
+  > = {
+    medicine: {
+      label: "Medicines",
+      icon: <IoMedkitOutline className="w-5 h-5" />,
+      description: "Pharmacy stock and medical consumables purchased for the clinic.",
+    },
+    equipment: {
+      label: "Equipment",
+      icon: <IoHardwareChipOutline className="w-5 h-5" />,
+      description: "Clinical and office equipment, devices, and durable assets.",
+    },
+    utility: {
+      label: "Utilities",
+      icon: <IoFlashOutline className="w-5 h-5" />,
+      description: "Electricity, water, internet, and other recurring utility bills.",
+    },
+    salary: {
+      label: "Salaries",
+      icon: <IoPeopleOutline className="w-5 h-5" />,
+      description:
+        "Staff payroll. Managed from HR, so these bills can't be corrected here.",
+    },
+    rent: {
+      label: "Rent",
+      icon: <IoHomeOutline className="w-5 h-5" />,
+      description: "Premises and facility rent.",
+    },
+    office_supply: {
+      label: "Office Supplies",
+      icon: <IoBriefcaseOutline className="w-5 h-5" />,
+      description: "Stationery and other day-to-day office consumables.",
+    },
+    other: {
+      label: "Other",
+      icon: <IoEllipsisHorizontal className="w-5 h-5" />,
+      description: "Anything that doesn't fit the categories above.",
+    },
+  };
+
+  const [activeTab, setActiveTab] = useState<
+    "bills" | "vendors" | "categories"
+  >("bills");
+  const [vendorSearchQuery, setVendorSearchQuery] = useState("");
+  // Set while the vendor modal is editing an existing vendor instead of
+  // adding one.
+  const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
 
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
@@ -438,51 +505,130 @@ export default function AccountsPage() {
     }
   };
 
+  const emptyVendorForm = () => ({
+    name: "",
+    category: "General",
+    phone: "",
+    email: "",
+    address: "",
+  });
+
+  const openAddVendor = () => {
+    setEditingVendor(null);
+    setVendorForm(emptyVendorForm());
+    setIsVendorModalOpen(true);
+  };
+
+  const openEditVendor = (vendor: Vendor) => {
+    setEditingVendor(vendor);
+    setVendorForm({
+      name: vendor.name,
+      category: vendor.category || "General",
+      phone: vendor.phone || "",
+      email: vendor.email || "",
+      address: vendor.address || "",
+    });
+    setIsVendorModalOpen(true);
+  };
+
+  const handleVendorModalChange = (open: boolean) => {
+    setIsVendorModalOpen(open);
+    if (!open) {
+      setEditingVendor(null);
+      setVendorForm(emptyVendorForm());
+    }
+  };
+
+  const toggleVendorActive = async (vendor: Vendor) => {
+    try {
+      await accountService.updateVendor(vendor.id, {
+        isActive: !vendor.isActive,
+      });
+      setVendors((prev) =>
+        prev.map((v) =>
+          v.id === vendor.id ? { ...v, isActive: !v.isActive } : v,
+        ),
+      );
+      addToast({
+        title: "Success",
+        description: vendor.isActive
+          ? "Vendor deactivated"
+          : "Vendor reactivated",
+        color: "success",
+      });
+    } catch (error) {
+      console.error("Error updating vendor status:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to update vendor",
+        color: "danger",
+      });
+    }
+  };
+
   const handleSaveVendor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vendorForm.name) return;
 
     setSaving(true);
     try {
-      const id = await accountService.createVendor({
-        ...vendorForm,
-        isActive: true,
-        clinicId: clinicId!,
-        branchId: "",
-        createdBy: userData?.id || "",
-      });
-
-      addToast({
-        title: "Success",
-        description: "Vendor added successfully",
-        color: "success",
-      });
-      setVendors((prev) => [
-        ...prev,
-        {
+      if (editingVendor) {
+        await accountService.updateVendor(editingVendor.id, {
           ...vendorForm,
-          id,
+        });
+        setVendors((prev) =>
+          prev.map((v) =>
+            v.id === editingVendor.id
+              ? { ...v, ...vendorForm, updatedAt: new Date() }
+              : v,
+          ),
+        );
+        addToast({
+          title: "Success",
+          description: "Vendor updated successfully",
+          color: "success",
+        });
+      } else {
+        const id = await accountService.createVendor({
+          ...vendorForm,
           isActive: true,
           clinicId: clinicId!,
           branchId: "",
-          createdAt: new Date(),
-          updatedAt: new Date(),
           createdBy: userData?.id || "",
-        },
-      ]);
-      setBillForm((prev) => ({
-        ...prev,
-        vendorName: vendorForm.name,
-        vendorId: id,
-      }));
+        });
+
+        addToast({
+          title: "Success",
+          description: "Vendor added successfully",
+          color: "success",
+        });
+        setVendors((prev) => [
+          ...prev,
+          {
+            ...vendorForm,
+            id,
+            isActive: true,
+            clinicId: clinicId!,
+            branchId: "",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            createdBy: userData?.id || "",
+          },
+        ]);
+        // Only auto-select into the bill form when the vendor was added from
+        // inside an open Record Purchase Bill — the Vendors tab has no such
+        // form to fill.
+        if (isBillModalOpen) {
+          setBillForm((prev) => ({
+            ...prev,
+            vendorName: vendorForm.name,
+            vendorId: id,
+          }));
+        }
+      }
       setIsVendorModalOpen(false);
-      setVendorForm({
-        name: "",
-        category: "General",
-        phone: "",
-        email: "",
-        address: "",
-      });
+      setEditingVendor(null);
+      setVendorForm(emptyVendorForm());
     } catch (error) {
       console.error("Error saving vendor:", error);
       addToast({
@@ -494,6 +640,10 @@ export default function AccountsPage() {
       setSaving(false);
     }
   };
+
+  const filteredVendors = vendors.filter((v) =>
+    v.name.toLowerCase().includes(vendorSearchQuery.toLowerCase()),
+  );
 
   const filteredBills = bills.filter((bill) => {
     const matchesSearch =
@@ -643,34 +793,79 @@ export default function AccountsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className="h-8 px-3 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] text-[11px] font-semibold flex items-center gap-2 transition-all hover:bg-[rgb(var(--color-surface))] tracking-tight"
-            onClick={handleExportCSV}
-          >
-            <IoDownloadOutline className="w-3.5 h-3.5" />
-            Export CSV
-          </button>
-          <button
-            className={`h-8 px-3 rounded-xl border text-[11px] font-semibold flex items-center gap-2 transition-all tracking-tight ${
-              showChart
-                ? "bg-primary text-white border-primary shadow-sm"
-                : "border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-surface))]"
-            }`}
-            onClick={() => setShowChart((v) => !v)}
-          >
-            <IoBarChartOutline className="w-3.5 h-3.5" />
-            {showChart ? "Hide Chart" : "View Chart"}
-          </button>
-          <button
-            className="h-8 px-4 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 transition-all active:scale-[0.98] tracking-tight shadow-sm shadow-primary/20"
-            onClick={openAddBill}
-          >
-            <IoAddOutline className="w-4 h-4" />
-            Add New Bill
-          </button>
+          {activeTab === "bills" && (
+            <>
+              <button
+                className="h-8 px-3 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] text-[11px] font-semibold flex items-center gap-2 transition-all hover:bg-[rgb(var(--color-surface))] tracking-tight"
+                onClick={handleExportCSV}
+              >
+                <IoDownloadOutline className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+              <button
+                className={`h-8 px-3 rounded-xl border text-[11px] font-semibold flex items-center gap-2 transition-all tracking-tight ${
+                  showChart
+                    ? "bg-primary text-white border-primary shadow-sm"
+                    : "border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-surface))]"
+                }`}
+                onClick={() => setShowChart((v) => !v)}
+              >
+                <IoBarChartOutline className="w-3.5 h-3.5" />
+                {showChart ? "Hide Chart" : "View Chart"}
+              </button>
+              <button
+                className="h-8 px-4 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 transition-all active:scale-[0.98] tracking-tight shadow-sm shadow-primary/20"
+                onClick={openAddBill}
+              >
+                <IoAddOutline className="w-4 h-4" />
+                Add New Bill
+              </button>
+            </>
+          )}
+          {activeTab === "vendors" && (
+            <button
+              className="h-8 px-4 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 transition-all active:scale-[0.98] tracking-tight shadow-sm shadow-primary/20"
+              onClick={openAddVendor}
+            >
+              <IoAddOutline className="w-4 h-4" />
+              Add New Vendor
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Section tabs */}
+      <div className="flex items-center gap-1 border-b border-[rgb(var(--color-border))]">
+        {(
+          [
+            { key: "bills", label: "Bills", icon: <IoReceiptOutline className="w-3.5 h-3.5" /> },
+            { key: "vendors", label: "Vendors", icon: <IoBusinessOutline className="w-3.5 h-3.5" /> },
+            { key: "categories", label: "Categories", icon: <IoPricetagsOutline className="w-3.5 h-3.5" /> },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            className={`px-4 py-2.5 text-[12.5px] font-semibold flex items-center gap-1.5 border-b-2 -mb-px transition-colors ${
+              activeTab === tab.key
+                ? "border-primary text-primary"
+                : "border-transparent text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))]"
+            }`}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.key === "vendors" && (
+              <span className="ml-0.5 text-[10px] opacity-60">
+                ({vendors.length})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "bills" && (
+      <>
       {/* Financial Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] relative overflow-hidden group">
@@ -1122,6 +1317,184 @@ export default function AccountsPage() {
           </table>
         </div>
       </div>
+      </>
+      )}
+
+      {activeTab === "vendors" && (
+        <div className="space-y-4">
+          <div className="relative w-full max-w-md">
+            <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted w-4 h-4" />
+            <input
+              className="w-full h-10 pl-10 pr-4 bg-surface border border-border-base rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+              placeholder="Search vendors..."
+              type="text"
+              value={vendorSearchQuery}
+              onChange={(e) => setVendorSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="bg-surface border border-border-base rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-2/50 border-b border-border-base">
+                    <th className="px-5 py-4 text-[11px] font-semibold text-text-muted">
+                      Vendor
+                    </th>
+                    <th className="px-5 py-4 text-[11px] font-semibold text-text-muted">
+                      Contact
+                    </th>
+                    <th className="px-5 py-4 text-[11px] font-semibold text-text-muted">
+                      Address
+                    </th>
+                    <th className="px-5 py-4 text-[11px] font-semibold text-text-muted">
+                      Status
+                    </th>
+                    <th className="px-5 py-4 text-[11px] font-semibold text-text-muted text-right">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-base">
+                  {filteredVendors.length === 0 ? (
+                    <tr>
+                      <td
+                        className="px-5 py-10 text-center text-text-muted text-[13px]"
+                        colSpan={5}
+                      >
+                        {vendors.length === 0
+                          ? "No vendors yet. Add one to get started."
+                          : "No vendors match your search."}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredVendors.map((v) => (
+                      <tr key={v.id}>
+                        <td className="px-5 py-3">
+                          <p className="font-semibold text-[13px] text-text-main">
+                            {v.name}
+                          </p>
+                        </td>
+                        <td className="px-5 py-3 text-[12.5px] text-text-muted">
+                          {v.phone && (
+                            <div className="flex items-center gap-1.5">
+                              <IoCallOutline className="w-3.5 h-3.5 shrink-0" />
+                              {v.phone}
+                            </div>
+                          )}
+                          {v.email && (
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <IoMailOutline className="w-3.5 h-3.5 shrink-0" />
+                              {v.email}
+                            </div>
+                          )}
+                          {!v.phone && !v.email && "—"}
+                        </td>
+                        <td className="px-5 py-3 text-[12.5px] text-text-muted">
+                          {v.address || "—"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                              v.isActive !== false
+                                ? "bg-primary/10 text-primary"
+                                : "bg-surface-2 text-text-muted"
+                            }`}
+                          >
+                            {v.isActive !== false ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              className="p-2 hover:bg-primary/10 rounded-lg transition-colors text-text-muted hover:text-primary"
+                              title="Edit vendor"
+                              type="button"
+                              onClick={() => openEditVendor(v)}
+                            >
+                              <IoCreateOutline className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-2 hover:bg-surface-2 rounded-lg transition-colors text-text-muted hover:text-rose-500"
+                              title={
+                                v.isActive !== false
+                                  ? "Deactivate vendor"
+                                  : "Reactivate vendor"
+                              }
+                              type="button"
+                              onClick={() => toggleVendorActive(v)}
+                            >
+                              {v.isActive !== false ? (
+                                <IoBanOutline className="w-4 h-4" />
+                              ) : (
+                                <IoRefreshOutline className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "categories" && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 p-3 bg-surface-2 border border-border-base rounded-xl text-[12px] text-text-muted">
+            <IoInformationCircleOutline className="w-4 h-4 shrink-0 mt-0.5" />
+            <p>
+              These categories are fixed to keep bill classification
+              consistent for accounting and IRD reporting, and aren&apos;t
+              user-editable. &ldquo;Salaries&rdquo; in particular is tied to
+              payroll — those bills are managed from HR instead of here.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(CATEGORY_META).map(([id, meta]) => {
+              const catBills = bills.filter(
+                (b) => isEffective(b) && b.category === id,
+              );
+              const total = catBills.reduce(
+                (sum, b) => sum + b.totalAmount,
+                0,
+              );
+
+              return (
+                <div
+                  key={id}
+                  className="p-4 border border-border-base bg-surface rounded-xl"
+                >
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      {meta.icon}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-[13.5px] text-text-main">
+                        {meta.label}
+                      </p>
+                      <p className="text-[11px] text-text-muted">
+                        {catBills.length} bill
+                        {catBills.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[11.5px] text-text-muted mb-2">
+                    {meta.description}
+                  </p>
+                  <p className="text-[15px] font-bold text-text-main">
+                    Rs. {total.toLocaleString()}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Add Bill Modal */}
       <Modal
         isOpen={isBillModalOpen}
@@ -1213,9 +1586,11 @@ export default function AccountsPage() {
                         });
                       }}
                     >
-                      {vendors.map((v) => (
-                        <SelectItem key={v.id}>{v.name}</SelectItem>
-                      ))}
+                      {vendors
+                        .filter((v) => v.isActive !== false)
+                        .map((v) => (
+                          <SelectItem key={v.id}>{v.name}</SelectItem>
+                        ))}
                     </Select>
                     <Button
                       isIconOnly
@@ -1224,7 +1599,7 @@ export default function AccountsPage() {
                       title="Add a new vendor"
                       type="button"
                       variant="bordered"
-                      onPress={() => setIsVendorModalOpen(true)}
+                      onPress={openAddVendor}
                     >
                       <IoAddOutline size={18} />
                     </Button>
@@ -1399,17 +1774,17 @@ export default function AccountsPage() {
         </ModalContent>
       </Modal>
 
-      {/* Add Vendor Modal */}
+      {/* Add/Edit Vendor Modal */}
       <Modal
         isOpen={isVendorModalOpen}
         size="md"
-        onClose={() => setIsVendorModalOpen(false)}
+        onClose={() => handleVendorModalChange(false)}
       >
         <ModalContent>
           <form onSubmit={handleSaveVendor}>
             <ModalHeader>
               <p className="text-[14px] font-bold text-text-main">
-                Add New Vendor
+                {editingVendor ? "Edit Vendor" : "Add New Vendor"}
               </p>
             </ModalHeader>
             <ModalBody>
@@ -1485,7 +1860,7 @@ export default function AccountsPage() {
                 size="sm"
                 type="button"
                 variant="light"
-                onPress={() => setIsVendorModalOpen(false)}
+                onPress={() => handleVendorModalChange(false)}
               >
                 Cancel
               </Button>
@@ -1496,7 +1871,7 @@ export default function AccountsPage() {
                 size="sm"
                 type="submit"
               >
-                Add Vendor
+                {editingVendor ? "Save Changes" : "Add Vendor"}
               </Button>
             </ModalFooter>
           </form>
