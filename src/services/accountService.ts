@@ -8,6 +8,7 @@ import {
   getDocs,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
@@ -30,6 +31,46 @@ export const accountService = {
     });
 
     return docRef.id;
+  },
+
+  /**
+   * Correct a bill the IRD-compliant way (Electronic Invoice Procedure 6(ख)/6(ट)):
+   * nothing is edited in place or deleted. The corrected bill is saved as a NEW
+   * record and the original is marked no longer effective, with who/when/why.
+   * Both writes land together or not at all. Returns the new bill's id.
+   */
+  async correctBill(
+    original: AccountBill,
+    corrected: Omit<AccountBill, "id" | "createdAt" | "updatedAt">,
+    correction: { reason: string; correctedBy: string; correctedByName?: string },
+  ): Promise<string> {
+    const newRef = doc(collection(db, BILLS_COLLECTION));
+    const batch = writeBatch(db);
+
+    batch.set(newRef, {
+      ...corrected,
+      billDate: Timestamp.fromDate(new Date(corrected.billDate)),
+      correctsBillId: original.id,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(doc(db, BILLS_COLLECTION, original.id), {
+      isEffective: false,
+      correction: {
+        reason: correction.reason,
+        correctedBy: correction.correctedBy,
+        ...(correction.correctedByName && {
+          correctedByName: correction.correctedByName,
+        }),
+        correctedAt: Timestamp.now(),
+        replacedByBillId: newRef.id,
+        replacedByBillNumber: corrected.billNumber,
+      },
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+
+    return newRef.id;
   },
 
   async updateBill(id: string, bill: Partial<AccountBill>): Promise<void> {
@@ -67,6 +108,20 @@ export const accountService = {
         updatedAt: data.updatedAt?.toDate
           ? data.updatedAt.toDate()
           : new Date(data.updatedAt),
+        ...(Array.isArray(data.payments) && {
+          payments: data.payments.map((p: any) => ({
+            ...p,
+            date: p.date?.toDate ? p.date.toDate() : new Date(p.date),
+          })),
+        }),
+        ...(data.correction && {
+          correction: {
+            ...data.correction,
+            correctedAt: data.correction.correctedAt?.toDate
+              ? data.correction.correctedAt.toDate()
+              : new Date(data.correction.correctedAt),
+          },
+        }),
       } as AccountBill;
     });
 
