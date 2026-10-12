@@ -1219,6 +1219,24 @@ export type EnquiryStatus =
  * AccountBill model for tracking all purchase bills (Accounts Payable)
  * This includes medicine purchases, hospital equipment, utilities, rent, etc.
  */
+/** Why, when and by whom a bill was superseded by a corrected one. */
+export interface BillCorrection {
+  reason: string;
+  correctedBy: string; // user id
+  correctedByName?: string;
+  correctedAt: Date;
+  replacedByBillId: string;
+  replacedByBillNumber: string;
+}
+
+/** One payment recorded against a bill through "Pay Due". */
+export interface BillPayment {
+  amount: number;
+  method: string;
+  date: Date;
+  recordedBy: string; // user id
+}
+
 export interface AccountBill {
   id: string;
   category:
@@ -1239,6 +1257,13 @@ export interface AccountBill {
   dueAmount: number;
   paymentStatus: "paid" | "partial" | "pending";
   paymentMethod?: string;
+  payments?: BillPayment[]; // later payments recorded via Pay Due (not the amount paid at entry)
+  // IRD 6(ख)/6(ट): bills are never edited in place or deleted. A correction saves a
+  // new bill (correctsBillId) and ends this one's effectiveness (isEffective=false).
+  // Missing isEffective means effective, so existing bills need no migration.
+  isEffective?: boolean;
+  correctsBillId?: string; // set on the replacement bill: the bill it supersedes
+  correction?: BillCorrection; // set on the superseded bill
   description?: string;
   attachmentUrl?: string; // URL for the scanned bill/receipt file
   clinicId: string;

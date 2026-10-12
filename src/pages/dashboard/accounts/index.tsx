@@ -10,6 +10,8 @@ import {
   IoPrintOutline,
   IoDownloadOutline,
   IoBarChartOutline,
+  IoCreateOutline,
+  IoEyeOutline,
 } from "react-icons/io5";
 import {
   Chart as ChartJS,
@@ -43,13 +45,45 @@ import {
 import { Select, SelectItem } from "@heroui/select";
 import { Input, Textarea } from "@heroui/input";
 import { Button } from "@heroui/button";
+import {
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@heroui/dropdown";
 
 import { printAccountBill } from "@/utils/accountPrinting";
+import { toCsv } from "@/utils/csv";
 import { clinicService } from "@/services/clinicService";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { accountService } from "@/services/accountService";
 import { AccountBill, Vendor } from "@/types/models";
+
+const PAYMENT_METHODS = ["Cash", "Bank Transfer", "E-Sewa", "Khalti", "Cheque"];
+
+const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Salary bills feed HR payroll (HR writes them as PAY-… and reads them back), so
+// they are not corrected from here.
+const isPayrollBill = (bill: AccountBill) => bill.category === "salary";
+
+// A bill is effective unless a correction has superseded it (IRD 6(ट)).
+const isEffective = (bill: AccountBill) => bill.isEffective !== false;
+
+const emptyBillForm = () => ({
+  category: "other" as AccountBill["category"],
+  itemName: "",
+  vendorName: "",
+  vendorId: "",
+  billNumber: "",
+  billDate: format(new Date(), "yyyy-MM-dd"),
+  totalAmount: "",
+  paidAmount: "",
+  description: "",
+  paymentStatus: "pending" as AccountBill["paymentStatus"],
+  paymentMethod: "Cash",
+});
 
 export default function AccountsPage() {
   const { clinicId, userData } = useAuthContext();
@@ -84,21 +118,58 @@ export default function AccountsPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<AccountBill | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [saving, setSaving] = useState(false);
+  // Set while the bill modal is correcting an existing bill instead of adding one.
+  // The original is never edited: the correction is saved as a new bill.
+  const [correctingBill, setCorrectingBill] = useState<AccountBill | null>(
+    null,
+  );
+  const [correctionReason, setCorrectionReason] = useState("");
+  // The bill whose details modal is open.
+  const [detailBill, setDetailBill] = useState<AccountBill | null>(null);
 
-  const [billForm, setBillForm] = useState({
-    category: "other" as AccountBill["category"],
-    itemName: "",
-    vendorName: "",
-    vendorId: "",
-    billNumber: "",
-    billDate: format(new Date(), "yyyy-MM-dd"),
-    totalAmount: "",
-    paidAmount: "",
-    description: "",
-    paymentStatus: "pending" as AccountBill["paymentStatus"],
-    paymentMethod: "Cash",
-  });
+  const [billForm, setBillForm] = useState(emptyBillForm);
+
+  const openAddBill = () => {
+    // Leaving correction mode starts from a blank form; otherwise an unsaved
+    // draft from an earlier "Add" is kept, as before.
+    if (correctingBill) {
+      setCorrectingBill(null);
+      setCorrectionReason("");
+      setBillForm(emptyBillForm());
+    }
+    setIsBillModalOpen(true);
+  };
+
+  const openCorrectBill = (bill: AccountBill) => {
+    setCorrectingBill(bill);
+    setCorrectionReason("");
+    setBillForm({
+      category: bill.category,
+      itemName: bill.itemName || "",
+      vendorName: bill.vendorName,
+      vendorId: bill.vendorId || "",
+      billNumber: bill.billNumber,
+      billDate: format(new Date(bill.billDate), "yyyy-MM-dd"),
+      totalAmount: String(bill.totalAmount),
+      paidAmount: String(bill.paidAmount),
+      description: bill.description || "",
+      paymentStatus: bill.paymentStatus,
+      paymentMethod: bill.paymentMethod || "Cash",
+    });
+    setIsBillModalOpen(true);
+  };
+
+  const handleBillModalChange = (open: boolean) => {
+    setIsBillModalOpen(open);
+    // Cancelling a correction must not leave that bill's data in the Add form.
+    if (!open && correctingBill) {
+      setCorrectingBill(null);
+      setCorrectionReason("");
+      setBillForm(emptyBillForm());
+    }
+  };
 
   const generateBillNumber = () => {
     const prefix = "BLL";
@@ -157,10 +228,36 @@ export default function AccountsPage() {
       return;
     }
 
+    const total = parseFloat(billForm.totalAmount);
+    const paid = parseFloat(billForm.paidAmount || "0");
+
+    if (correctingBill && !correctionReason.trim()) {
+      addToast({
+        title: "Reason required",
+        description: "State why this bill is being corrected.",
+        color: "warning",
+      });
+
+      return;
+    }
+
+    // Reject amounts that can only produce a wrong ledger (e.g. a negative due).
+    if (!(total > 0) || !(paid >= 0) || paid > total) {
+      addToast({
+        title: "Invalid amount",
+        description: !(total > 0)
+          ? "Total amount must be greater than zero."
+          : !(paid >= 0)
+            ? "Paid amount cannot be negative."
+            : "Paid amount cannot be more than the total.",
+        color: "warning",
+      });
+
+      return;
+    }
+
     setSaving(true);
     try {
-      const total = parseFloat(billForm.totalAmount);
-      const paid = parseFloat(billForm.paidAmount || "0");
       const due = total - paid;
 
       let status: AccountBill["paymentStatus"] = "pending";
@@ -168,38 +265,74 @@ export default function AccountsPage() {
       if (paid >= total) status = "paid";
       else if (paid > 0) status = "partial";
 
-      await accountService.createBill({
+      const billData = {
         ...billForm,
         totalAmount: total,
         paidAmount: paid,
         dueAmount: due,
         paymentStatus: status,
         billDate: new Date(billForm.billDate),
-        clinicId: clinicId!,
-        branchId: "",
-        createdBy: userData?.id || "",
-      });
+      };
+
+      if (correctingBill) {
+        const unchanged =
+          billData.category === correctingBill.category &&
+          billData.itemName === (correctingBill.itemName || "") &&
+          billData.vendorName === correctingBill.vendorName &&
+          billData.billNumber === correctingBill.billNumber &&
+          billData.totalAmount === correctingBill.totalAmount &&
+          billData.paidAmount === correctingBill.paidAmount &&
+          billData.description === (correctingBill.description || "") &&
+          billData.paymentMethod === (correctingBill.paymentMethod || "Cash") &&
+          billForm.billDate ===
+            format(new Date(correctingBill.billDate), "yyyy-MM-dd");
+
+        if (unchanged) {
+          addToast({
+            title: "Nothing changed",
+            description: "Change at least one detail to record a correction.",
+            color: "warning",
+          });
+          setSaving(false);
+
+          return;
+        }
+
+        await accountService.correctBill(
+          correctingBill,
+          {
+            ...billData,
+            clinicId: correctingBill.clinicId,
+            branchId: correctingBill.branchId ?? "",
+            createdBy: userData?.id || "",
+          },
+          {
+            reason: correctionReason.trim(),
+            correctedBy: userData?.id || "",
+            correctedByName: userData?.displayName,
+          },
+        );
+      } else {
+        await accountService.createBill({
+          ...billData,
+          clinicId: clinicId!,
+          branchId: "",
+          createdBy: userData?.id || "",
+        });
+      }
 
       addToast({
         title: "Success",
-        description: "Purchase bill recorded successfully",
+        description: correctingBill
+          ? "Correction recorded. The original bill is kept and marked as corrected."
+          : "Purchase bill recorded successfully",
         color: "success",
       });
       setIsBillModalOpen(false);
+      setCorrectingBill(null);
+      setCorrectionReason("");
       loadData();
-      setBillForm({
-        category: "other",
-        itemName: "",
-        vendorName: "",
-        vendorId: "",
-        billNumber: "",
-        billDate: format(new Date(), "yyyy-MM-dd"),
-        totalAmount: "",
-        paidAmount: "",
-        description: "",
-        paymentStatus: "pending",
-        paymentMethod: "Cash",
-      });
+      setBillForm(emptyBillForm());
     } catch (error) {
       console.error("Error saving bill:", error);
       addToast({
@@ -239,6 +372,15 @@ export default function AccountsPage() {
         paidAmount: newPaidAmount,
         dueAmount: newDueAmount,
         paymentStatus: newStatus,
+        payments: [
+          ...(selectedBill.payments || []),
+          {
+            amount,
+            method: paymentMethod,
+            date: new Date(),
+            recordedBy: userData?.id || "",
+          },
+        ],
       });
 
       addToast({
@@ -249,6 +391,7 @@ export default function AccountsPage() {
       setIsPaymentModalOpen(false);
       setSelectedBill(null);
       setPaymentAmount("");
+      setPaymentMethod("Cash");
       loadData();
     } catch (error) {
       console.error("Error recording payment:", error);
@@ -377,16 +520,31 @@ export default function AccountsPage() {
     return matchesSearch && matchesCategory && matchesStatus && matchesDate;
   });
 
+  // A corrected bill stays in the table and the export, but its amounts are
+  // replaced by the new bill, so it must not be counted twice.
+  const effectiveBills = filteredBills.filter(isEffective);
+
   const stats = {
-    total: filteredBills.reduce((acc, b) => acc + b.totalAmount, 0),
-    paid: filteredBills.reduce((acc, b) => acc + b.paidAmount, 0),
-    due: filteredBills.reduce((acc, b) => acc + b.dueAmount, 0),
+    total: effectiveBills.reduce((acc, b) => acc + b.totalAmount, 0),
+    paid: effectiveBills.reduce((acc, b) => acc + b.paidAmount, 0),
+    due: effectiveBills.reduce((acc, b) => acc + b.dueAmount, 0),
   };
+
+  // Details modal: later payments, and what was already paid when the bill was
+  // recorded (paid amount minus the later payments).
+  const detailPayments = detailBill?.payments || [];
+  const detailPaidAtEntry = detailBill
+    ? Math.max(
+        0,
+        detailBill.paidAmount -
+          detailPayments.reduce((s, p) => s + p.amount, 0),
+      )
+    : 0;
 
   const chartData = useMemo(() => {
     const categoryTotals: Record<string, number> = {};
 
-    filteredBills.forEach((b) => {
+    effectiveBills.forEach((b) => {
       const label = b.category
         .replace("_", " ")
         .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -418,7 +576,7 @@ export default function AccountsPage() {
         },
       ],
     };
-  }, [filteredBills]);
+  }, [effectiveBills]);
 
   const handleExportCSV = () => {
     if (filteredBills.length === 0) {
@@ -440,6 +598,8 @@ export default function AccountsPage() {
       "Status",
       "Date",
       "Description",
+      "Record",
+      "Correction reason",
     ];
     const rows = filteredBills.map((b) => [
       b.billNumber,
@@ -450,9 +610,11 @@ export default function AccountsPage() {
       b.dueAmount,
       b.paymentStatus,
       format(new Date(b.billDate), "yyyy-MM-dd"),
-      (b.description || "").replace(/,/g, " "),
+      b.description || "",
+      isEffective(b) ? "Effective" : "Corrected (superseded)",
+      b.correction?.reason || "",
     ]);
-    const csvContent = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const csvContent = toCsv([headers, ...rows]);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -501,7 +663,7 @@ export default function AccountsPage() {
           </button>
           <button
             className="h-8 px-4 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 transition-all active:scale-[0.98] tracking-tight shadow-sm shadow-primary/20"
-            onClick={() => setIsBillModalOpen(true)}
+            onClick={openAddBill}
           >
             <IoAddOutline className="w-4 h-4" />
             Add New Bill
@@ -523,7 +685,7 @@ export default function AccountsPage() {
           </p>
           <div className="mt-2 flex items-center gap-2">
             <span className="text-[8px] font-semibold bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] px-1.5 py-0.5 border border-[rgb(var(--color-border))] tracking-wider">
-              All time
+              Current filters
             </span>
           </div>
         </div>
@@ -572,7 +734,7 @@ export default function AccountsPage() {
                 Expense Breakdown by Category
               </h3>
               <p className="text-[10px] text-[rgb(var(--color-text-muted))] mt-0.5">
-                Based on current filters · {filteredBills.length} records
+                Based on current filters · {effectiveBills.length} records
               </p>
             </div>
           </div>
@@ -670,8 +832,9 @@ export default function AccountsPage() {
               <span className="ml-1 text-[9px] opacity-60">
                 (
                 {s === "all"
-                  ? bills.length
-                  : bills.filter((b) => b.paymentStatus === s).length}
+                  ? bills.filter(isEffective).length
+                  : bills.filter((b) => isEffective(b) && b.paymentStatus === s)
+                      .length}
                 )
               </span>
             </button>
@@ -803,7 +966,9 @@ export default function AccountsPage() {
                 filteredBills.map((bill) => (
                   <tr
                     key={bill.id}
-                    className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors group"
+                    className={`hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors group ${
+                      isEffective(bill) ? "" : "opacity-60"
+                    }`}
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
@@ -869,6 +1034,14 @@ export default function AccountsPage() {
                         {bill.paymentStatus.charAt(0).toUpperCase() +
                           bill.paymentStatus.slice(1)}
                       </span>
+                      {!isEffective(bill) && (
+                        <span
+                          className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] border border-[rgb(var(--color-border))]"
+                          title={bill.correction?.reason}
+                        >
+                          Corrected
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2 text-[rgb(var(--color-text-muted))]">
@@ -880,12 +1053,13 @@ export default function AccountsPage() {
                     </td>
                     <td className="px-5 py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {bill.dueAmount > 0 && (
+                        {bill.dueAmount > 0 && isEffective(bill) && (
                           <button
                             className="px-3 py-1.5 rounded-xl bg-primary/10 text-primary text-[10px] font-black hover:bg-primary hover:text-white transition-all uppercase tracking-tighter"
                             onClick={() => {
                               setSelectedBill(bill);
                               setPaymentAmount(bill.dueAmount.toString());
+                              setPaymentMethod("Cash");
                               setIsPaymentModalOpen(true);
                             }}
                           >
@@ -899,9 +1073,52 @@ export default function AccountsPage() {
                         >
                           <IoPrintOutline className="w-4.5 h-4.5" />
                         </button>
-                        <button className="p-2 hover:bg-[rgb(var(--color-surface-2))] rounded-lg transition-colors text-[rgb(var(--color-text-muted))] hover:text-primary">
-                          <IoEllipsisHorizontal className="w-5 h-5" />
-                        </button>
+                        <Dropdown placement="bottom-end">
+                          <DropdownTrigger>
+                            <button
+                              aria-label="More actions"
+                              className="p-2 hover:bg-[rgb(var(--color-surface-2))] rounded-lg transition-colors text-[rgb(var(--color-text-muted))] hover:text-primary"
+                            >
+                              <IoEllipsisHorizontal className="w-5 h-5" />
+                            </button>
+                          </DropdownTrigger>
+                          <DropdownMenu
+                            aria-label="Bill actions"
+                            disabledKeys={
+                              isPayrollBill(bill) || !isEffective(bill)
+                                ? ["correct"]
+                                : []
+                            }
+                            onAction={(key) => {
+                              if (key === "view") setDetailBill(bill);
+                              if (key === "correct") openCorrectBill(bill);
+                            }}
+                          >
+                            <DropdownItem
+                              key="view"
+                              startContent={
+                                <IoEyeOutline className="w-4 h-4" />
+                              }
+                            >
+                              View details
+                            </DropdownItem>
+                            <DropdownItem
+                              key="correct"
+                              description={
+                                !isEffective(bill)
+                                  ? "Already corrected"
+                                  : isPayrollBill(bill)
+                                    ? "Managed from HR payroll"
+                                    : "Saves a new bill; the original is kept"
+                              }
+                              startContent={
+                                <IoCreateOutline className="w-4 h-4" />
+                              }
+                            >
+                              Correct bill
+                            </DropdownItem>
+                          </DropdownMenu>
+                        </Dropdown>
                       </div>
                     </td>
                   </tr>
@@ -920,21 +1137,40 @@ export default function AccountsPage() {
         }}
         isOpen={isBillModalOpen}
         size="2xl"
-        onOpenChange={setIsBillModalOpen}
+        onOpenChange={handleBillModalChange}
       >
         <ModalContent>
           {(onClose) => (
             <form onSubmit={handleSaveBill}>
               <ModalHeader className="flex flex-col gap-1">
                 <h2 className="text-[18px] font-bold text-[rgb(var(--color-text))]">
-                  Record Purchase Bill
+                  {correctingBill
+                    ? "Correct Purchase Bill"
+                    : "Record Purchase Bill"}
                 </h2>
                 <p className="text-[12px] text-[rgb(var(--color-text-muted))] font-normal">
-                  Enter details of the purchase or expense bill.
+                  {correctingBill
+                    ? `Correcting bill #${correctingBill.billNumber}. The original is kept and marked as corrected; this saves a new bill that replaces it.`
+                    : "Enter details of the purchase or expense bill."}
                 </p>
               </ModalHeader>
               <ModalBody className="py-6">
                 <div className="grid grid-cols-2 gap-4">
+                  {correctingBill && (
+                    <div className="col-span-2">
+                      <p className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                        Reason for correction *
+                      </p>
+                      <Textarea
+                        minRows={2}
+                        aria-label="Reason for correction"
+                        placeholder="e.g. Wrong amount entered, vendor reissued the bill..."
+                        size="sm"
+                        value={correctionReason}
+                        onChange={(e) => setCorrectionReason(e.target.value)}
+                      />
+                    </div>
+                  )}
                   <div className="col-span-2 md:col-span-1">
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
                       Category
@@ -1129,7 +1365,7 @@ export default function AccountsPage() {
                   isLoading={saving}
                   type="submit"
                 >
-                  Save Bill
+                  {correctingBill ? "Save Correction" : "Save Bill"}
                 </Button>
               </ModalFooter>
             </form>
@@ -1295,17 +1531,14 @@ export default function AccountsPage() {
                     <Select
                       className="max-w-full"
                       classNames={{ trigger: "rounded-xl" }}
-                      defaultSelectedKeys={["Cash"]}
                       placeholder="Select method"
+                      selectedKeys={[paymentMethod]}
                       size="sm"
+                      onChange={(e) =>
+                        e.target.value && setPaymentMethod(e.target.value)
+                      }
                     >
-                      {[
-                        "Cash",
-                        "Bank Transfer",
-                        "E-Sewa",
-                        "Khalti",
-                        "Cheque",
-                      ].map((method) => (
+                      {PAYMENT_METHODS.map((method) => (
                         <SelectItem key={method}>{method}</SelectItem>
                       ))}
                     </Select>
@@ -1335,6 +1568,165 @@ export default function AccountsPage() {
           )}
         </ModalContent>
       </Modal>
+
+      {/* Bill Details Modal */}
+      <Modal
+        classNames={{
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
+        }}
+        isOpen={!!detailBill}
+        scrollBehavior="inside"
+        size="lg"
+        onOpenChange={(open) => !open && setDetailBill(null)}
+      >
+        <ModalContent>
+          {(onClose) =>
+            detailBill && (
+              <>
+                <ModalHeader className="flex flex-col gap-1">
+                  <h2 className="text-[17px] font-semibold text-primary tracking-tight">
+                    {detailBill.vendorName}
+                  </h2>
+                  <p className="text-[11.5px] text-[rgb(var(--color-text-muted))] font-medium">
+                    Bill #{detailBill.billNumber}
+                  </p>
+                </ModalHeader>
+                <ModalBody className="py-4">
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+                    <DetailRow
+                      label="Category"
+                      value={titleCase(detailBill.category.replace("_", " "))}
+                    />
+                    <DetailRow label="Item" value={detailBill.itemName} />
+                    <DetailRow
+                      label="Bill date"
+                      value={format(
+                        new Date(detailBill.billDate),
+                        "MMM dd, yyyy",
+                      )}
+                    />
+                    <DetailRow
+                      label="Status"
+                      value={titleCase(detailBill.paymentStatus)}
+                    />
+                    <DetailRow
+                      label="Total"
+                      value={`Rs. ${detailBill.totalAmount.toLocaleString()}`}
+                    />
+                    <DetailRow
+                      label="Paid"
+                      value={`Rs. ${detailBill.paidAmount.toLocaleString()}`}
+                    />
+                    <DetailRow
+                      label="Due"
+                      value={`Rs. ${detailBill.dueAmount.toLocaleString()}`}
+                    />
+                    <DetailRow
+                      label="Payment method"
+                      value={detailBill.paymentMethod}
+                    />
+                    <div className="col-span-2">
+                      <DetailRow
+                        label="Description"
+                        value={detailBill.description}
+                      />
+                    </div>
+                  </dl>
+
+                  {detailBill.correction && (
+                    <div className="rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] p-3 text-[12px] space-y-0.5">
+                      <p className="font-semibold text-[rgb(var(--color-text))]">
+                        This bill was corrected and is no longer effective
+                      </p>
+                      <p className="text-[rgb(var(--color-text-muted))]">
+                        Reason: {detailBill.correction.reason}
+                      </p>
+                      <p className="text-[rgb(var(--color-text-muted))]">
+                        By {detailBill.correction.correctedByName || "—"} on{" "}
+                        {format(
+                          new Date(detailBill.correction.correctedAt),
+                          "MMM dd, yyyy h:mm a",
+                        )}
+                      </p>
+                      <p className="text-[rgb(var(--color-text-muted))]">
+                        Replaced by bill #
+                        {detailBill.correction.replacedByBillNumber}
+                      </p>
+                    </div>
+                  )}
+                  {detailBill.correctsBillId && (
+                    <p className="text-[12px] text-[rgb(var(--color-text-muted))]">
+                      This bill corrects bill #
+                      {bills.find((b) => b.id === detailBill.correctsBillId)
+                        ?.billNumber ?? "—"}
+                      .
+                    </p>
+                  )}
+
+                  <div className="mt-2">
+                    <h3 className="text-[12px] font-semibold text-[rgb(var(--color-text))] mb-2">
+                      Payment history
+                    </h3>
+                    {detailPaidAtEntry > 0 && (
+                      <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-2">
+                        Paid when the bill was recorded:{" "}
+                        <span className="font-medium text-[rgb(var(--color-text))]">
+                          Rs. {detailPaidAtEntry.toLocaleString()}
+                        </span>
+                      </p>
+                    )}
+                    {detailPayments.length === 0 ? (
+                      <p className="text-[12px] text-[rgb(var(--color-text-muted))]">
+                        No later payments recorded.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-[rgb(var(--color-border))] border border-[rgb(var(--color-border))] rounded-xl overflow-hidden">
+                        {detailPayments.map((p, i) => (
+                          <li
+                            key={i}
+                            className="flex items-center justify-between gap-3 px-3 py-2 text-[12.5px]"
+                          >
+                            <span className="text-[rgb(var(--color-text-muted))]">
+                              {format(new Date(p.date), "MMM dd, yyyy h:mm a")}
+                              {p.method && ` · ${p.method}`}
+                            </span>
+                            <span className="font-semibold text-[rgb(var(--color-text))]">
+                              Rs. {p.amount.toLocaleString()}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </ModalBody>
+                <ModalFooter>
+                  <Button
+                    className="font-semibold text-[12.5px] rounded-xl"
+                    size="sm"
+                    variant="light"
+                    onPress={onClose}
+                  >
+                    Close
+                  </Button>
+                </ModalFooter>
+              </>
+            )
+          }
+        </ModalContent>
+      </Modal>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider">
+        {label}
+      </dt>
+      <dd className="text-[13px] text-[rgb(var(--color-text))] break-words whitespace-pre-wrap">
+        {value || "—"}
+      </dd>
     </div>
   );
 }
