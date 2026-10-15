@@ -16,6 +16,8 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
+  Zap,
+  Heart,
 } from "lucide-react";
 
 import { Carousel } from "@/components/ui/Carousel";
@@ -45,14 +47,24 @@ const STAT_IMAGES: Record<string, string> = {
 // Editorial display serif for headlines — loaded in index.html, scoped to this page only.
 const SERIF = { fontFamily: "'Fraunces', serif" };
 
-function Eyebrow({ children }: { children: ReactNode }) {
+function Eyebrow({
+  children,
+  plain,
+}: {
+  children: ReactNode;
+  plain?: boolean;
+}) {
   return (
     <div
-      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5"
-      style={{
-        background: "rgb(var(--color-primary) / 0.08)",
-        border: "1px solid rgb(var(--color-primary) / 0.18)",
-      }}
+      className={`inline-flex items-center gap-2 mb-4 ${plain ? "" : "px-4 py-1.5 rounded-full mb-5"}`}
+      style={
+        plain
+          ? undefined
+          : {
+              background: "rgb(var(--color-primary) / 0.08)",
+              border: "1px solid rgb(var(--color-primary) / 0.18)",
+            }
+      }
     >
       <span
         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -533,77 +545,79 @@ export default function IndexPage() {
       {/* ─────────────────────────────────────────────────────────────────────
           SERVICES
       ───────────────────────────────────────────────────────────────────── */}
-      <section className="pt-20 lg:pt-32 pb-10 lg:pb-24 overflow-hidden">
+      <section className="pt-14 lg:pt-20 pb-10 lg:pb-16 overflow-hidden">
         <div className="max-w-7xl mx-auto px-5 lg:px-8">
           {/* Header */}
-          <Reveal className="mb-10 lg:mb-20 text-center lg:text-left max-w-2xl mx-auto lg:mx-0">
-            <div className="flex justify-center lg:justify-start">
-              <Eyebrow>Our Services</Eyebrow>
+          <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 lg:mb-10 text-center lg:text-left">
+            <div className="max-w-2xl mx-auto lg:mx-0">
+              <div className="flex justify-center lg:justify-start">
+                <Eyebrow plain>Our Services</Eyebrow>
+              </div>
+              <h2
+                className="text-3xl sm:text-4xl lg:text-[2.6rem] mb-3 leading-tight tracking-tight"
+                style={{
+                  ...SERIF,
+                  fontWeight: 600,
+                  color: "rgb(var(--color-text))",
+                }}
+              >
+                Medical Aesthetic Services
+              </h2>
+              <p
+                className="text-sm sm:text-base leading-relaxed"
+                style={{ color: "rgb(var(--color-text-muted))" }}
+              >
+                Precision-engineered protocols fusing advanced dermatological
+                science with Korean aesthetic innovation.
+              </p>
             </div>
-            <h2
-              className="text-3xl sm:text-4xl lg:text-5xl mb-4 leading-tight tracking-tight"
-              style={{
-                ...SERIF,
-                fontWeight: 600,
-                color: "rgb(var(--color-text))",
-              }}
-            >
-              Medical Aesthetic Services
-            </h2>
-            <p
-              className="text-sm sm:text-base leading-relaxed"
-              style={{ color: "rgb(var(--color-text-muted))" }}
-            >
-              Precision-engineered protocols fusing advanced dermatological
-              science with Korean aesthetic innovation.
-            </p>
+            <div className="flex justify-center lg:justify-end">
+              <Link
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-full border transition-colors hover:bg-[rgb(var(--color-primary)/0.06)]"
+                style={{
+                  color: "rgb(var(--color-primary))",
+                  borderColor: "rgb(var(--color-primary) / 0.35)",
+                  background: "rgb(var(--color-surface))",
+                }}
+                to="/features"
+              >
+                View All Services
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </Reveal>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
             {content.services.map((service, index) => {
               const IconComponent = resolveIcon(service.icon);
-              // Odd cards drop slightly on desktop to break the rigid grid line.
-              const stagger = index % 2 === 1 ? "lg:mt-12" : "";
 
               return (
-                <Reveal
-                  key={index}
-                  className={stagger}
-                  delay={index * 90}
-                  direction={index % 2 === 1 ? "left" : "right"}
-                >
+                <Reveal key={index} className="h-full" delay={index * 90}>
                   <div
-                    className="group flex flex-col rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1.5"
+                    className="group flex flex-col h-full rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
                     style={{
                       background: "rgb(var(--color-surface))",
                       border: "1px solid rgb(var(--color-border))",
-                      boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)",
+                      boxShadow: "0 8px 24px -16px rgba(0,0,0,0.12)",
                     }}
                   >
                     {/* Image */}
-                    <div className="relative aspect-[16/10] overflow-hidden">
+                    <div className="aspect-[16/10] overflow-hidden">
                       <img
                         alt={service.title}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         src={`/images/service_${index + 1}.png`}
                       />
-                      <span
-                        className="absolute top-4 left-4 w-8 h-8 rounded-lg flex items-center justify-center text-xs font-extrabold text-white"
-                        style={{
-                          background: "rgba(0,0,0,0.55)",
-                          backdropFilter: "blur(4px)",
-                        }}
-                      >
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
                     </div>
 
                     {/* Content */}
-                    <div className="p-7 flex flex-col flex-1">
+                    <div className="px-5 pb-5 flex flex-col flex-1">
                       <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center mb-5"
+                        className="relative z-10 -mt-6 mb-3 w-12 h-12 rounded-full flex items-center justify-center"
                         style={{
-                          background: "rgba(var(--color-primary),0.08)",
+                          background: "rgb(var(--color-surface))",
+                          border: "1px solid rgb(var(--color-primary) / 0.2)",
+                          boxShadow: "0 6px 14px -8px rgba(0,0,0,0.25)",
                         }}
                       >
                         <IconComponent
@@ -613,77 +627,221 @@ export default function IndexPage() {
                       </div>
 
                       <h3
-                        className="text-lg mb-3 tracking-tight"
-                        style={{
-                          ...SERIF,
-                          fontWeight: 600,
-                          color: "rgb(var(--color-text))",
-                        }}
+                        className="text-base font-semibold mb-2 tracking-tight"
+                        style={{ color: "rgb(var(--color-text))" }}
                       >
                         {service.title}
                       </h3>
                       <p
-                        className="text-sm leading-relaxed flex-1"
+                        className="text-[13px] leading-relaxed flex-1"
                         style={{ color: "rgb(var(--color-text-muted))" }}
                       >
                         {service.description}
                       </p>
 
-                      <div
-                        className="mt-6 pt-5 border-t"
-                        style={{ borderColor: "rgb(var(--color-border))" }}
+                      <Link
+                        className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-75"
+                        style={{ color: "rgb(var(--color-primary))" }}
+                        to="/features"
                       >
-                        <Link
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-75"
-                          style={{ color: "rgb(var(--color-primary))" }}
-                          to="/features"
-                        >
-                          Learn more <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                      </div>
+                        Learn more <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
                     </div>
                   </div>
                 </Reveal>
               );
             })}
+
+            {/* Explore card */}
+            <Reveal className="h-full" delay={content.services.length * 90}>
+              <div
+                className="flex flex-col items-center justify-center text-center h-full min-h-[280px] rounded-2xl p-7"
+                style={{
+                  background: "rgb(var(--color-primary) / 0.06)",
+                  border: "1px solid rgb(var(--color-primary) / 0.15)",
+                }}
+              >
+                <Sparkles
+                  className="w-10 h-10 mb-5"
+                  strokeWidth={1.4}
+                  style={{ color: "rgb(var(--color-primary))" }}
+                />
+                <h3
+                  className="text-base font-semibold mb-3 tracking-tight"
+                  style={{ color: "rgb(var(--color-text))" }}
+                >
+                  Explore All Treatments
+                </h3>
+                <p
+                  className="text-[13px] leading-relaxed mb-6"
+                  style={{ color: "rgb(var(--color-text-muted))" }}
+                >
+                  Discover our complete range of advanced aesthetic treatments
+                  for your unique skin goals.
+                </p>
+                <Link
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full border transition-colors hover:bg-[rgb(var(--color-primary)/0.08)]"
+                  style={{
+                    color: "rgb(var(--color-primary))",
+                    borderColor: "rgb(var(--color-primary) / 0.35)",
+                    background: "rgb(var(--color-surface))",
+                  }}
+                  to="/features"
+                >
+                  View All Services
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </Reveal>
           </div>
         </div>
       </section>
 
       {/* ─────────────────────────────────────────────────────────────────────
-          STATEMENT — oversized typography as a graphic beat
+          WHY CHOOSE US — "Science meets artistry"
       ───────────────────────────────────────────────────────────────────── */}
-      <section className="py-2 lg:py-4 overflow-hidden">
-        <Reveal
-          className="max-w-7xl mx-auto px-5 lg:px-8 text-center"
-          direction="scale"
-        >
-          <p
-            className="text-xs font-bold uppercase tracking-widest mb-6"
-            style={{ color: "rgb(var(--color-primary))" }}
-          >
-            The Philosophy
-          </p>
-          <h2
-            className="text-[7vw] sm:text-[5vw] lg:text-[3.5vw] leading-[0.95] tracking-tight"
-            style={{
-              ...SERIF,
-              fontWeight: 600,
-              color: "rgb(var(--color-text))",
-            }}
-          >
-            Science meets
-            <br />
-            <span
+      <section
+        className="py-12 lg:py-14 overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(90deg, rgb(var(--color-primary) / 0.07), rgb(var(--color-primary) / 0.03))",
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)_minmax(0,0.85fr)] items-center gap-10 lg:gap-10">
+          {/* Copy */}
+          <Reveal className="text-center lg:text-left">
+            <div className="flex justify-center lg:justify-start">
+              <Eyebrow plain>Why Choose Us</Eyebrow>
+            </div>
+            <h2
+              className="text-3xl sm:text-4xl leading-[1.1] tracking-tight mb-4"
               style={{
-                fontStyle: "italic",
-                color: "rgb(var(--color-primary))",
+                ...SERIF,
+                fontWeight: 600,
+                color: "rgb(var(--color-text))",
               }}
             >
-              artistry.
-            </span>
-          </h2>
-        </Reveal>
+              Science meets
+              <br />
+              <span
+                style={{
+                  fontStyle: "italic",
+                  fontWeight: 500,
+                  color: "rgb(var(--color-primary))",
+                }}
+              >
+                artistry.
+              </span>
+            </h2>
+            <p
+              className="text-sm leading-relaxed mb-6 max-w-sm mx-auto lg:mx-0"
+              style={{ color: "rgb(var(--color-text-muted))" }}
+            >
+              We combine advanced Korean technology, expert care, and a
+              personalized approach to help you achieve healthy, radiant, and
+              confident skin.
+            </p>
+            <Link
+              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-full border transition-colors hover:bg-[rgb(var(--color-primary)/0.08)]"
+              style={{
+                color: "rgb(var(--color-primary))",
+                borderColor: "rgb(var(--color-primary) / 0.35)",
+                background: "rgb(var(--color-surface))",
+              }}
+              to="/about"
+            >
+              Learn More
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </Reveal>
+
+          {/* Four reasons */}
+          <Reveal delay={100}>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-8 text-center sm:text-left">
+              {[
+                {
+                  icon: Zap,
+                  title: "Korean Technology",
+                  desc: "World-class equipment and protocols.",
+                },
+                {
+                  icon: Users,
+                  title: "Expert Doctors",
+                  desc: "Certified & experienced dermatologists.",
+                },
+                {
+                  icon: Heart,
+                  title: "Personalized Care",
+                  desc: "Treatments tailored to your skin needs.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Safe & Trusted",
+                  desc: "FDA-approved & K-Certified products.",
+                },
+              ].map(({ icon: Icon, title, desc }) => (
+                <div
+                  key={title}
+                  className="flex flex-col items-center sm:items-start"
+                >
+                  <div
+                    className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
+                    style={{ background: "rgb(var(--color-primary) / 0.1)" }}
+                  >
+                    <Icon
+                      className="w-6 h-6"
+                      strokeWidth={1.6}
+                      style={{ color: "rgb(var(--color-primary))" }}
+                    />
+                  </div>
+                  <p
+                    className="text-sm font-semibold mb-1"
+                    style={{ color: "rgb(var(--color-text))" }}
+                  >
+                    {title}
+                  </p>
+                  <p
+                    className="text-xs leading-relaxed"
+                    style={{ color: "rgb(var(--color-text-muted))" }}
+                  >
+                    {desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          {/* Portrait */}
+          <Reveal
+            className="relative mx-auto w-full max-w-[300px] lg:max-w-none"
+            delay={200}
+          >
+            <div
+              className="pointer-events-none absolute -right-8 -bottom-8 w-64 h-64 rounded-full"
+              style={{ background: "rgb(var(--color-primary) / 0.12)" }}
+            />
+            <img
+              alt="Radiant, healthy skin"
+              className="relative w-full h-[300px] lg:h-[340px] object-cover object-center rounded-[2rem]"
+              src="/images/banner_1.png"
+              style={{ boxShadow: "0 18px 40px -22px rgba(0,0,0,0.3)" }}
+            />
+            <p
+              className="absolute -top-5 -left-2 lg:-left-6 leading-[1.05] -rotate-6 pointer-events-none"
+              style={{
+                fontFamily: "'Caveat', cursive",
+                fontWeight: 600,
+                fontSize: "1.6rem",
+                color: "rgb(var(--color-primary))",
+                textShadow: "0 1px 0 rgba(255,255,255,0.8)",
+              }}
+            >
+              Healthy Skin,
+              <br />
+              &nbsp;&nbsp;Happier You ♡
+            </p>
+          </Reveal>
+        </div>
       </section>
 
       {/* ─────────────────────────────────────────────────────────────────────
