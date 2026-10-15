@@ -300,6 +300,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { medicineService } from "@/services/medicineService";
 import { pharmacyService } from "@/services/pharmacyService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { prescriptionService } from "@/services/prescriptionService";
 import { itemService } from "@/services/itemService";
 import { patientService } from "@/services/patientService";
@@ -508,6 +509,21 @@ interface MedicinePurchase {
   returns?: MedicinePurchaseReturn[];
   totalReturnedAmount?: number;
   printCount?: number;
+  /**
+   * Set only on a synthetic row representing a medicine line dispensed
+   * through the unified Billing Counter (an appointmentBilling invoice
+   * that mixed a consultation/lab test with a medicine), not a real
+   * medicinePurchases document. This module's own sales list, stat cards,
+   * and daily reports used to only read medicinePurchases, so any medicine
+   * sold through Billing Counter was invisible here even though it's real,
+   * paid, stock-deducted revenue — confirmed live (today had 4 such sales,
+   * NPR ~448, all absent from this page before this fix). Row actions that
+   * assume a real medicinePurchases document (Edit/Print/Record
+   * Payment/Record Return from this page) don't apply to it — View routes
+   * to the real appointment invoice instead.
+   */
+  sourceType?: "billing-counter";
+  sourceBillingId?: string;
 }
 
 interface MedicineUsage {
@@ -1107,6 +1123,7 @@ export default function PharmacyPage() {
           suppliersData,
           clinicData,
           layoutConfigData,
+          appointmentBillingData,
         ] = await Promise.all([
           medicineService.getMedicinesByClinic(
             clinicId,
@@ -1120,7 +1137,63 @@ export default function PharmacyPage() {
           medicineService.getSuppliersByClinic(clinicId),
           clinicService.getClinicById(clinicId),
           clinicService.getPrintLayoutConfig(clinicId),
+          appointmentBillingService.getBillingByClinic(clinicId),
         ]);
+
+        // Medicine can also be sold through the unified Billing Counter,
+        // which mixes a consultation/lab test and a dispensed medicine on
+        // one appointmentBilling invoice instead of a medicinePurchases
+        // document. Represent each such line as its own synthetic,
+        // MedicinePurchase-shaped row so this module's existing sales
+        // list/stat cards/daily reports (all driven off `purchases`) show
+        // it for free, instead of silently excluding real, paid revenue.
+        const billingCounterMedicineSales: MedicinePurchase[] = (
+          (appointmentBillingData as any[]) || []
+        )
+          .filter((b) => b.status !== "cancelled")
+          .flatMap((b) =>
+            (b.items || [])
+              .filter((item: any) => item.lineKind === "medicine")
+              .map((item: any) => ({
+                id: `bc:${b.id}:${item.id}`,
+                purchaseNo: b.invoiceNumber,
+                items: [
+                  {
+                    id: item.id,
+                    medicineId: item.appointmentTypeId,
+                    medicineName: item.appointmentTypeName,
+                    expiryDate:
+                      item.batchAllocations?.[0]?.expiryDate || "",
+                    salePrice: item.price,
+                    quantity: item.quantity,
+                    amount: item.amount,
+                    batchNumber: item.batchAllocations?.[0]?.batchNumber,
+                    taxRate: item.taxRate,
+                    hsCode: item.hsCode,
+                  },
+                ],
+                total: (item.price || 0) * (item.quantity || 0),
+                discount: item.discountAmount || 0,
+                taxPercentage: item.taxRate || 0,
+                taxAmount: 0,
+                netAmount: item.amount || 0,
+                paymentType: b.paymentMethod || "cash",
+                paymentStatus: b.paymentStatus,
+                paymentNote: "",
+                patientName: b.patientName,
+                patientPanVat: b.patientPanVat || b.buyerPan,
+                purchaseDate: b.invoiceDate,
+                clinicId: b.clinicId,
+                branchId: b.branchId || b.clinicId,
+                irdSynced: b.irdSynced,
+                cbmsResponseCode: b.cbmsResponseCode,
+                createdBy: b.createdBy,
+                createdAt: b.invoiceDate,
+                updatedAt: b.invoiceDate,
+                sourceType: "billing-counter" as const,
+                sourceBillingId: b.id,
+              })),
+          );
 
         setMedicines(medicinesData as Medicine[]);
 
@@ -1139,7 +1212,10 @@ export default function PharmacyPage() {
         setRawStocks(sData);
 
         setItems(itemsData);
-        setPurchases(purchasesData as MedicinePurchase[]);
+        setPurchases([
+          ...(purchasesData as MedicinePurchase[]),
+          ...billingCounterMedicineSales,
+        ]);
         setSuppliers((suppliersData as Supplier[]) || []);
         setClinic(clinicData);
         setLayoutConfig(layoutConfigData);
@@ -4227,10 +4303,25 @@ export default function PharmacyPage() {
                                       purchase.irdSynced ||
                                         purchase.cbmsResponseCode,
                                     )}
-                                    invoiceType="pharmacy"
-                                    recordId={purchase.id}
+                                    invoiceType={
+                                      purchase.sourceType === "billing-counter"
+                                        ? "appointment"
+                                        : "pharmacy"
+                                    }
+                                    recordId={
+                                      purchase.sourceType === "billing-counter"
+                                        ? purchase.sourceBillingId!
+                                        : purchase.id
+                                    }
                                     synced={Boolean(purchase.irdSynced)}
                                     onSynced={async () => {
+                                      // A billing-counter row isn't a real
+                                      // medicinePurchases document — its sync
+                                      // state lives on the appointment
+                                      // invoice instead, refreshed on next
+                                      // page load rather than here.
+                                      if (purchase.sourceType === "billing-counter") return;
+
                                       const updated =
                                         await pharmacyService.getMedicinePurchaseById(
                                           purchase.id,
@@ -4257,15 +4348,29 @@ export default function PharmacyPage() {
                                   <div className="flex items-center gap-1">
                                     <button
                                       className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
-                                      title="View"
+                                      title={
+                                        purchase.sourceType === "billing-counter"
+                                          ? "View (Billing Counter invoice)"
+                                          : "View"
+                                      }
                                       onClick={() =>
                                         navigate(
-                                          `/dashboard/pharmacy/purchase/${purchase.id}`,
+                                          purchase.sourceType === "billing-counter"
+                                            ? `/dashboard/appointments-billing/${purchase.sourceBillingId}`
+                                            : `/dashboard/pharmacy/purchase/${purchase.id}`,
                                         )
                                       }
                                     >
                                       <IoEyeOutline />
                                     </button>
+                                    {/* A billing-counter row has no
+                                        medicinePurchases document behind it
+                                        — Edit/Print/Record Payment/Record
+                                        Return here would all act on an id
+                                        that doesn't exist. Those actions
+                                        live on the appointment invoice
+                                        itself, reached via View above. */}
+                                    {purchase.sourceType !== "billing-counter" && (
                                     <Dropdown>
                                       <DropdownTrigger>
                                         <button
@@ -4322,6 +4427,7 @@ export default function PharmacyPage() {
                                         </DropdownItem>
                                       </DropdownMenu>
                                     </Dropdown>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
