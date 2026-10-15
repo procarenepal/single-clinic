@@ -4,6 +4,11 @@ interface CarouselProps {
   items: ReactNode[];
   autoPlayInterval?: number;
   className?: string;
+  /**
+   * "counter" is for carousels laid over photography: a white "01 / 04" counter
+   * with dots at the bottom-right, and brand-coloured arrows.
+   */
+  variant?: "default" | "counter";
 }
 
 // Minimum horizontal drag distance (px) before a touch gesture counts as a swipe.
@@ -12,6 +17,7 @@ export function Carousel({
   items,
   autoPlayInterval = 5000,
   className = "",
+  variant = "default",
 }: CarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
@@ -82,6 +88,11 @@ export function Carousel({
 
   if (!items || items.length === 0) return null;
 
+  const isCounter = variant === "counter";
+  const arrowTone = isCounter
+    ? "text-[rgb(var(--color-primary))] hover:scale-105"
+    : "border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:border-[rgb(var(--color-primary))]";
+
   return (
     <div className={`relative overflow-hidden ${className}`}>
       {/* Slides container */}
@@ -108,7 +119,7 @@ export function Carousel({
           the arrows overlapping it) and 44px min touch target from sm: up. */}
       <button
         aria-label="Previous slide"
-        className="hidden sm:flex absolute left-2 lg:left-4 top-1/2 -translate-y-1/2 w-11 h-11 lg:w-10 lg:h-10 items-center justify-center rounded-full bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:border-[rgb(var(--color-primary))] shadow-sm transition-all z-10 p-0 active:scale-95"
+        className={`hidden sm:flex absolute left-2 lg:left-4 top-1/2 -translate-y-1/2 w-11 h-11 lg:w-10 lg:h-10 items-center justify-center rounded-full bg-[rgb(var(--color-surface))] shadow-sm transition-all z-10 p-0 active:scale-95 ${arrowTone}`}
         onClick={goToPrev}
       >
         <svg
@@ -128,7 +139,7 @@ export function Carousel({
 
       <button
         aria-label="Next slide"
-        className="hidden sm:flex absolute right-2 lg:right-4 top-1/2 -translate-y-1/2 w-11 h-11 lg:w-10 lg:h-10 items-center justify-center rounded-full bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:border-[rgb(var(--color-primary))] shadow-sm transition-all z-10 p-0 active:scale-95"
+        className={`hidden sm:flex absolute right-2 lg:right-4 top-1/2 -translate-y-1/2 w-11 h-11 lg:w-10 lg:h-10 items-center justify-center rounded-full bg-[rgb(var(--color-surface))] shadow-sm transition-all z-10 p-0 active:scale-95 ${arrowTone}`}
         onClick={goToNext}
       >
         <svg
@@ -147,7 +158,22 @@ export function Carousel({
       </button>
 
       {/* Indicators */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+      <div
+        className={
+          isCounter
+            ? "absolute bottom-5 right-5 flex items-center gap-3 z-10"
+            : "absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-10"
+        }
+      >
+        {isCounter && (
+          <span
+            className="text-xs font-semibold tabular-nums text-white"
+            style={{ textShadow: "0 1px 4px rgba(0,0,0,0.45)" }}
+          >
+            {String(currentIndex + 1).padStart(2, "0")} /{" "}
+            {String(items.length).padStart(2, "0")}
+          </span>
+        )}
         {items.map((_, index) => (
           // p-2.5 / -m-2.5 expands the tap target well past the visual dot
           // without changing the dots' visual spacing in the flex row.
@@ -158,10 +184,15 @@ export function Carousel({
             onClick={() => goToSlide(index)}
           >
             <span
-              className={`block h-1.5 rounded-full transition-all duration-300 ${currentIndex === index
-                ? "bg-[rgb(var(--color-primary))] w-6"
-                : "bg-[rgb(var(--color-border))] w-2"
-                }`}
+              className={`block h-1.5 rounded-full transition-all duration-300 ${
+                isCounter
+                  ? currentIndex === index
+                    ? "bg-white w-6"
+                    : "bg-white/60 w-1.5"
+                  : currentIndex === index
+                    ? "bg-[rgb(var(--color-primary))] w-6"
+                    : "bg-[rgb(var(--color-border))] w-2"
+              }`}
             />
           </button>
         ))}
