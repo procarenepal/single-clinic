@@ -1,21 +1,21 @@
-import { useState, useEffect, ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  ReactNode,
+  CSSProperties,
+  MouseEventHandler,
+} from "react";
 import { Link } from "react-router-dom";
 import {
-  MapPin,
-  Building2,
-  Users,
-  Calendar,
-  ClipboardList,
-  Stethoscope,
-  Building,
-  ShieldCheck,
   ArrowRight,
-  Star,
-  Phone,
-  Mail,
-  Clock,
   CheckCircle2,
+  Clock,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
   Sparkles,
+  Star,
 } from "lucide-react";
 
 import { Carousel } from "@/components/ui/Carousel";
@@ -25,34 +25,69 @@ import { useParallax } from "@/hooks/useParallax";
 import {
   landingPageService,
   LandingPageContent,
+  PUBLIC_HOMEPAGE_CLINIC_ID,
 } from "@/services/landingPageService";
 import BeforeAfterGallery from "@/components/BeforeAfterGallery";
 import MeetTheTeam from "@/components/MeetTheTeam";
+import { resolveHomepageIcon } from "@/utils/homepageIcons";
 
 // Shared brand gradient used for icon badges throughout the landing page.
 const BRAND_GRADIENT =
   "linear-gradient(135deg, rgb(var(--color-primary)) 0%, color-mix(in srgb, rgb(var(--color-primary)) 70%, #a78bfa) 100%)";
-// Illustrated stat icons, keyed by the icon name stored in the homepage content.
-// Both the current defaults and the older names resolve, so saved content works.
-const STAT_IMAGES: Record<string, string> = {
-  Users: "/images/stat_clients.png",
-  Calendar: "/images/stat_experience.png",
-  Building2: "/images/stat_experience.png",
-  ShieldCheck: "/images/stat_certified.png",
-  ClipboardList: "/images/stat_certified.png",
-  Stethoscope: "/images/stat_rating.png",
-};
 // Editorial display serif for headlines — loaded in index.html, scoped to this page only.
 const SERIF = { fontFamily: "'Fraunces', serif" };
 
-function Eyebrow({ children }: { children: ReactNode }) {
+/** A link whose target comes from editable content: a site path, an https:// URL or a #anchor. */
+function SmartLink({
+  to,
+  children,
+  ...rest
+}: {
+  to: string;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  onMouseEnter?: MouseEventHandler<HTMLElement>;
+  onMouseLeave?: MouseEventHandler<HTMLElement>;
+}) {
+  if (/^(https?:|mailto:|tel:|#)/i.test(to)) {
+    return (
+      <a
+        href={to}
+        rel="noreferrer"
+        target={/^https?:/i.test(to) ? "_blank" : undefined}
+        {...rest}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <Link to={to || "/"} {...rest}>
+      {children}
+    </Link>
+  );
+}
+
+function Eyebrow({
+  children,
+  plain,
+}: {
+  children: ReactNode;
+  plain?: boolean;
+}) {
   return (
     <div
-      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5"
-      style={{
-        background: "rgb(var(--color-primary) / 0.08)",
-        border: "1px solid rgb(var(--color-primary) / 0.18)",
-      }}
+      className={`inline-flex items-center gap-2 mb-4 ${plain ? "" : "px-4 py-1.5 rounded-full mb-5"}`}
+      style={
+        plain
+          ? undefined
+          : {
+              background: "rgb(var(--color-primary) / 0.08)",
+              border: "1px solid rgb(var(--color-primary) / 0.18)",
+            }
+      }
     >
       <span
         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -98,7 +133,7 @@ export default function IndexPage() {
   const [content, setContent] = useState<LandingPageContent | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const CLINIC_ID = "main-clinic";
+  const CLINIC_ID = PUBLIC_HOMEPAGE_CLINIC_ID;
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -123,25 +158,6 @@ export default function IndexPage() {
   // landingPageService, which already exists precisely for public-facing
   // content) is the correct source for this, not the clinics collection.
 
-  const testimonials = [
-    {
-      name: "Ji-Su Park",
-      role: "Patient",
-      text: "The glass skin facial here is incredible. My skin has never looked this radiant. The clinicians are so professional and the products they use are clearly premium.",
-      image:
-        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
-      rating: 5,
-    },
-    {
-      name: "Sarah Jenkins",
-      role: "Patient",
-      text: "I was struggling with pigmentation for years. After just three sessions of their laser therapy, I see a massive difference. Highly recommend this clinic!",
-      image:
-        "https://images.unsplash.com/photo-1554151228-14d9def656e4?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
-      rating: 5,
-    },
-  ];
-
   if (loading || !content) {
     return (
       <div
@@ -161,27 +177,12 @@ export default function IndexPage() {
     );
   }
 
+  const testimonials = content.testimonialsSection.items;
+
   // Headline: the last word is set apart in italic brand colour.
   const heroTitleWords = content.hero.title.trim().split(/\s+/);
   const heroTitleAccent = heroTitleWords[heroTitleWords.length - 1];
   const heroTitleLead = heroTitleWords.slice(0, -1).join(" ");
-
-  const resolveIcon = (name: string) =>
-    name === "Users"
-      ? Users
-      : name === "ClipboardList"
-        ? ClipboardList
-        : name === "Building2"
-          ? Building2
-          : name === "Stethoscope"
-            ? Stethoscope
-            : name === "Building"
-              ? Building
-              : name === "Calendar"
-                ? Calendar
-                : name === "ShieldCheck"
-                  ? ShieldCheck
-                  : MapPin;
 
   // -mt-6 cancels the layout's pt-6 so the hero sits flush under the navbar.
   return (
@@ -208,7 +209,7 @@ export default function IndexPage() {
           {/* Copy */}
           <Reveal className="flex-1 lg:flex-[0.85] max-w-xl text-center lg:text-left">
             <div className="flex justify-center lg:justify-start">
-              <Eyebrow>Advanced Aesthetic Medicine</Eyebrow>
+              <Eyebrow>{content.hero.eyebrow}</Eyebrow>
             </div>
 
             <h1
@@ -241,7 +242,7 @@ export default function IndexPage() {
 
             {/* CTA row */}
             <div className="flex flex-col sm:flex-row gap-3 mb-10 items-center sm:justify-center lg:justify-start lg:items-start">
-              <Link
+              <SmartLink
                 className="inline-flex items-center justify-center gap-2 px-8 py-4 text-sm font-semibold text-white rounded-xl transition-transform duration-200 hover:-translate-y-0.5"
                 style={{
                   background: BRAND_GRADIENT,
@@ -251,26 +252,28 @@ export default function IndexPage() {
               >
                 {content.hero.ctaText}
                 <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                className="inline-flex items-center justify-center px-8 py-4 text-sm font-semibold rounded-xl border-2 transition-colors duration-150"
-                style={{
-                  color: "rgb(var(--color-text))",
-                  borderColor: "rgb(var(--color-border))",
-                  background: "rgb(var(--color-surface))",
-                }}
-                to="/features"
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background =
-                    "rgb(var(--color-surface-2))";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.background =
-                    "rgb(var(--color-surface))";
-                }}
-              >
-                View Services
-              </Link>
+              </SmartLink>
+              {content.hero.secondaryCtaText && (
+                <SmartLink
+                  className="inline-flex items-center justify-center px-8 py-4 text-sm font-semibold rounded-xl border-2 transition-colors duration-150"
+                  style={{
+                    color: "rgb(var(--color-text))",
+                    borderColor: "rgb(var(--color-border))",
+                    background: "rgb(var(--color-surface))",
+                  }}
+                  to={content.hero.secondaryCtaLink}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.background =
+                      "rgb(var(--color-surface-2))";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.background =
+                      "rgb(var(--color-surface))";
+                  }}
+                >
+                  {content.hero.secondaryCtaText}
+                </SmartLink>
+              )}
             </div>
 
             {/* Trust row — elevated card */}
@@ -283,12 +286,12 @@ export default function IndexPage() {
               }}
             >
               <div className="flex -space-x-2.5">
-                {[1, 2, 3, 4].map((i) => (
+                {content.hero.trustAvatars.map((url, i) => (
                   <img
                     key={i}
                     alt="Patient"
                     className="w-9 h-9 rounded-full border-2 object-cover"
-                    src={`https://i.pravatar.cc/100?u=skin-doc${i}`}
+                    src={url}
                     style={{ borderColor: "rgb(var(--color-surface))" }}
                   />
                 ))}
@@ -305,13 +308,15 @@ export default function IndexPage() {
                       className="w-3.5 h-3.5 fill-amber-400 text-amber-400"
                     />
                   ))}
-                  <span className="text-sm font-bold ml-1">4.9</span>
+                  <span className="text-sm font-bold ml-1">
+                    {content.hero.trustRating}
+                  </span>
                 </div>
                 <p
                   className="text-xs"
                   style={{ color: "rgb(var(--color-text-muted))" }}
                 >
-                  Trusted by 5,000+ patients
+                  {content.hero.trustText}
                 </p>
               </div>
             </div>
@@ -334,56 +339,24 @@ export default function IndexPage() {
                 <Carousel
                   autoPlayInterval={5000}
                   className="h-full"
-                  items={[
-                    <div key="1" className="relative w-full h-full group">
+                  items={content.hero.slides.map((slide, i) => (
+                    <div key={i} className="relative w-full h-full group">
                       <img
-                        alt="Glass Skin"
+                        alt={slide.caption || "Clinic"}
                         className="w-full h-full object-cover"
-                        src="/images/banner_1.png"
+                        src={slide.imageUrl}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                      <div className="absolute top-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">
-                          Natural Glow
-                        </p>
-                        <p className="text-lg font-bold">
-                          The Signature Glass Skin
-                        </p>
-                      </div>
-                    </div>,
-                    <div key="2" className="relative w-full h-full group">
-                      <img
-                        alt="Advanced Tech"
-                        className="w-full h-full object-cover"
-                        src="/images/banner_2.png"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                      <div className="absolute top-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">
-                          Medical Grade
-                        </p>
-                        <p className="text-lg font-bold">
-                          Advanced K-Laser Therapy
-                        </p>
-                      </div>
-                    </div>,
-                    <div key="3" className="relative w-full h-full group">
-                      <img
-                        alt="Clinic Interior"
-                        className="w-full h-full object-cover"
-                        src="/images/banner_3.png"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                      <div className="absolute top-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">
-                          Serene Wellness
-                        </p>
-                        <p className="text-lg font-bold">
-                          Premium Aesthetic Sanctuary
-                        </p>
-                      </div>
-                    </div>,
-                  ]}
+                      {(slide.kicker || slide.caption) && (
+                        <div className="absolute top-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">
+                            {slide.kicker}
+                          </p>
+                          <p className="text-lg font-bold">{slide.caption}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                   variant="counter"
                 />
               </div>
@@ -407,21 +380,21 @@ export default function IndexPage() {
                   className="text-sm font-extrabold leading-none"
                   style={{ color: "rgb(var(--color-text))" }}
                 >
-                  4.9/5
+                  {content.hero.ratingValue}
                 </p>
               </div>
               <p
                 className="text-[10px] font-medium text-right"
                 style={{ color: "rgb(var(--color-text-muted))" }}
               >
-                Patient Rating
+                {content.hero.ratingLabel}
               </p>
             </div>
 
             {/* Lead specialist card — bottom-left of the image */}
             <a
               className="hidden sm:flex absolute bottom-4 left-4 items-end z-20 group/doc"
-              href="#team"
+              href={content.hero.specialistLink || "#team"}
             >
               <div
                 className="relative z-10 rounded-2xl p-1.5"
@@ -431,9 +404,9 @@ export default function IndexPage() {
                 }}
               >
                 <img
-                  alt="Dr. Park"
+                  alt={content.hero.specialistName}
                   className="w-[84px] h-[96px] lg:w-[96px] lg:h-[108px] rounded-xl object-cover object-top"
-                  src="/images/team_1.png"
+                  src={content.hero.specialistImageUrl}
                 />
               </div>
               <div
@@ -448,13 +421,13 @@ export default function IndexPage() {
                     className="text-sm font-bold leading-tight"
                     style={{ color: "rgb(var(--color-text))" }}
                   >
-                    Dr. Park
+                    {content.hero.specialistName}
                   </p>
                   <p
                     className="text-[11px] font-medium mt-0.5"
                     style={{ color: "rgb(var(--color-primary))" }}
                   >
-                    Lead Aesthetic Specialist
+                    {content.hero.specialistRole}
                   </p>
                 </div>
                 <ArrowRight
@@ -467,864 +440,1045 @@ export default function IndexPage() {
         </div>
       </section>
 
-      {/* ─────────────────────────────────────────────────────────────────────
+      {content.sections.stats && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
           STATS — flat card directly under the hero
       ───────────────────────────────────────────────────────────────────── */}
-      <Reveal
-        className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8 mt-6 lg:mt-8"
-        delay={100}
-      >
-        <div
-          className="rounded-2xl lg:rounded-[1.75rem] overflow-hidden"
-          style={{
-            background: "rgb(var(--color-surface))",
-            border: "1px solid rgb(var(--color-border))",
-            boxShadow: "0 8px 24px -14px rgba(0,0,0,0.08)",
-          }}
-        >
-          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-[rgb(var(--color-border))]">
-            {content.stats.map((stat, index) => {
-              const IconComponent = resolveIcon(stat.icon);
-              const statImage = STAT_IMAGES[stat.icon];
-
-              return (
-                <div
-                  key={index}
-                  className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 py-3 lg:py-3.5"
-                >
-                  <div
-                    className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: "rgb(var(--color-primary) / 0.1)" }}
-                  >
-                    {statImage ? (
-                      <img
-                        alt=""
-                        className="w-7 h-7 object-contain"
-                        src={statImage}
-                      />
-                    ) : (
-                      <IconComponent
-                        className="w-5 h-5"
-                        style={{ color: "rgb(var(--color-primary))" }}
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <p
-                      className="text-lg sm:text-xl font-bold tabular-nums tracking-tight leading-tight"
-                      style={{ color: "rgb(var(--color-text))" }}
-                    >
-                      <CountUp value={stat.number} />
-                    </p>
-                    <p
-                      className="text-xs leading-snug"
-                      style={{ color: "rgb(var(--color-text-muted))" }}
-                    >
-                      {stat.label}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </Reveal>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          SERVICES
-      ───────────────────────────────────────────────────────────────────── */}
-      <section className="pt-20 lg:pt-32 pb-10 lg:pb-24 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
-          {/* Header */}
-          <Reveal className="mb-10 lg:mb-20 text-center lg:text-left max-w-2xl mx-auto lg:mx-0">
-            <div className="flex justify-center lg:justify-start">
-              <Eyebrow>Our Services</Eyebrow>
-            </div>
-            <h2
-              className="text-3xl sm:text-4xl lg:text-5xl mb-4 leading-tight tracking-tight"
+          <Reveal
+            className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8 mt-6 lg:mt-8"
+            delay={100}
+          >
+            <div
+              className="rounded-2xl lg:rounded-[1.75rem] overflow-hidden"
               style={{
-                ...SERIF,
-                fontWeight: 600,
-                color: "rgb(var(--color-text))",
+                background: "rgb(var(--color-surface))",
+                border: "1px solid rgb(var(--color-border))",
+                boxShadow: "0 8px 24px -14px rgba(0,0,0,0.08)",
               }}
             >
-              Medical Aesthetic Services
-            </h2>
-            <p
-              className="text-sm sm:text-base leading-relaxed"
-              style={{ color: "rgb(var(--color-text-muted))" }}
-            >
-              Precision-engineered protocols fusing advanced dermatological
-              science with Korean aesthetic innovation.
-            </p>
-          </Reveal>
+              <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-[rgb(var(--color-border))]">
+                {content.stats.map((stat, index) => {
+                  const IconComponent = resolveHomepageIcon(stat.icon);
+                  const statImage = stat.imageUrl;
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {content.services.map((service, index) => {
-              const IconComponent = resolveIcon(service.icon);
-              // Odd cards drop slightly on desktop to break the rigid grid line.
-              const stagger = index % 2 === 1 ? "lg:mt-12" : "";
-
-              return (
-                <Reveal
-                  key={index}
-                  className={stagger}
-                  delay={index * 90}
-                  direction={index % 2 === 1 ? "left" : "right"}
-                >
-                  <div
-                    className="group flex flex-col rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1.5"
-                    style={{
-                      background: "rgb(var(--color-surface))",
-                      border: "1px solid rgb(var(--color-border))",
-                      boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)",
-                    }}
-                  >
-                    {/* Image */}
-                    <div className="relative aspect-[16/10] overflow-hidden">
-                      <img
-                        alt={service.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        src={`/images/service_${index + 1}.png`}
-                      />
-                      <span
-                        className="absolute top-4 left-4 w-8 h-8 rounded-lg flex items-center justify-center text-xs font-extrabold text-white"
-                        style={{
-                          background: "rgba(0,0,0,0.55)",
-                          backdropFilter: "blur(4px)",
-                        }}
-                      >
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-7 flex flex-col flex-1">
+                  return (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 py-3 lg:py-3.5"
+                    >
                       <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center mb-5"
+                        className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{
-                          background: "rgba(var(--color-primary),0.08)",
+                          background: "rgb(var(--color-primary) / 0.1)",
                         }}
                       >
-                        <IconComponent
-                          className="w-5 h-5"
-                          style={{ color: "rgb(var(--color-primary))" }}
-                        />
+                        {statImage ? (
+                          <img
+                            alt=""
+                            className="w-7 h-7 object-contain"
+                            src={statImage}
+                          />
+                        ) : (
+                          <IconComponent
+                            className="w-5 h-5"
+                            style={{ color: "rgb(var(--color-primary))" }}
+                          />
+                        )}
                       </div>
-
-                      <h3
-                        className="text-lg mb-3 tracking-tight"
-                        style={{
-                          ...SERIF,
-                          fontWeight: 600,
-                          color: "rgb(var(--color-text))",
-                        }}
-                      >
-                        {service.title}
-                      </h3>
-                      <p
-                        className="text-sm leading-relaxed flex-1"
-                        style={{ color: "rgb(var(--color-text-muted))" }}
-                      >
-                        {service.description}
-                      </p>
-
-                      <div
-                        className="mt-6 pt-5 border-t"
-                        style={{ borderColor: "rgb(var(--color-border))" }}
-                      >
-                        <Link
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-75"
-                          style={{ color: "rgb(var(--color-primary))" }}
-                          to="/features"
+                      <div>
+                        <p
+                          className="text-lg sm:text-xl font-bold tabular-nums tracking-tight leading-tight"
+                          style={{ color: "rgb(var(--color-text))" }}
                         >
-                          Learn more <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
+                          <CountUp value={stat.number} />
+                        </p>
+                        <p
+                          className="text-xs leading-snug"
+                          style={{ color: "rgb(var(--color-text-muted))" }}
+                        >
+                          {stat.label}
+                        </p>
                       </div>
                     </div>
-                  </div>
-                </Reveal>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          STATEMENT — oversized typography as a graphic beat
-      ───────────────────────────────────────────────────────────────────── */}
-      <section className="py-2 lg:py-4 overflow-hidden">
-        <Reveal
-          className="max-w-7xl mx-auto px-5 lg:px-8 text-center"
-          direction="scale"
-        >
-          <p
-            className="text-xs font-bold uppercase tracking-widest mb-6"
-            style={{ color: "rgb(var(--color-primary))" }}
-          >
-            The Philosophy
-          </p>
-          <h2
-            className="text-[7vw] sm:text-[5vw] lg:text-[3.5vw] leading-[0.95] tracking-tight"
-            style={{
-              ...SERIF,
-              fontWeight: 600,
-              color: "rgb(var(--color-text))",
-            }}
-          >
-            Science meets
-            <br />
-            <span
-              style={{
-                fontStyle: "italic",
-                color: "rgb(var(--color-primary))",
-              }}
-            >
-              artistry.
-            </span>
-          </h2>
-        </Reveal>
-      </section>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          PROMO BANNER
-      ───────────────────────────────────────────────────────────────────── */}
-      <Reveal>
-        <section className="py-4 px-5 lg:px-8 max-w-7xl mx-auto mb-6 lg:mb-10">
-          <div
-            className="relative h-[220px] sm:h-[280px] lg:h-[360px] rounded-2xl overflow-hidden"
-            style={{ boxShadow: "0 24px 48px -24px rgba(0,0,0,0.3)" }}
-          >
-            <img
-              alt="Promotion"
-              className="absolute inset-0 w-full h-full object-cover"
-              src="/images/promo_banner.png"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/50 to-transparent" />
-
-            <div className="absolute inset-0 flex items-center px-7 sm:px-10 lg:px-16">
-              <div className="max-w-xs sm:max-w-sm text-white">
-                <span
-                  className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3 sm:mb-5"
-                  style={{ background: "rgb(var(--color-primary))" }}
-                >
-                  Limited Offer
-                </span>
-                <h2
-                  className="text-lg sm:text-2xl lg:text-4xl mb-2 sm:mb-4 leading-tight"
-                  style={{ ...SERIF, fontWeight: 600 }}
-                >
-                  Signature Glass Skin Protocol
-                </h2>
-                <p className="text-xs sm:text-sm text-white/80 mb-4 sm:mb-7 leading-relaxed hidden sm:block">
-                  First-time clients save 20% this month on our medical-grade
-                  facial series.
-                </p>
-                <Link
-                  className="inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-opacity hover:opacity-90"
-                  style={{
-                    background: "white",
-                    color: "rgb(var(--color-text))",
-                  }}
-                  to="/contact"
-                >
-                  Claim Offer{" "}
-                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </Link>
+                  );
+                })}
               </div>
             </div>
-          </div>
-        </section>
-      </Reveal>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          HOW IT WORKS
-      ───────────────────────────────────────────────────────────────────── */}
-      <section
-        className="py-16 lg:py-24 border-t border-b"
-        style={{
-          background: "rgb(var(--color-surface))",
-          borderColor: "rgb(var(--color-border))",
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
-          <Reveal className="mb-10 lg:mb-14 text-center lg:text-left">
-            <div className="flex justify-center lg:justify-start">
-              <Eyebrow>Process</Eyebrow>
-            </div>
-            <h2
-              className="text-3xl sm:text-4xl lg:text-5xl mb-4 leading-tight tracking-tight"
-              style={{
-                ...SERIF,
-                fontWeight: 600,
-                color: "rgb(var(--color-text))",
-              }}
-            >
-              Your Treatment Journey
-            </h2>
-            <p
-              className="text-sm sm:text-base"
-              style={{ color: "rgb(var(--color-text-muted))" }}
-            >
-              A structured, evidence-based approach to skin health and aesthetic
-              excellence.
-            </p>
           </Reveal>
+        </>
+      )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-8">
-            {content.process.map((item, i) => (
-              <Reveal
-                key={i}
-                className="relative flex flex-col"
-                delay={i * 120}
-              >
-                <span
-                  aria-hidden="true"
-                  className="absolute -top-4 -left-1 text-[100px] leading-none select-none pointer-events-none opacity-[0.05]"
-                  style={{
-                    ...SERIF,
-                    fontWeight: 700,
-                    color: "rgb(var(--color-text))",
-                  }}
-                >
-                  {item.step}
-                </span>
-
-                {/* Step indicator */}
-                <div className="relative flex items-center gap-4 mb-5">
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+      {content.sections.services && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
+          SERVICES
+      ───────────────────────────────────────────────────────────────────── */}
+          <section className="pt-14 lg:pt-20 pb-10 lg:pb-16 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-5 lg:px-8">
+              {/* Header */}
+              <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 lg:mb-10 text-center lg:text-left">
+                <div className="max-w-2xl mx-auto lg:mx-0">
+                  <div className="flex justify-center lg:justify-start">
+                    <Eyebrow plain>{content.servicesSection.eyebrow}</Eyebrow>
+                  </div>
+                  <h2
+                    className="text-3xl sm:text-4xl lg:text-[2.6rem] mb-3 leading-tight tracking-tight"
                     style={{
-                      background: BRAND_GRADIENT,
-                      boxShadow:
-                        "0 8px 16px -6px rgba(var(--color-primary),0.5)",
+                      ...SERIF,
+                      fontWeight: 600,
+                      color: "rgb(var(--color-text))",
                     }}
                   >
-                    {item.step}
-                  </div>
-                  {i < content.process.length - 1 && (
-                    <div
-                      className="hidden md:block flex-1 h-0.5 rounded-full"
-                      style={{
-                        background:
-                          "linear-gradient(90deg, rgba(var(--color-primary),0.35), rgba(var(--color-primary),0.03))",
-                      }}
+                    {content.servicesSection.title}
+                  </h2>
+                  <p
+                    className="text-sm sm:text-base leading-relaxed"
+                    style={{ color: "rgb(var(--color-text-muted))" }}
+                  >
+                    {content.servicesSection.subtitle}
+                  </p>
+                </div>
+                <div className="flex justify-center lg:justify-end">
+                  <SmartLink
+                    className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-full border transition-colors hover:bg-[rgb(var(--color-primary)/0.06)]"
+                    style={{
+                      color: "rgb(var(--color-primary))",
+                      borderColor: "rgb(var(--color-primary) / 0.35)",
+                      background: "rgb(var(--color-surface))",
+                    }}
+                    to={content.servicesSection.buttonLink}
+                  >
+                    {content.servicesSection.buttonText}
+                    <ArrowRight className="w-4 h-4" />
+                  </SmartLink>
+                </div>
+              </Reveal>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+                {content.services.map((service, index) => {
+                  const IconComponent = resolveHomepageIcon(service.icon);
+
+                  return (
+                    <Reveal key={index} className="h-full" delay={index * 90}>
+                      <div
+                        className="group flex flex-col h-full rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
+                        style={{
+                          background: "rgb(var(--color-surface))",
+                          border: "1px solid rgb(var(--color-border))",
+                          boxShadow: "0 8px 24px -16px rgba(0,0,0,0.12)",
+                        }}
+                      >
+                        {/* Image */}
+                        <div className="aspect-[16/10] overflow-hidden">
+                          <img
+                            alt={service.title}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            src={service.imageUrl}
+                          />
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-5 pb-5 flex flex-col flex-1">
+                          <div
+                            className="relative z-10 -mt-6 mb-3 w-12 h-12 rounded-full flex items-center justify-center"
+                            style={{
+                              background: "rgb(var(--color-surface))",
+                              border:
+                                "1px solid rgb(var(--color-primary) / 0.2)",
+                              boxShadow: "0 6px 14px -8px rgba(0,0,0,0.25)",
+                            }}
+                          >
+                            <IconComponent
+                              className="w-5 h-5"
+                              style={{ color: "rgb(var(--color-primary))" }}
+                            />
+                          </div>
+
+                          <h3
+                            className="text-base font-semibold mb-2 tracking-tight"
+                            style={{ color: "rgb(var(--color-text))" }}
+                          >
+                            {service.title}
+                          </h3>
+                          <p
+                            className="text-[13px] leading-relaxed flex-1"
+                            style={{ color: "rgb(var(--color-text-muted))" }}
+                          >
+                            {service.description}
+                          </p>
+
+                          <SmartLink
+                            className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-75"
+                            style={{ color: "rgb(var(--color-primary))" }}
+                            to={
+                              service.linkUrl ||
+                              content.servicesSection.buttonLink
+                            }
+                          >
+                            {content.servicesSection.learnMoreText}{" "}
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </SmartLink>
+                        </div>
+                      </div>
+                    </Reveal>
+                  );
+                })}
+
+                {/* Explore card */}
+                <Reveal className="h-full" delay={content.services.length * 90}>
+                  <div
+                    className="flex flex-col items-center justify-center text-center h-full min-h-[280px] rounded-2xl p-7"
+                    style={{
+                      background: "rgb(var(--color-primary) / 0.06)",
+                      border: "1px solid rgb(var(--color-primary) / 0.15)",
+                    }}
+                  >
+                    <Sparkles
+                      className="w-10 h-10 mb-5"
+                      strokeWidth={1.4}
+                      style={{ color: "rgb(var(--color-primary))" }}
                     />
-                  )}
-                </div>
+                    <h3
+                      className="text-base font-semibold mb-3 tracking-tight"
+                      style={{ color: "rgb(var(--color-text))" }}
+                    >
+                      {content.servicesSection.exploreTitle}
+                    </h3>
+                    <p
+                      className="text-[13px] leading-relaxed mb-6"
+                      style={{ color: "rgb(var(--color-text-muted))" }}
+                    >
+                      {content.servicesSection.exploreText}
+                    </p>
+                    <SmartLink
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full border transition-colors hover:bg-[rgb(var(--color-primary)/0.08)]"
+                      style={{
+                        color: "rgb(var(--color-primary))",
+                        borderColor: "rgb(var(--color-primary) / 0.35)",
+                        background: "rgb(var(--color-surface))",
+                      }}
+                      to={content.servicesSection.exploreButtonLink}
+                    >
+                      {content.servicesSection.exploreButtonText}
+                      <ArrowRight className="w-4 h-4" />
+                    </SmartLink>
+                  </div>
+                </Reveal>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
-                {/* Image */}
-                <div
-                  className="relative aspect-[16/10] rounded-2xl overflow-hidden mb-6"
-                  style={{ boxShadow: "0 12px 24px -12px rgba(0,0,0,0.18)" }}
-                >
-                  <img
-                    alt={item.title}
-                    className="w-full h-full object-cover"
-                    src={`/images/step_${i + 1}.png`}
-                  />
+      {content.sections.whyChoose && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
+          WHY CHOOSE US — "Science meets artistry"
+      ───────────────────────────────────────────────────────────────────── */}
+          <section
+            className="py-12 lg:py-14 overflow-hidden"
+            style={{
+              background:
+                "linear-gradient(90deg, rgb(var(--color-primary) / 0.07), rgb(var(--color-primary) / 0.03))",
+            }}
+          >
+            <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)_minmax(0,0.85fr)] items-center gap-10 lg:gap-10">
+              {/* Copy */}
+              <Reveal className="text-center lg:text-left">
+                <div className="flex justify-center lg:justify-start">
+                  <Eyebrow plain>{content.whyChoose.eyebrow}</Eyebrow>
                 </div>
-
-                <h4
-                  className="text-lg mb-2"
+                <h2
+                  className="text-3xl sm:text-4xl leading-[1.1] tracking-tight mb-4"
                   style={{
                     ...SERIF,
                     fontWeight: 600,
                     color: "rgb(var(--color-text))",
                   }}
                 >
-                  {item.title}
-                </h4>
+                  {content.whyChoose.title}
+                  <br />
+                  <span
+                    style={{
+                      fontStyle: "italic",
+                      fontWeight: 500,
+                      color: "rgb(var(--color-primary))",
+                    }}
+                  >
+                    {content.whyChoose.accent}
+                  </span>
+                </h2>
                 <p
-                  className="text-sm leading-relaxed"
+                  className="text-sm leading-relaxed mb-6 max-w-sm mx-auto lg:mx-0"
                   style={{ color: "rgb(var(--color-text-muted))" }}
                 >
-                  {item.desc}
+                  {content.whyChoose.description}
                 </p>
+                <SmartLink
+                  className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-full border transition-colors hover:bg-[rgb(var(--color-primary)/0.08)]"
+                  style={{
+                    color: "rgb(var(--color-primary))",
+                    borderColor: "rgb(var(--color-primary) / 0.35)",
+                    background: "rgb(var(--color-surface))",
+                  }}
+                  to={content.whyChoose.buttonLink}
+                >
+                  {content.whyChoose.buttonText}
+                  <ArrowRight className="w-4 h-4" />
+                </SmartLink>
               </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* ─────────────────────────────────────────────────────────────────────
-          PRECISION / TECH
-      ───────────────────────────────────────────────────────────────────── */}
-      <section className="py-16 lg:py-24 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
-          {/* Image */}
-          <Reveal className="relative mb-6 lg:mb-0" direction="left">
-            <div
-              className="hidden lg:block absolute -inset-4 rounded-[2rem] -z-10"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(var(--color-primary),0.14), rgba(var(--color-primary),0.02))",
-              }}
-            />
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{ boxShadow: "0 24px 48px -24px rgba(0,0,0,0.25)" }}
-            >
-              <img
-                alt={content.precisionSection.title}
-                className="w-full h-auto object-cover"
-                src={content.precisionSection.imageUrl}
-              />
-            </div>
+              {/* Four reasons */}
+              <Reveal delay={100}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-8 text-center sm:text-left">
+                  {content.whyChoose.features.map(({ icon, title, desc }) => {
+                    const Icon = resolveHomepageIcon(icon);
 
-            {/* Floating stat callout */}
-            {content.stats[0] && (
-              <div
-                className="absolute -bottom-5 left-5 sm:-bottom-6 sm:left-8 rounded-2xl px-5 py-4 flex items-center gap-3"
-                style={{
-                  background: "rgb(var(--color-surface))",
-                  border: "1px solid rgb(var(--color-border))",
-                  boxShadow: "0 16px 32px -16px rgba(0,0,0,0.35)",
-                }}
+                    return (
+                      <div
+                        key={title}
+                        className="flex flex-col items-center sm:items-start"
+                      >
+                        <div
+                          className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
+                          style={{
+                            background: "rgb(var(--color-primary) / 0.1)",
+                          }}
+                        >
+                          <Icon
+                            className="w-6 h-6"
+                            strokeWidth={1.6}
+                            style={{ color: "rgb(var(--color-primary))" }}
+                          />
+                        </div>
+                        <p
+                          className="text-sm font-semibold mb-1"
+                          style={{ color: "rgb(var(--color-text))" }}
+                        >
+                          {title}
+                        </p>
+                        <p
+                          className="text-xs leading-relaxed"
+                          style={{ color: "rgb(var(--color-text-muted))" }}
+                        >
+                          {desc}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Reveal>
+
+              {/* Portrait */}
+              <Reveal
+                className="relative mx-auto w-full max-w-[300px] lg:max-w-none"
+                delay={200}
               >
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: BRAND_GRADIENT }}
-                >
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <div>
+                  className="pointer-events-none absolute -right-8 -bottom-8 w-64 h-64 rounded-full"
+                  style={{ background: "rgb(var(--color-primary) / 0.12)" }}
+                />
+                <img
+                  alt={content.whyChoose.title}
+                  className="relative w-full h-[300px] lg:h-[340px] object-cover object-center rounded-[2rem]"
+                  src={content.whyChoose.imageUrl}
+                  style={{ boxShadow: "0 18px 40px -22px rgba(0,0,0,0.3)" }}
+                />
+                {content.whyChoose.note && (
                   <p
-                    className="text-lg font-extrabold leading-none"
-                    style={{ color: "rgb(var(--color-text))" }}
+                    className="absolute -top-5 -left-2 lg:-left-6 leading-[1.05] -rotate-6 pointer-events-none"
+                    style={{
+                      fontFamily: "'Caveat', cursive",
+                      whiteSpace: "pre-line",
+                      fontWeight: 600,
+                      fontSize: "1.6rem",
+                      color: "rgb(var(--color-primary))",
+                      textShadow: "0 1px 0 rgba(255,255,255,0.8)",
+                    }}
                   >
-                    {content.stats[0].number}
+                    {content.whyChoose.note}
                   </p>
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-wide mt-1"
-                    style={{ color: "rgb(var(--color-text-muted))" }}
-                  >
-                    {content.stats[0].label}
-                  </p>
+                )}
+              </Reveal>
+            </div>
+          </section>
+        </>
+      )}
+
+      {content.sections.promo && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
+          PROMO BANNER
+      ───────────────────────────────────────────────────────────────────── */}
+          <Reveal>
+            <section className="py-4 px-5 lg:px-8 max-w-7xl mx-auto mb-6 lg:mb-10">
+              <div
+                className="relative h-[220px] sm:h-[280px] lg:h-[360px] rounded-2xl overflow-hidden"
+                style={{ boxShadow: "0 24px 48px -24px rgba(0,0,0,0.3)" }}
+              >
+                <img
+                  alt="Promotion"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  src={content.promo.imageUrl}
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/50 to-transparent" />
+
+                <div className="absolute inset-0 flex items-center px-7 sm:px-10 lg:px-16">
+                  <div className="max-w-xs sm:max-w-sm text-white">
+                    <span
+                      className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3 sm:mb-5"
+                      style={{ background: "rgb(var(--color-primary))" }}
+                    >
+                      {content.promo.badge}
+                    </span>
+                    <h2
+                      className="text-lg sm:text-2xl lg:text-4xl mb-2 sm:mb-4 leading-tight"
+                      style={{ ...SERIF, fontWeight: 600 }}
+                    >
+                      {content.promo.title}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-white/80 mb-4 sm:mb-7 leading-relaxed hidden sm:block">
+                      {content.promo.description}
+                    </p>
+                    <SmartLink
+                      className="inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-opacity hover:opacity-90"
+                      style={{
+                        background: "white",
+                        color: "rgb(var(--color-text))",
+                      }}
+                      to={content.promo.buttonLink}
+                    >
+                      {content.promo.buttonText}{" "}
+                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    </SmartLink>
+                  </div>
                 </div>
               </div>
-            )}
+            </section>
           </Reveal>
+        </>
+      )}
 
-          {/* Copy */}
-          <Reveal
-            className="text-center lg:text-left"
-            delay={120}
-            direction="right"
+      {content.sections.process && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
+          HOW IT WORKS
+      ───────────────────────────────────────────────────────────────────── */}
+          <section
+            className="py-16 lg:py-24 border-t border-b"
+            style={{
+              background: "rgb(var(--color-surface))",
+              borderColor: "rgb(var(--color-border))",
+            }}
           >
-            <div className="flex justify-center lg:justify-start">
-              <Eyebrow>Why Choose Us</Eyebrow>
-            </div>
-            <h2
-              className="text-3xl sm:text-4xl lg:text-5xl mb-5 tracking-tight leading-[1.1]"
-              style={{
-                ...SERIF,
-                fontWeight: 600,
-                color: "rgb(var(--color-text))",
-              }}
-            >
-              {content.precisionSection.title}
-            </h2>
-            <p
-              className="text-sm sm:text-base leading-relaxed mb-5 lg:mb-10"
-              style={{ color: "rgb(var(--color-text-muted))" }}
-            >
-              {content.precisionSection.description}
-            </p>
+            <div className="max-w-7xl mx-auto px-5 lg:px-8">
+              <Reveal className="mb-10 lg:mb-14 text-center lg:text-left">
+                <div className="flex justify-center lg:justify-start">
+                  <Eyebrow>{content.processSection.eyebrow}</Eyebrow>
+                </div>
+                <h2
+                  className="text-3xl sm:text-4xl lg:text-5xl mb-4 leading-tight tracking-tight"
+                  style={{
+                    ...SERIF,
+                    fontWeight: 600,
+                    color: "rgb(var(--color-text))",
+                  }}
+                >
+                  {content.processSection.title}
+                </h2>
+                <p
+                  className="text-sm sm:text-base"
+                  style={{ color: "rgb(var(--color-text-muted))" }}
+                >
+                  {content.processSection.subtitle}
+                </p>
+              </Reveal>
 
-            <ul className="space-y-4 lg:space-y-5 text-left">
-              {[
-                {
-                  title: "K-Beauty Innovation",
-                  desc: "Latest medical technologies from Seoul's top aesthetic laboratories.",
-                },
-                {
-                  title: "Certified Experts",
-                  desc: "Dermatologists trained in the latest Korean skincare protocols.",
-                },
-                {
-                  title: "Holistic Approach",
-                  desc: "Focused on long-term skin health and natural-looking results.",
-                },
-              ].map((item, i) => (
-                <li key={i} className="flex items-start gap-3.5">
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{ background: "rgba(var(--color-primary),0.12)" }}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-8">
+                {content.process.map((item, i) => (
+                  <Reveal
+                    key={i}
+                    className="relative flex flex-col"
+                    delay={i * 120}
                   >
-                    <CheckCircle2
-                      className="w-4 h-4"
-                      style={{ color: "rgb(var(--color-primary))" }}
-                    />
-                  </div>
-                  <div>
-                    <p
-                      className="text-sm font-semibold mb-0.5"
-                      style={{ color: "rgb(var(--color-text))" }}
+                    <span
+                      aria-hidden="true"
+                      className="absolute -top-4 -left-1 text-[100px] leading-none select-none pointer-events-none opacity-[0.05]"
+                      style={{
+                        ...SERIF,
+                        fontWeight: 700,
+                        color: "rgb(var(--color-text))",
+                      }}
+                    >
+                      {item.step}
+                    </span>
+
+                    {/* Step indicator */}
+                    <div className="relative flex items-center gap-4 mb-5">
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                        style={{
+                          background: BRAND_GRADIENT,
+                          boxShadow:
+                            "0 8px 16px -6px rgba(var(--color-primary),0.5)",
+                        }}
+                      >
+                        {item.step}
+                      </div>
+                      {i < content.process.length - 1 && (
+                        <div
+                          className="hidden md:block flex-1 h-0.5 rounded-full"
+                          style={{
+                            background:
+                              "linear-gradient(90deg, rgba(var(--color-primary),0.35), rgba(var(--color-primary),0.03))",
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    {/* Image */}
+                    <div
+                      className="relative aspect-[16/10] rounded-2xl overflow-hidden mb-6"
+                      style={{
+                        boxShadow: "0 12px 24px -12px rgba(0,0,0,0.18)",
+                      }}
+                    >
+                      <img
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                        src={item.imageUrl}
+                      />
+                    </div>
+
+                    <h4
+                      className="text-lg mb-2"
+                      style={{
+                        ...SERIF,
+                        fontWeight: 600,
+                        color: "rgb(var(--color-text))",
+                      }}
                     >
                       {item.title}
-                    </p>
+                    </h4>
                     <p
-                      className="text-sm"
+                      className="text-sm leading-relaxed"
                       style={{ color: "rgb(var(--color-text-muted))" }}
                     >
                       {item.desc}
                     </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          BEFORE & AFTER
-      ───────────────────────────────────────────────────────────────────── */}
-      <BeforeAfterGallery />
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          TESTIMONIALS
-      ───────────────────────────────────────────────────────────────────── */}
-      <section
-        className="py-16 lg:py-24 border-b"
-        style={{
-          background: "rgb(var(--color-surface))",
-          borderColor: "rgb(var(--color-border))",
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
-          <Reveal className="mb-8 lg:mb-14 text-center lg:text-left">
-            <div className="flex justify-center lg:justify-start">
-              <Eyebrow>Testimonials</Eyebrow>
+                  </Reveal>
+                ))}
+              </div>
             </div>
-            <h2
-              className="text-3xl sm:text-4xl lg:text-5xl mb-3 leading-tight tracking-tight"
-              style={{
-                ...SERIF,
-                fontWeight: 600,
-                color: "rgb(var(--color-text))",
-              }}
-            >
-              Patient Experiences
-            </h2>
-            <p
-              className="text-sm sm:text-base"
-              style={{ color: "rgb(var(--color-text-muted))" }}
-            >
-              Confidence restored, skin transformed through expert care.
-            </p>
-          </Reveal>
+          </section>
+        </>
+      )}
 
-          <Reveal
-            className="min-h-[300px] lg:h-80"
-            delay={150}
-            direction="scale"
-          >
-            <Carousel
-              autoPlayInterval={8000}
-              items={testimonials.map((t, i) => (
-                <div key={i} className="h-full px-1 sm:px-2">
+      {content.sections.precision && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
+          PRECISION / TECH
+      ───────────────────────────────────────────────────────────────────── */}
+          <section className="py-16 lg:py-24 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+              {/* Image */}
+              <Reveal className="relative mb-6 lg:mb-0" direction="left">
+                <div
+                  className="hidden lg:block absolute -inset-4 rounded-[2rem] -z-10"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(var(--color-primary),0.14), rgba(var(--color-primary),0.02))",
+                  }}
+                />
+                <div
+                  className="rounded-2xl overflow-hidden"
+                  style={{ boxShadow: "0 24px 48px -24px rgba(0,0,0,0.25)" }}
+                >
+                  <img
+                    alt={content.precisionSection.title}
+                    className="w-full h-auto object-cover"
+                    src={content.precisionSection.imageUrl}
+                  />
+                </div>
+
+                {/* Floating stat callout */}
+                {content.stats[0] && (
                   <div
-                    className="h-full rounded-2xl p-5 sm:p-8 lg:p-12 flex flex-col justify-center relative overflow-hidden"
+                    className="absolute -bottom-5 left-5 sm:-bottom-6 sm:left-8 rounded-2xl px-5 py-4 flex items-center gap-3"
                     style={{
-                      background: "rgb(var(--color-bg))",
+                      background: "rgb(var(--color-surface))",
                       border: "1px solid rgb(var(--color-border))",
-                      boxShadow: "0 20px 40px -28px rgba(0,0,0,0.25)",
+                      boxShadow: "0 16px 32px -16px rgba(0,0,0,0.35)",
                     }}
                   >
-                    {/* Decorative quote mark */}
-                    <span
-                      aria-hidden="true"
-                      className="absolute top-0 right-4 sm:right-6 text-[100px] sm:text-[140px] leading-none select-none pointer-events-none"
-                      style={{
-                        ...SERIF,
-                        color: "rgba(var(--color-primary),0.06)",
-                      }}
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: BRAND_GRADIENT }}
                     >
-                      "
-                    </span>
-
-                    <div className="relative z-10">
-                      {/* Stars */}
-                      <div className="flex gap-1 mb-6">
-                        {Array.from({ length: t.rating }).map((_, s) => (
-                          <Star
-                            key={s}
-                            className="w-4 h-4 fill-amber-400 text-amber-400"
-                          />
-                        ))}
-                      </div>
-
+                      <Sparkles className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
                       <p
-                        className="text-base sm:text-lg lg:text-2xl leading-relaxed mb-5 sm:mb-8"
+                        className="text-lg font-extrabold leading-none"
+                        style={{ color: "rgb(var(--color-text))" }}
+                      >
+                        {content.stats[0].number}
+                      </p>
+                      <p
+                        className="text-[10px] font-semibold uppercase tracking-wide mt-1"
+                        style={{ color: "rgb(var(--color-text-muted))" }}
+                      >
+                        {content.stats[0].label}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </Reveal>
+
+              {/* Copy */}
+              <Reveal
+                className="text-center lg:text-left"
+                delay={120}
+                direction="right"
+              >
+                <div className="flex justify-center lg:justify-start">
+                  <Eyebrow>{content.precisionSection.eyebrow}</Eyebrow>
+                </div>
+                <h2
+                  className="text-3xl sm:text-4xl lg:text-5xl mb-5 tracking-tight leading-[1.1]"
+                  style={{
+                    ...SERIF,
+                    fontWeight: 600,
+                    color: "rgb(var(--color-text))",
+                  }}
+                >
+                  {content.precisionSection.title}
+                </h2>
+                <p
+                  className="text-sm sm:text-base leading-relaxed mb-5 lg:mb-10"
+                  style={{ color: "rgb(var(--color-text-muted))" }}
+                >
+                  {content.precisionSection.description}
+                </p>
+
+                <ul className="space-y-4 lg:space-y-5 text-left">
+                  {content.precisionSection.points.map((item, i) => (
+                    <li key={i} className="flex items-start gap-3.5">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
                         style={{
-                          ...SERIF,
-                          fontStyle: "italic",
-                          fontWeight: 500,
-                          color: "rgb(var(--color-text))",
+                          background: "rgba(var(--color-primary),0.12)",
                         }}
                       >
-                        "{t.text}"
-                      </p>
-
-                      <div className="flex items-center gap-4">
-                        <img
-                          alt={t.name}
-                          className="w-12 h-12 rounded-full object-cover"
-                          src={t.image}
-                          style={{
-                            border: "2px solid rgb(var(--color-primary))",
-                          }}
+                        <CheckCircle2
+                          className="w-4 h-4"
+                          style={{ color: "rgb(var(--color-primary))" }}
                         />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p
-                              className="text-sm font-bold"
-                              style={{ color: "rgb(var(--color-text))" }}
-                            >
-                              {t.name}
-                            </p>
-                            <div
-                              className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                      </div>
+                      <div>
+                        <p
+                          className="text-sm font-semibold mb-0.5"
+                          style={{ color: "rgb(var(--color-text))" }}
+                        >
+                          {item.title}
+                        </p>
+                        <p
+                          className="text-sm"
+                          style={{ color: "rgb(var(--color-text-muted))" }}
+                        >
+                          {item.desc}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Reveal>
+            </div>
+          </section>
+        </>
+      )}
+
+      {content.sections.gallery && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
+          BEFORE & AFTER
+      ───────────────────────────────────────────────────────────────────── */}
+          <BeforeAfterGallery content={content.gallerySection} />
+        </>
+      )}
+
+      {content.sections.testimonials && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
+          TESTIMONIALS
+      ───────────────────────────────────────────────────────────────────── */}
+          <section
+            className="py-16 lg:py-24 border-b"
+            style={{
+              background: "rgb(var(--color-surface))",
+              borderColor: "rgb(var(--color-border))",
+            }}
+          >
+            <div className="max-w-7xl mx-auto px-5 lg:px-8">
+              <Reveal className="mb-8 lg:mb-14 text-center lg:text-left">
+                <div className="flex justify-center lg:justify-start">
+                  <Eyebrow>{content.testimonialsSection.eyebrow}</Eyebrow>
+                </div>
+                <h2
+                  className="text-3xl sm:text-4xl lg:text-5xl mb-3 leading-tight tracking-tight"
+                  style={{
+                    ...SERIF,
+                    fontWeight: 600,
+                    color: "rgb(var(--color-text))",
+                  }}
+                >
+                  {content.testimonialsSection.title}
+                </h2>
+                <p
+                  className="text-sm sm:text-base"
+                  style={{ color: "rgb(var(--color-text-muted))" }}
+                >
+                  {content.testimonialsSection.subtitle}
+                </p>
+              </Reveal>
+
+              <Reveal
+                className="min-h-[300px] lg:h-80"
+                delay={150}
+                direction="scale"
+              >
+                <Carousel
+                  autoPlayInterval={8000}
+                  items={testimonials.map((t, i) => (
+                    <div key={i} className="h-full px-1 sm:px-2">
+                      <div
+                        className="h-full rounded-2xl p-5 sm:p-8 lg:p-12 flex flex-col justify-center relative overflow-hidden"
+                        style={{
+                          background: "rgb(var(--color-bg))",
+                          border: "1px solid rgb(var(--color-border))",
+                          boxShadow: "0 20px 40px -28px rgba(0,0,0,0.25)",
+                        }}
+                      >
+                        {/* Decorative quote mark */}
+                        <span
+                          aria-hidden="true"
+                          className="absolute top-0 right-4 sm:right-6 text-[100px] sm:text-[140px] leading-none select-none pointer-events-none"
+                          style={{
+                            ...SERIF,
+                            color: "rgba(var(--color-primary),0.06)",
+                          }}
+                        >
+                          "
+                        </span>
+
+                        <div className="relative z-10">
+                          {/* Stars */}
+                          <div className="flex gap-1 mb-6">
+                            {Array.from({ length: t.rating }).map((_, s) => (
+                              <Star
+                                key={s}
+                                className="w-4 h-4 fill-amber-400 text-amber-400"
+                              />
+                            ))}
+                          </div>
+
+                          <p
+                            className="text-base sm:text-lg lg:text-2xl leading-relaxed mb-5 sm:mb-8"
+                            style={{
+                              ...SERIF,
+                              fontStyle: "italic",
+                              fontWeight: 500,
+                              color: "rgb(var(--color-text))",
+                            }}
+                          >
+                            "{t.text}"
+                          </p>
+
+                          <div className="flex items-center gap-4">
+                            <img
+                              alt={t.name}
+                              className="w-12 h-12 rounded-full object-cover"
+                              src={t.imageUrl}
                               style={{
-                                color: "rgb(var(--color-success))",
-                                background: "rgba(var(--color-success),0.1)",
-                                border:
-                                  "1px solid rgba(var(--color-success),0.25)",
+                                border: "2px solid rgb(var(--color-primary))",
                               }}
-                            >
-                              <ShieldCheck className="w-2.5 h-2.5" /> Verified
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p
+                                  className="text-sm font-bold"
+                                  style={{ color: "rgb(var(--color-text))" }}
+                                >
+                                  {t.name}
+                                </p>
+                                <div
+                                  className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                  style={{
+                                    color: "rgb(var(--color-success))",
+                                    background:
+                                      "rgba(var(--color-success),0.1)",
+                                    border:
+                                      "1px solid rgba(var(--color-success),0.25)",
+                                  }}
+                                >
+                                  <ShieldCheck className="w-2.5 h-2.5" />{" "}
+                                  Verified
+                                </div>
+                              </div>
+                              <p
+                                className="text-xs mt-0.5"
+                                style={{
+                                  color: "rgb(var(--color-text-muted))",
+                                }}
+                              >
+                                {t.role}
+                              </p>
                             </div>
                           </div>
-                          <p
-                            className="text-xs mt-0.5"
-                            style={{ color: "rgb(var(--color-text-muted))" }}
-                          >
-                            {t.role}
-                          </p>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-            />
-          </Reveal>
-        </div>
-      </section>
+                  ))}
+                />
+              </Reveal>
+            </div>
+          </section>
+        </>
+      )}
 
-      {/* ─────────────────────────────────────────────────────────────────────
+      {content.sections.team && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
           MEET THE TEAM
       ───────────────────────────────────────────────────────────────────── */}
-      <MeetTheTeam />
+          <MeetTheTeam content={content.teamSection} />
+        </>
+      )}
 
-      {/* ─────────────────────────────────────────────────────────────────────
+      {content.sections.contact && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
           CONTACT
       ───────────────────────────────────────────────────────────────────── */}
-      <section className="py-16 lg:py-24 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
-          {/* Info */}
-          <Reveal className="text-center lg:text-left" direction="left">
-            <div className="flex justify-center lg:justify-start">
-              <Eyebrow>Location &amp; Contact</Eyebrow>
-            </div>
-            <h2
-              className="text-3xl sm:text-4xl lg:text-5xl mb-8 lg:mb-10 tracking-tight leading-tight"
-              style={{
-                ...SERIF,
-                fontWeight: 600,
-                color: "rgb(var(--color-text))",
-              }}
-            >
-              Visit Our Clinic
-            </h2>
-
-            <div
-              className="rounded-2xl lg:rounded-3xl p-6 lg:p-8 space-y-5 lg:space-y-6 text-left"
-              style={{
-                background: "rgb(var(--color-surface))",
-                border: "1px solid rgb(var(--color-border))",
-                boxShadow: "0 20px 40px -28px rgba(0,0,0,0.18)",
-              }}
-            >
-              {[
-                {
-                  icon: <MapPin className="w-4 h-4" />,
-                  label: "Address",
-                  value: content.contact.location,
-                },
-                {
-                  icon: <Clock className="w-4 h-4" />,
-                  label: "Hours",
-                  value: content.contact.hours,
-                },
-                {
-                  icon: <Phone className="w-4 h-4" />,
-                  label: "Phone",
-                  value: content.contact.phone,
-                },
-                {
-                  icon: <Mail className="w-4 h-4" />,
-                  label: "Email",
-                  value: content.contact.email,
-                },
-              ].map((item, i) => (
-                <div key={i} className="flex items-start gap-4">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{
-                      background: "rgba(var(--color-primary),0.08)",
-                      color: "rgb(var(--color-primary))",
-                    }}
-                  >
-                    {item.icon}
-                  </div>
-                  <div>
-                    <p
-                      className="text-xs font-bold uppercase tracking-wider mb-1"
-                      style={{ color: "rgb(var(--color-text-muted))" }}
-                    >
-                      {item.label}
-                    </p>
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: "rgb(var(--color-text))" }}
-                    >
-                      {item.value}
-                    </p>
-                  </div>
+          <section className="py-16 lg:py-24 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
+              {/* Info */}
+              <Reveal className="text-center lg:text-left" direction="left">
+                <div className="flex justify-center lg:justify-start">
+                  <Eyebrow>{content.contact.eyebrow}</Eyebrow>
                 </div>
-              ))}
-            </div>
-          </Reveal>
-
-          {/* Map placeholder */}
-          <Reveal
-            className="w-full h-[260px] sm:h-[320px] lg:h-[380px] lg:mt-[68px]"
-            delay={120}
-            direction="right"
-          >
-            <div
-              className="w-full h-full rounded-2xl lg:rounded-3xl overflow-hidden relative"
-              style={{
-                background: "rgb(var(--color-surface))",
-                border: "1px solid rgb(var(--color-border))",
-                boxShadow: "0 24px 48px -24px rgba(0,0,0,0.25)",
-              }}
-            >
-              <img
-                alt="Clinic"
-                className="absolute inset-0 w-full h-full object-cover opacity-30"
-                src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-              />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-8 text-center">
-                <div
-                  className="w-14 h-14 rounded-xl flex items-center justify-center"
+                <h2
+                  className="text-3xl sm:text-4xl lg:text-5xl mb-8 lg:mb-10 tracking-tight leading-tight"
                   style={{
-                    background: BRAND_GRADIENT,
-                    boxShadow:
-                      "0 12px 24px -8px rgba(var(--color-primary),0.5)",
+                    ...SERIF,
+                    fontWeight: 600,
+                    color: "rgb(var(--color-text))",
                   }}
                 >
-                  <MapPin className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <p
-                    className="font-bold mb-1"
-                    style={{ color: "rgb(var(--color-text))" }}
-                  >
-                    Clinic Location
-                  </p>
-                  <p
-                    className="text-sm mb-5"
-                    style={{ color: "rgb(var(--color-text-muted))" }}
-                  >
-                    {content.contact.location}
-                  </p>
-                </div>
-                <button
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                  style={{ background: "rgb(var(--color-primary))" }}
-                >
-                  <MapPin className="w-4 h-4" /> Get Directions
-                </button>
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
+                  {content.contact.title}
+                </h2>
 
-      {/* ─────────────────────────────────────────────────────────────────────
+                <div
+                  className="rounded-2xl lg:rounded-3xl p-6 lg:p-8 space-y-5 lg:space-y-6 text-left"
+                  style={{
+                    background: "rgb(var(--color-surface))",
+                    border: "1px solid rgb(var(--color-border))",
+                    boxShadow: "0 20px 40px -28px rgba(0,0,0,0.18)",
+                  }}
+                >
+                  {[
+                    {
+                      icon: <MapPin className="w-4 h-4" />,
+                      label: "Address",
+                      value: content.contact.location,
+                    },
+                    {
+                      icon: <Clock className="w-4 h-4" />,
+                      label: "Hours",
+                      value: content.contact.hours,
+                    },
+                    {
+                      icon: <Phone className="w-4 h-4" />,
+                      label: "Phone",
+                      value: content.contact.phone,
+                    },
+                    {
+                      icon: <Mail className="w-4 h-4" />,
+                      label: "Email",
+                      value: content.contact.email,
+                    },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background: "rgba(var(--color-primary),0.08)",
+                          color: "rgb(var(--color-primary))",
+                        }}
+                      >
+                        {item.icon}
+                      </div>
+                      <div>
+                        <p
+                          className="text-xs font-bold uppercase tracking-wider mb-1"
+                          style={{ color: "rgb(var(--color-text-muted))" }}
+                        >
+                          {item.label}
+                        </p>
+                        <p
+                          className="text-sm font-medium"
+                          style={{ color: "rgb(var(--color-text))" }}
+                        >
+                          {item.value}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Reveal>
+
+              {/* Map placeholder */}
+              <Reveal
+                className="w-full h-[260px] sm:h-[320px] lg:h-[380px] lg:mt-[68px]"
+                delay={120}
+                direction="right"
+              >
+                <div
+                  className="w-full h-full rounded-2xl lg:rounded-3xl overflow-hidden relative"
+                  style={{
+                    background: "rgb(var(--color-surface))",
+                    border: "1px solid rgb(var(--color-border))",
+                    boxShadow: "0 24px 48px -24px rgba(0,0,0,0.25)",
+                  }}
+                >
+                  <img
+                    alt="Clinic"
+                    className="absolute inset-0 w-full h-full object-cover opacity-30"
+                    src={content.contact.mapImageUrl}
+                  />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-8 text-center">
+                    <div
+                      className="w-14 h-14 rounded-xl flex items-center justify-center"
+                      style={{
+                        background: BRAND_GRADIENT,
+                        boxShadow:
+                          "0 12px 24px -8px rgba(var(--color-primary),0.5)",
+                      }}
+                    >
+                      <MapPin className="w-7 h-7 text-white" />
+                    </div>
+                    <div>
+                      <p
+                        className="font-bold mb-1"
+                        style={{ color: "rgb(var(--color-text))" }}
+                      >
+                        {content.contact.mapLabel}
+                      </p>
+                      <p
+                        className="text-sm mb-5"
+                        style={{ color: "rgb(var(--color-text-muted))" }}
+                      >
+                        {content.contact.location}
+                      </p>
+                    </div>
+                    <a
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                      href={
+                        content.contact.directionsLink ||
+                        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(content.contact.location)}`
+                      }
+                      rel="noreferrer"
+                      style={{ background: "rgb(var(--color-primary))" }}
+                      target="_blank"
+                    >
+                      <MapPin className="w-4 h-4" /> Get Directions
+                    </a>
+                  </div>
+                </div>
+              </Reveal>
+            </div>
+          </section>
+        </>
+      )}
+
+      {content.sections.cta && (
+        <>
+          {/* ─────────────────────────────────────────────────────────────────────
           CTA
       ───────────────────────────────────────────────────────────────────── */}
-      <section className="py-10 lg:py-24">
-        <Reveal className="max-w-7xl mx-auto px-5 lg:px-8" direction="scale">
-          <div
-            className="relative rounded-2xl lg:rounded-[2rem] overflow-hidden"
-            style={{ boxShadow: "0 32px 64px -24px rgba(0,0,0,0.35)" }}
-          >
-            {/* Background */}
-            <img
-              alt="CTA background"
-              className="absolute inset-0 w-full h-full object-cover"
-              src="/images/cta_bg.png"
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(165deg, rgb(var(--color-primary) / 96%) 0%, rgb(var(--color-primary) / 90%) 45%, rgb(0 0 0 / 80%) 100%)",
-              }}
-            />
-
-            {/* Content */}
-            <div className="relative z-10 px-5 sm:px-8 py-10 sm:py-20 lg:py-24 text-center text-white max-w-2xl mx-auto">
-              <p className="text-xs font-bold uppercase tracking-widest mb-3 sm:mb-5 opacity-75">
-                Get Started
-              </p>
-              <h2
-                className="text-3xl sm:text-4xl lg:text-6xl mb-3 sm:mb-6 tracking-tight leading-[1.05]"
-                style={{ ...SERIF, fontWeight: 600 }}
+          <section className="py-10 lg:py-24">
+            <Reveal
+              className="max-w-7xl mx-auto px-5 lg:px-8"
+              direction="scale"
+            >
+              <div
+                className="relative rounded-2xl lg:rounded-[2rem] overflow-hidden"
+                style={{ boxShadow: "0 32px 64px -24px rgba(0,0,0,0.35)" }}
               >
-                Begin Your Journey to Healthier Skin
-              </h2>
-              <p className="text-sm sm:text-base text-white/90 mb-5 sm:mb-10 leading-relaxed">
-                Join thousands of patients who have transformed their skin with
-                our evidence-based Korean aesthetic protocols.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link
-                  className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-sm font-semibold transition-transform duration-200 hover:-translate-y-0.5"
+                {/* Background */}
+                <img
+                  alt="CTA background"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  src={content.cta.imageUrl}
+                />
+                <div
+                  className="absolute inset-0"
                   style={{
-                    background: "white",
-                    color: "rgb(var(--color-primary))",
-                    boxShadow: "0 16px 32px -12px rgba(0,0,0,0.35)",
+                    background:
+                      "linear-gradient(165deg, rgb(var(--color-primary) / 96%) 0%, rgb(var(--color-primary) / 90%) 45%, rgb(0 0 0 / 80%) 100%)",
                   }}
-                  to={content.hero.ctaLink}
-                >
-                  Book Consultation <ArrowRight className="w-4 h-4" />
-                </Link>
-                <Link
-                  className="inline-flex items-center justify-center px-8 py-3.5 rounded-xl text-sm font-semibold border border-white/30 text-white transition-colors"
-                  style={{ background: "rgba(255,255,255,0.1)" }}
-                  to="/contact"
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      "rgba(255,255,255,0.2)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      "rgba(255,255,255,0.1)";
-                  }}
-                >
-                  Contact Us
-                </Link>
+                />
+
+                {/* Content */}
+                <div className="relative z-10 px-5 sm:px-8 py-10 sm:py-20 lg:py-24 text-center text-white max-w-2xl mx-auto">
+                  <p className="text-xs font-bold uppercase tracking-widest mb-3 sm:mb-5 opacity-75">
+                    {content.cta.eyebrow}
+                  </p>
+                  <h2
+                    className="text-3xl sm:text-4xl lg:text-6xl mb-3 sm:mb-6 tracking-tight leading-[1.05]"
+                    style={{ ...SERIF, fontWeight: 600 }}
+                  >
+                    {content.cta.title}
+                  </h2>
+                  <p className="text-sm sm:text-base text-white/90 mb-5 sm:mb-10 leading-relaxed">
+                    {content.cta.description}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <SmartLink
+                      className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-sm font-semibold transition-transform duration-200 hover:-translate-y-0.5"
+                      style={{
+                        background: "white",
+                        color: "rgb(var(--color-primary))",
+                        boxShadow: "0 16px 32px -12px rgba(0,0,0,0.35)",
+                      }}
+                      to={content.cta.primaryLink}
+                    >
+                      {content.cta.primaryText}{" "}
+                      <ArrowRight className="w-4 h-4" />
+                    </SmartLink>
+                    <SmartLink
+                      className="inline-flex items-center justify-center px-8 py-3.5 rounded-xl text-sm font-semibold border border-white/30 text-white transition-colors"
+                      style={{ background: "rgba(255,255,255,0.1)" }}
+                      to={content.cta.secondaryLink}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.background =
+                          "rgba(255,255,255,0.2)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.background =
+                          "rgba(255,255,255,0.1)";
+                      }}
+                    >
+                      {content.cta.secondaryText}
+                    </SmartLink>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </Reveal>
-      </section>
+            </Reveal>
+          </section>
+        </>
+      )}
     </div>
   );
 }
