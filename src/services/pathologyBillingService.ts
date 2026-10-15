@@ -451,6 +451,7 @@ export const pathologyBillingService = {
       // to IRD whenever staff forgot to flip the invoice toggle (or vice
       // versa, tax an item explicitly configured exempt).
       isTaxable: isTaxEnabledOverall && item.isTaxable !== false,
+      hsCode: item.hsCode,
     }));
 
     // The clinic's configured invoicePrefix used to be computed by this

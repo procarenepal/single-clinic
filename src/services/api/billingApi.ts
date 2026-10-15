@@ -38,6 +38,10 @@ export interface InvoiceItemDto {
   rate: number;
   totalAmount: number;
   isTaxable: boolean;
+  /** Tax classification code. Per VAT Rules 2053 r.17, only mandatory for
+   * imported goods — optional for domestic goods, not applicable to
+   * services — so this is routinely absent, which is correct, not a gap. */
+  hsCode?: string;
 }
 
 /**

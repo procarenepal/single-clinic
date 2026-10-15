@@ -378,6 +378,11 @@ export interface AppointmentType {
    * the clinic's defaultTaxPercentage when unset (a type can be taxable
    * without specifying its own rate). */
   taxRate?: number;
+  /** Tax classification code. Per VAT Rules 2053 r.17, mandatory only for
+   * imported goods, optional for domestic goods, and not applicable to
+   * services at all — most types here will correctly have none. Set once
+   * here and copied onto every invoice line billed for this type. */
+  hsCode?: string;
   /** This service's own commission %, taking priority over the performing
    * clinician's blanket defaultCommission when set. Only meaningful when
    * calculateCommission isn't false. Blank/unset falls back to the
@@ -774,6 +779,10 @@ export interface Medicine {
   isActive: boolean;
   isVatApplied: boolean;
   vatPercentage: number;
+  /** Tax classification code. Per VAT Rules 2053 r.17, mandatory only when
+   * this medicine is imported — optional for domestically-made ones. Set
+   * once here and copied onto every invoice line dispensing it. */
+  hsCode?: string;
   clinicId: string;
   branchId: string; // Associated branch
   createdAt: Date;
@@ -1015,6 +1024,11 @@ export interface MedicinePurchaseItem {
    * catalog taxRate, editable per line. Falls back to the purchase-level
    * taxPercentage when the medicine has no catalog rate configured. */
   taxRate?: number;
+  /** Tax classification code, copied from the selected Medicine's catalog
+   * hsCode at the time this line was added. Per VAT Rules 2053 r.17, only
+   * mandatory for imported goods — optional for domestic ones, so this is
+   * routinely blank and that's correct. */
+  hsCode?: string;
   /** Structured per-batch breakdown of this line item's FEFO allocation —
    * lets a return restore quantity to the exact batch(es) sold from,
    * unlike the display-only batchNumber string above. */
@@ -1945,6 +1959,12 @@ export interface AppointmentBillingItem {
   discountAmount?: number;
   isTaxable?: boolean; // Whether tax applies to this item
   taxRate?: number; // Per-item VAT rate override, e.g. 13. Falls back to the clinic's defaultTaxPercentage when unset. Only meaningful when isTaxable is true.
+  /** Tax classification code, copied from the source catalogue entry
+   * (AppointmentType/PathologyTestType/Medicine per lineKind) at the time
+   * this line was added. Per VAT Rules 2053 r.17, only mandatory for
+   * imported goods — not applicable to services at all, and optional for
+   * domestic goods — so most lines correctly have none. */
+  hsCode?: string;
   amount: number; // (price * quantity) - discountAmount
   /**
    * What this line actually charges for, so a single invoice can mix a
@@ -2280,6 +2300,10 @@ export interface PathologyTestType {
   /** VAT %, e.g. 13. Only meaningful when isTaxable is true. Falls back to
    * the clinic's defaultTaxPercentage when unset. */
   taxRate?: number;
+  /** Tax classification code. Per VAT Rules 2053 r.17, this doesn't apply
+   * to services at all (goods/imports only), so a lab test correctly has
+   * none. Kept for the rare case a test maps to a dispensed physical kit. */
+  hsCode?: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -2444,6 +2468,10 @@ export interface PathologyBillingItem {
   isUrgent?: boolean; // Fast-track status
   isTaxable?: boolean; // Whether tax applies to this test (default true — most tests are taxable goods/services)
   taxRate?: number; // Per-item VAT rate override, e.g. 13. Falls back to the clinic's defaultTaxPercentage when unset. Only meaningful when isTaxable is true.
+  /** Tax classification code, copied from the matched PathologyTestType at
+   * the time this line was added. Routinely blank — see the note on
+   * PathologyTestType.hsCode. */
+  hsCode?: string;
 }
 
 // Payment Event model for tracking multiple payment installments

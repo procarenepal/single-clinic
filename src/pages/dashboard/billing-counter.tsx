@@ -242,6 +242,7 @@ export default function BillingCounterPage() {
               calculateCommission: false,
               isTaxable: Boolean(med.isVatApplied),
               taxRate: med.vatPercentage || undefined,
+              hsCode: med.hsCode,
               lineKind: "medicine" as const,
               stockType: "regular" as const,
             };
@@ -307,6 +308,7 @@ export default function BillingCounterPage() {
         // have to remember it per invoice — honour it rather than defaulting.
         taxable: Boolean(t.isTaxable),
         taxRate: t.taxRate || undefined,
+        hsCode: t.hsCode || undefined,
       }));
     }
 
@@ -318,6 +320,7 @@ export default function BillingCounterPage() {
       // services and tests which are exempt here unless staff say otherwise.
       taxable: Boolean(m.isVatApplied),
       taxRate: m.vatPercentage || undefined,
+      hsCode: m.hsCode || undefined,
     }));
   }, [pickKind, apptTypes, labTests, medicines]);
 
@@ -446,6 +449,9 @@ export default function BillingCounterPage() {
         taxRate: resolved
           ? resolved.taxRate
           : (entry as { taxRate?: number }).taxRate,
+        hsCode: resolved
+          ? resolved.hsCode
+          : (entry as { hsCode?: string }).hsCode,
         lineKind: pickKind,
       },
     ]);
@@ -864,6 +870,7 @@ export default function BillingCounterPage() {
                     {[
                       "Kind",
                       "Item",
+                      "HS Code",
                       "Clinician / pool",
                       "Comm. %",
                       "Qty",
@@ -897,6 +904,9 @@ export default function BillingCounterPage() {
                           </span>
                         </td>
                         <td className="px-2 py-1">{it.appointmentTypeName}</td>
+                        <td className="px-2 py-1 whitespace-nowrap text-text-muted">
+                          {it.hsCode || "-"}
+                        </td>
                         <td className="px-2 py-1 w-44">
                           {kind === "service" ? (
                             // Per line, not per invoice: one bill can carry two

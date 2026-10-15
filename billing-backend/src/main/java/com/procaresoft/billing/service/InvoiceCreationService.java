@@ -161,6 +161,7 @@ public class InvoiceCreationService {
             item.setRate(itemDto.getRate());
             item.setTotalAmount(itemDto.getTotalAmount());
             item.setTaxable(itemDto.isTaxable());
+            item.setHsCode(itemDto.getHsCode());
             invoice.addItem(item);
         }
 

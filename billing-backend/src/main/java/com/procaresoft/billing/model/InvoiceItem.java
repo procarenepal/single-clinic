@@ -36,6 +36,14 @@ public class InvoiceItem {
     private boolean isTaxable;
 
     /**
+     * Per-item tax classification code. Per VAT Rules 2053 r.17, only
+     * mandatory for imported goods, optional for domestic goods, and not
+     * applicable to services at all — null on most rows, correctly.
+     */
+    @Column(name = "hs_code")
+    private String hsCode;
+
+    /**
      * IRD's procedure §6(घ) wants every record to carry its entry time. The
      * invoice row has always had one; its line items had nothing — an
      * unattributed row in a tax ledger. Set once on insert and never

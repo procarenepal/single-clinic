@@ -813,6 +813,7 @@ export const appointmentBillingService = {
       // no longer treats "unconfigured" as "taxable whenever the toggle's
       // on". This line-item flag previously still had that stale fallback.
       isTaxable: item.isTaxable === true,
+      hsCode: item.hsCode,
     }));
 
     // Reserve the Firestore document id up front so the ledger row can
@@ -1870,6 +1871,7 @@ export const appointmentBillingService = {
     calculateCommission?: boolean;
     isTaxable?: boolean;
     taxRate?: number;
+    hsCode?: string;
   } {
     return {
       appointmentTypeName: appointmentType.name,
@@ -1883,6 +1885,7 @@ export const appointmentBillingService = {
       calculateCommission: appointmentType.calculateCommission,
       isTaxable: appointmentType.isTaxable,
       taxRate: appointmentType.taxRate,
+      hsCode: appointmentType.hsCode,
     };
   },
 

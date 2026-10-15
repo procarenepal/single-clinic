@@ -493,6 +493,7 @@ export const pharmacyService = {
             rate: item.amount / item.quantity || 0,
             totalAmount: item.amount || 0,
             isTaxable: (item.taxRate ?? purchaseData.taxPercentage ?? 0) > 0,
+            hsCode: item.hsCode,
           })),
         });
 
@@ -696,6 +697,7 @@ export const pharmacyService = {
           // the whole purchase's default rate is > 0".
           isTaxable:
             (item.taxRate ?? purchaseData.taxPercentage ?? 0) > 0,
+          hsCode: item.hsCode,
         }));
         const payload = buildInvoicePayload({
           clinicId: purchaseData.clinicId,
@@ -1385,6 +1387,7 @@ export const pharmacyService = {
             rate: Math.abs((item.amount || 0) / (item.quantity || 1)),
             totalAmount: -Math.abs(item.amount || 0),
             isTaxable: originalRatio > 0,
+            hsCode: item.hsCode,
           })),
         });
 

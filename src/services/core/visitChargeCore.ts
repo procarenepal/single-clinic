@@ -42,6 +42,10 @@ export interface ChargeableType {
   defaultCommission?: number | null;
   isTaxable?: boolean;
   taxRate?: number | null;
+  /** Tax classification code, copied onto every line billed for this type.
+   * Per VAT Rules 2053 r.17, only mandatory for imported goods — not
+   * applicable to the services this core mostly prices. */
+  hsCode?: string | null;
   /** Absent on legacy types → "catalogue". */
   pricedBy?: PricedBy | null;
   /** Absent on legacy types → "either". */
@@ -70,6 +74,7 @@ export interface VisitLine extends VisitBillingItem {
   calculateCommission: boolean;
   isTaxable: boolean;
   taxRate?: number;
+  hsCode?: string;
   doctorId: string;
   doctorName: string;
   performerKind: PerformerKind;
@@ -238,6 +243,7 @@ export function resolveVisitLine(
     calculateCommission,
     isTaxable: type.isTaxable === true,
     ...(typeof type.taxRate === "number" ? { taxRate: type.taxRate } : {}),
+    ...(type.hsCode ? { hsCode: type.hsCode } : {}),
     doctorId: clinician.id,
     doctorName: clinician.name,
     performerKind: clinician.kind,

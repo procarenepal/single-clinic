@@ -198,6 +198,7 @@ export default function MedicinesTab({
       price: "",
       costPrice: "",
       barcode: "",
+      hsCode: "",
       currentStock: "",
       isAddingSupplier: false, // Will be deprecated
       newSupplierName: "", // Will be deprecated
@@ -650,6 +651,7 @@ export default function MedicinesTab({
         genericName: "",
         batchNumber: "",
         barcode: "",
+        hsCode: "",
         currentStock: "",
         description: "",
       },
@@ -684,6 +686,7 @@ export default function MedicinesTab({
         // not fall back to 13 just because 0 is falsy. `|| 13` here made
         // every 0%-VAT medicine's edit form silently show/re-save 13%.
         vatPercentage: medicine.vatPercentage ?? 13,
+        hsCode: medicine.hsCode || "",
       };
 
       return newList;
@@ -849,6 +852,7 @@ export default function MedicinesTab({
         price: medicine.price?.toString() || "",
         costPrice: medicine.costPrice?.toString() || "",
         barcode: medicine.barcode || "",
+        hsCode: medicine.hsCode || "",
         currentStock: currentStockValue,
         isAddingSupplier: false,
         newSupplierName: "",
@@ -1003,6 +1007,7 @@ export default function MedicinesTab({
         if (row.price) medicineData.price = parseFloat(row.price);
         if (row.costPrice) medicineData.costPrice = parseFloat(row.costPrice);
         if (row.barcode.trim()) medicineData.barcode = row.barcode.trim();
+        if (row.hsCode?.trim()) medicineData.hsCode = row.hsCode.trim();
         medicineData.isVatApplied = row.isVatApplied || false;
         medicineData.vatPercentage = parseFloat(row.vatPercentage) || 0;
 
@@ -2971,6 +2976,27 @@ export default function MedicinesTab({
                       )}
                     </div>
 
+                    {/* IRD rule (VAT Rules 2053, r.17): HS Code is
+                        mandatory only for imported medicines, optional for
+                        domestically-made ones. Set once here so it's
+                        copied onto every invoice item this medicine is
+                        dispensed on. */}
+                    <div className="pt-4 border-t border-primary/10">
+                      <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">
+                        HS Code{" "}
+                        <span className="font-normal text-[rgb(var(--color-text-muted)/0.7)]">
+                          (if imported)
+                        </span>
+                      </label>
+                      <input
+                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md mt-1.5"
+                        name="hsCode"
+                        placeholder="e.g. 3004"
+                        value={formDataList[0].hsCode}
+                        onChange={(e) => handleChange(0, e)}
+                      />
+                    </div>
+
                     {formDataList[0].isVatApplied &&
                       formDataList[0].costPrice && (
                         <div className="mt-6 p-3 rounded-lg bg-white/50 border border-primary/10 text-center">
@@ -3029,6 +3055,9 @@ export default function MedicinesTab({
                       </th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">
                         VAT (%)
+                      </th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">
+                        HS Code (if imported)
                       </th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">
                         Brand
@@ -3301,6 +3330,16 @@ export default function MedicinesTab({
                               </div>
                             )}
                           </div>
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="hsCode"
+                            placeholder="e.g. 3004"
+                            value={formData.hsCode}
+                            onChange={(e) => handleChange(index, e)}
+                          />
                         </td>
 
                         <td className="px-2 py-2">

@@ -1098,6 +1098,7 @@ export default function PurchaseDetailPage() {
           quantity: item.quantity,
           price: item.salePrice,
           amount: item.amount,
+          hsCode: item.originalItem?.hsCode,
         })),
       },
       format as PrintFormat,
@@ -1466,6 +1467,9 @@ export default function PurchaseDetailPage() {
                       Medicine
                     </th>
                     <th className="px-3 py-2 text-[11px] font-semibold text-mountain-500 uppercase tracking-wider">
+                      HS Code
+                    </th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-500 uppercase tracking-wider">
                       Qty Sold
                     </th>
                     <th className="px-3 py-2 text-[11px] font-semibold text-mountain-500 uppercase tracking-wider">
@@ -1498,6 +1502,9 @@ export default function PurchaseDetailPage() {
                             {item.batchNumber && `| Batch: ${item.batchNumber}`}
                           </p>
                         </div>
+                      </td>
+                      <td className="px-3 py-2 text-[12.5px] text-mountain-800">
+                        {item.originalItem?.hsCode || "—"}
                       </td>
                       <td className="px-3 py-2 text-[12.5px] text-mountain-800">
                         {item.quantity}
@@ -1983,7 +1990,9 @@ export default function PurchaseDetailPage() {
                       style={{ border: "1px solid #000", padding: "1px 3px" }}
                     >
                       <strong>{item.medicineName}</strong>
-                      {(item.batchNumber || item.expiryDate) && (
+                      {(item.batchNumber ||
+                        item.expiryDate ||
+                        item.originalItem?.hsCode) && (
                         <div
                           style={{
                             fontSize: "8.5px",
@@ -2000,6 +2009,12 @@ export default function PurchaseDetailPage() {
                               {item.batchNumber}
                             </span>
                           )}
+                          {/* Mandatory for imported medicines only (VAT
+                              Rules 2053 r.17) — blank is normal otherwise. */}
+                          <span>
+                            {item.expiryDate || item.batchNumber ? " | " : ""}
+                            HS: {item.originalItem?.hsCode || "-"}
+                          </span>
                         </div>
                       )}
                     </td>

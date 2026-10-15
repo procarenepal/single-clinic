@@ -135,5 +135,13 @@ public class InvoiceRequestDto {
          */
         @com.fasterxml.jackson.annotation.JsonProperty("isTaxable")
         private boolean isTaxable;
+
+        /**
+         * Per-item tax classification code. Per VAT Rules 2053 r.17, only
+         * mandatory for imported goods, optional for domestic goods, and
+         * not applicable to services — nullable here because most line
+         * items correctly have none, not just for migration safety.
+         */
+        private String hsCode;
     }
 }

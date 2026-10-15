@@ -23,6 +23,10 @@ export interface UnifiedInvoiceItem {
   quantity: number;
   price?: number;
   amount: number;
+  /** IRD-required tax classification code. Printed as its own column on
+   * A4/A5; folded into the subtext line on thermal, where an extra column
+   * doesn't fit a 58mm receipt. */
+  hsCode?: string;
 }
 
 export interface UnifiedInvoice {
@@ -185,20 +189,33 @@ export const generateUnifiedInvoiceHTML = (
   let footerType: "pathology" | "appointment" | "pharmacy" = invoice.invoiceType;
   let footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig, footerType as any) : "";
 
+  // HS Code column: required by Schedule 6/r.17 format, but per-line values
+  // are routinely blank — the rule only mandates one for imported goods,
+  // leaves it optional for domestic goods, and doesn't apply to services at
+  // all. A4/A5 has room for its own column; a 58mm thermal receipt is
+  // already dropping the Price column to fit, so HS Code folds into the
+  // existing subtext line there instead of adding a column that would
+  // overflow the paper.
   const itemsHtml = invoice.items
-    .map(
-      (item, index) =>
-        `<tr>
+    .map((item, index) => {
+      const thermalSubtext = isThermal
+        ? [item.subtext, `HS: ${item.hsCode || "-"}`]
+            .filter(Boolean)
+            .join(" &middot; ")
+        : item.subtext;
+
+      return `<tr>
           <td class="text-center" style="text-align: center;">${index + 1}</td>
           <td style="text-align: ${isThermal ? 'center' : 'left'};">
             <div style="font-weight: 500;">${item.name}</div>
-            ${item.subtext ? `<div style="font-size: ${isThermal ? '0.9em' : '10px'}; color: #000000; font-weight: 600; margin-top: 2px;">${item.subtext}</div>` : ''}
+            ${thermalSubtext ? `<div style="font-size: ${isThermal ? '0.9em' : '10px'}; color: #000000; font-weight: 600; margin-top: 2px;">${thermalSubtext}</div>` : ''}
           </td>
+          ${!isThermal ? `<td class="text-center" style="text-align: center; white-space: nowrap;">${item.hsCode || "-"}</td>` : ""}
           <td class="text-center" style="text-align: center; white-space: nowrap;">${item.quantity}</td>
           ${!isThermal ? `<td style="text-align: right; white-space: nowrap;">${item.price !== undefined ? formatCurrency(item.price) : '-'}</td>` : ""}
           <td style="text-align: right; white-space: nowrap; font-weight: 600;">${formatCurrency(item.amount)}</td>
-        </tr>`
-    )
+        </tr>`;
+    })
     .join("");
 
   return `<!DOCTYPE html>
@@ -445,6 +462,7 @@ export const generateUnifiedInvoiceHTML = (
           <tr>
             <th style="width: 40px; text-align: center;">S.N.</th>
             <th style="text-align: left;">Item / Service</th>
+            ${!isThermal ? `<th style="width: 70px; text-align: center; white-space: nowrap;">HS Code</th>` : ""}
             <th style="width: 50px; text-align: center; white-space: nowrap;">Qty</th>
             ${!isThermal ? `<th style="width: 100px; text-align: right; white-space: nowrap;">Price</th>` : ""}
             <th style="width: 110px; text-align: right; white-space: nowrap;">Amount</th>
@@ -616,7 +634,8 @@ export const generateInvoiceHTML = (
       subtext: i.testType ? `(${i.testType})` : undefined,
       quantity: i.quantity,
       price: i.price || 0,
-      amount: i.amount || 0
+      amount: i.amount || 0,
+      hsCode: i.hsCode
     }))
   };
 
@@ -713,7 +732,8 @@ export const generateAppointmentInvoiceHTML = (
       subtext: i.doctorName && i.doctorName !== 'Unknown Doctor' && i.doctorName !== 'Expert Cabin' ? `Assigned: ${i.doctorName}` : undefined,
       quantity: i.quantity,
       price: i.price,
-      amount: i.amount
+      amount: i.amount,
+      hsCode: i.hsCode
     }))
   };
 
@@ -756,7 +776,8 @@ export const generatePharmacyInvoiceHTML = (
       subtext: i.subtext || (i.batchNumber ? `Batch: ${i.batchNumber}` : undefined),
       quantity: i.quantity || 1,
       price: i.price || i.unitPrice || 0,
-      amount: i.amount || i.totalPrice || (i.quantity * (i.price || i.unitPrice || 0))
+      amount: i.amount || i.totalPrice || (i.quantity * (i.price || i.unitPrice || 0)),
+      hsCode: i.hsCode
     }))
   };
 

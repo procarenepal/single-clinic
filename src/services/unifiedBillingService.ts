@@ -330,6 +330,7 @@ export async function createDispensingBill(
         rate: item.quantity ? item.amount / item.quantity : item.amount,
         totalAmount: item.amount || 0,
         isTaxable: item.isTaxable === true,
+        hsCode: item.hsCode,
       })),
     });
 
@@ -570,6 +571,7 @@ export async function createDispensingCreditNote(
         rate: Math.abs((item.amount || 0) / (item.quantity || 1)),
         totalAmount: -Math.abs(item.amount || 0),
         isTaxable: item.isTaxable === true,
+        hsCode: item.hsCode,
       })),
     });
 

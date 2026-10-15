@@ -1111,6 +1111,7 @@ export default function InvoiceDetailPage() {
                   <tr>
                     <th className="text-center w-10">S.N.</th>
                     <th className="text-left">Service</th>
+                    <th className="text-center w-20">HS Code</th>
                     <th className="text-center w-16">Qty</th>
                     <th className="text-right w-24">Price</th>
                     <th className="text-right w-24">Amount</th>
@@ -1140,6 +1141,9 @@ export default function InvoiceDetailPage() {
                             </p>
                           )}
                         </div>
+                      </td>
+                      <td className="text-center text-[13px]">
+                        {(item as any).hsCode || "—"}
                       </td>
                       <td className="text-center text-[13px]">
                         {item.quantity}

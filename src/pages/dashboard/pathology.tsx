@@ -30,7 +30,9 @@ import PathologyCategoriesTab from "@/components/pathology/PathologyCategoriesTa
 import PathologyUnitsTab from "@/components/pathology/PathologyUnitsTab";
 import PathologyParametersTab from "@/components/pathology/PathologyParametersTab";
 import PathologyTestTypesTab from "@/components/pathology/PathologyTestTypesTab";
-import PathologyDailyReportTab from "@/components/pathology/PathologyDailyReportTab";
+import PathologyDailyReportTab, {
+  DailyTestRow,
+} from "@/components/pathology/PathologyDailyReportTab";
 import {
   PathologyTest,
   PathologyCategory,
@@ -345,6 +347,7 @@ export default function PathologyPage() {
     price: "",
     isTaxable: false,
     taxRate: "",
+    hsCode: "",
   });
 
   const [isEditing, setIsEditing] = useState(false);
@@ -622,60 +625,125 @@ export default function PathologyPage() {
       return invoiceDate >= startOfDay && invoiceDate <= endOfDay;
     });
 
-    // Calculate statistics
+    // Calculate statistics. "draft" is a separate lifecycle label from
+    // whether an invoice is real/paid — nearly every invoice stays "draft"
+    // forever here (finalizing is a manual, functionally-optional step; the
+    // actual IRD lock comes from irdSynced, not status), so a invoice being
+    // excluded from revenue because it's still "draft" would zero out
+    // almost all of this clinic's real, paid business. Only a cancelled
+    // invoice should be excluded from revenue.
     const validBillings = dailyBillings.filter((b) => b.status !== "cancelled");
-    const revenueBillings = validBillings.filter((b) => b.status !== "draft");
 
-    const totalTests = dailyTests.length;
     const totalBillings = validBillings.length;
 
-    const totalRevenue = revenueBillings.reduce(
+    const totalRevenue = validBillings.reduce(
       (sum, billing) => sum + (billing.totalAmount || 0),
       0,
     );
-    const totalPaid = revenueBillings.reduce(
+    const totalPaid = validBillings.reduce(
       (sum, billing) => sum + (billing.paidAmount || 0),
       0,
     );
-    const totalPending = revenueBillings.reduce(
+    const totalPending = validBillings.reduce(
       (sum, billing) => sum + (billing.balanceAmount || 0),
       0,
     );
 
-    // Test types breakdown
+    // Pathology activity for the day comes from two genuinely separate
+    // places: an item on a billed invoice (what this clinic's real workflow
+    // actually produces) and a logged PathologyTest clinical-result record
+    // (a separate, optional workflow — "Pathology Tests" tab — with its own
+    // catalog, which this clinic has never used at all, on any date, not
+    // just today). Reporting only from the log meant this report showed
+    // zero activity on days with real, paid invoices. Combining both means
+    // it reflects whichever source actually has data.
+    //
+    // A billing item's own testType string is routinely blank (confirmed
+    // against live data — older/typical items carry only
+    // id/testId/testName/price/quantity/amount), but testId is a real,
+    // populated reference to pathologyCategories (NOT PathologyTest,
+    // despite what PathologyBillingItem's testId comment says — verified
+    // directly against Firestore) — the same category a Test Price catalog
+    // entry prices and the same one the Pathology Category tab manages. So
+    // "no category" was a missed lookup, not missing data: resolve it from
+    // `categories`, and fall back to that resolved name for Test Type too,
+    // since there's no separate test-type classification in this data model
+    // beyond the category itself.
+    const billingDerivedTests: DailyTestRow[] = validBillings.flatMap(
+      (billing) =>
+        billing.items.map((item, idx) => {
+          const categoryName = categories.find(
+            (c) => c.id === item.testId,
+          )?.name;
+
+          return {
+            id: `${billing.id}-${idx}`,
+            testName: item.testName,
+            patientName: billing.patientName,
+            testType: item.testType || categoryName,
+            categoryName,
+            createdAt: billing.invoiceDate,
+          };
+        }),
+    );
+    const loggedTests: DailyTestRow[] = dailyTests.map((test) => ({
+      id: test.id,
+      testName: test.testName,
+      patientName: test.patientName,
+      patientAge: test.patientAge,
+      patientGender: test.patientGender,
+      testType: test.testType,
+      categoryName: test.categoryName,
+      labTechnicianName: test.labTechnicianName,
+      createdAt: test.createdAt,
+    }));
+    const combinedTests = [...billingDerivedTests, ...loggedTests];
+    const totalTests = combinedTests.length;
+
+    // Test types breakdown — meaningful from either source.
     const testTypeBreakdown: Record<string, number> = {};
 
-    dailyTests.forEach((test) => {
+    combinedTests.forEach((test) => {
       const type = test.testType || "Unknown";
 
       testTypeBreakdown[type] = (testTypeBreakdown[type] || 0) + 1;
     });
 
-    // Category breakdown
+    // Category breakdown: now resolvable from either source (billing items
+    // via the testId -> pathologyCategories lookup above). Lab-technician
+    // breakdown stays logged-results-only — that's genuinely never captured
+    // on a billing item, so including billing rows here would just pile
+    // every billed test into a fake "Unassigned" bucket instead of having
+    // no entry at all.
     const categoryBreakdown: Record<string, number> = {};
 
-    dailyTests.forEach((test) => {
+    combinedTests.forEach((test) => {
       const category = test.categoryName || "Unknown";
 
       categoryBreakdown[category] = (categoryBreakdown[category] || 0) + 1;
     });
 
-    // Lab technician breakdown
     const technicianBreakdown: Record<string, number> = {};
 
-    dailyTests.forEach((test) => {
+    loggedTests.forEach((test) => {
       const technician = test.labTechnicianName || "Unassigned";
 
       technicianBreakdown[technician] =
         (technicianBreakdown[technician] || 0) + 1;
     });
 
-    // Patient statistics
-    const uniquePatients = new Set(dailyTests.map((test) => test.patientName));
-    const totalPatients = uniquePatients.size;
+    // Patient statistics — distinct patients actually seen today, from
+    // billing (by patientId when linked, else the invoice itself, so two
+    // different unlinked walk-ins never collapse into one just because
+    // neither has a patientId) unioned with distinct logged-test patients.
+    const uniquePatientKeys = new Set<string>([
+      ...validBillings.map((b) => `b:${b.patientId || b.id}`),
+      ...dailyTests.map((t) => `t:${t.patientId ?? t.patientName}`),
+    ]);
+    const totalPatients = uniquePatientKeys.size;
 
     return {
-      dailyTests,
+      dailyTests: combinedTests,
       dailyBillings,
       totalTests,
       totalBillings,
@@ -687,7 +755,7 @@ export default function PathologyPage() {
       technicianBreakdown,
       totalPatients,
     };
-  }, [tests, billings, selectedDate]);
+  }, [tests, billings, selectedDate, categories]);
 
   // Test form handlers
   const resetTestForm = () => {
@@ -1734,6 +1802,7 @@ export default function PathologyPage() {
       price: "",
       isTaxable: false,
       taxRate: "",
+      hsCode: "",
     });
     setIsEditing(false);
   };
@@ -1809,6 +1878,7 @@ export default function PathologyPage() {
         branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
+        hsCode: testTypeForm.hsCode.trim(),
         isTaxable: testTypeForm.isTaxable,
         // null (not undefined — pathologyService strips undefined but keeps
         // null, correctly clearing a previously-set rate) when not taxable
@@ -1869,6 +1939,7 @@ export default function PathologyPage() {
       isTaxable: testType.isTaxable ?? false,
       taxRate:
         testType.taxRate !== undefined ? String(testType.taxRate) : "",
+      hsCode: testType.hsCode || "",
     });
     setIsEditing(true);
     testTypeModalState.open();
@@ -2335,7 +2406,7 @@ export default function PathologyPage() {
 
   const buildDailyReportHtml = (
     reportData: {
-      dailyTests: PathologyTest[];
+      dailyTests: DailyTestRow[];
       dailyBillings: PathologyBilling[];
       totalTests: number;
       totalBillings: number;
@@ -2446,7 +2517,7 @@ export default function PathologyPage() {
                     <td class="font-bold">${test.testName}</td>
                     <td>${test.patientName}${test.patientAge ? ` (${test.patientAge}${test.patientGender ? `, ${test.patientGender}` : ""})` : ""}</td>
                     <td>${test.testType || "—"}</td>
-                    <td>${test.categoryName}</td>
+                    <td>${test.categoryName || "—"}</td>
                     <td>${test.labTechnicianName || "—"}</td>
                     <td class="text-right">${new Date(test.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
@@ -5070,6 +5141,20 @@ export default function PathologyPage() {
                     </div>
                   )}
                 </div>
+
+                {/* IRD rule (VAT Rules 2053, r.17): HS Code is mandatory
+                    only for imported goods, optional for domestic goods,
+                    and not applicable to services — a lab test correctly
+                    has none. Set once here so it's copied onto every
+                    invoice item billed for this test. */}
+                <Input
+                  label="HS Code (optional — only applies to imported goods)"
+                  placeholder="e.g. 9993"
+                  value={testTypeForm.hsCode}
+                  onValueChange={(v) =>
+                    setTestTypeForm((prev) => ({ ...prev, hsCode: v }))
+                  }
+                />
               </div>
               <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
                 <Button variant="light" onClick={testTypeModalState.close}>

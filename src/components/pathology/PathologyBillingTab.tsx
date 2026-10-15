@@ -778,6 +778,9 @@ export default function PathologyBillingTab({
         taxRate: matchingType
           ? matchingType.taxRate
           : updatedItems[index].taxRate,
+        hsCode: matchingType
+          ? matchingType.hsCode
+          : updatedItems[index].hsCode,
       };
     } else if (field === "quantity") {
       const qty = parseInt(value) || 1;
@@ -2134,6 +2137,14 @@ export default function PathologyBillingTab({
                             updateInvoiceItem(index, "testName", e.target.value)
                           }
                         />
+                        {/* HS Code doesn't apply to services at all (VAT
+                            Rules 2053 r.17 — goods/imports only), so a lab
+                            test correctly has none here. Shown read-only
+                            from the matched Test Type's catalog entry in
+                            case staff ever do set one. */}
+                        <p className="text-[10.5px] mt-0.5 text-text-muted">
+                          HS Code: {item.hsCode || "-"}
+                        </p>
                       </div>
                       <div>
                         <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
@@ -2966,8 +2977,7 @@ export default function PathologyBillingTab({
                                 >
                                   Record Test Results
                                 </DropdownItem>
-                                {billing.balanceAmount > 0 &&
-                                billing.status !== "draft" ? (
+                                {billing.balanceAmount > 0 ? (
                                   <DropdownItem
                                     key="pay"
                                     startContent={<IoWalletOutline className="text-lg" />}

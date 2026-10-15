@@ -1211,6 +1211,24 @@ function AppointmentTypeModal({
               </div>
             )}
           </div>
+
+          {/* IRD rule (VAT Rules 2053, r.17): HS Code is mandatory on an
+              invoice line only for imported goods, optional for domestic
+              goods, and not applicable to services at all — most services
+              in this catalogue will correctly have none. Set once here so
+              it's copied onto every invoice item billed for this service,
+              instead of staff typing it per invoice. */}
+          <Input
+            label="HS Code (optional — only applies to imported goods)"
+            placeholder="e.g. 9993"
+            value={formData.hsCode || ""}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                hsCode: e.target.value,
+              }))
+            }
+          />
         </div>
       </ModalBody>
       <ModalFooter>

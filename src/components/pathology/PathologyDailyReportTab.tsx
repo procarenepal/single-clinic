@@ -7,10 +7,30 @@ import {
 } from "react-icons/io5";
 
 import { Button } from "@/components/ui/button";
-import { PathologyTest, PathologyBilling } from "@/types/models";
+import { PathologyBilling } from "@/types/models";
+
+/**
+ * One row of pathology activity for the day — either a billed invoice item
+ * (this clinic's actual workflow) or a logged PathologyTest clinical-result
+ * record (a separate, optional workflow with its own catalog, which may be
+ * empty on any given day even when real billing happened). Only the fields
+ * this tab actually renders; a billing-derived row has no category/lab
+ * technician since billing items don't carry that clinical detail.
+ */
+export interface DailyTestRow {
+  id: string;
+  testName: string;
+  patientName: string;
+  patientAge?: string | number;
+  patientGender?: string;
+  testType?: string;
+  categoryName?: string;
+  labTechnicianName?: string;
+  createdAt: Date | string;
+}
 
 export interface DailyReportData {
-  dailyTests: PathologyTest[];
+  dailyTests: DailyTestRow[];
   dailyBillings: PathologyBilling[];
   totalTests: number;
   totalBillings: number;
@@ -216,9 +236,13 @@ export default function PathologyDailyReportTab({
                         {test.testType || "—"}
                       </td>
                       <td className="px-4 py-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
-                          {test.categoryName}
-                        </span>
+                        {test.categoryName ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
+                            {test.categoryName}
+                          </span>
+                        ) : (
+                          <span className="text-text-muted text-[13px]">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-2">
                         {test.labTechnicianName ? (

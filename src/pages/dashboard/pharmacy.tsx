@@ -446,6 +446,10 @@ interface PurchaseItem {
    * when unset. Sale price fields above are MRP (tax-INCLUSIVE); taxable/
    * VAT are back-calculated from this rate, not added on top. */
   taxRate?: number;
+  /** Tax classification code, auto-filled from the selected medicine's
+   * catalog hsCode. Per VAT Rules 2053 r.17, only mandatory for imported
+   * medicines — optional for domestic ones, so this is routinely blank. */
+  hsCode?: string;
 }
 
 interface MedicinePurchaseReturnItem {
@@ -2092,6 +2096,7 @@ export default function PharmacyPage() {
                 updatedItem.taxRate = selectedMedicine.isVatApplied
                   ? selectedMedicine.vatPercentage ?? 0
                   : 0;
+                updatedItem.hsCode = selectedMedicine.hsCode;
                 updatedItem.expiryDate = toISODateString(
                   selectedMedicine.expiryDate,
                 );
@@ -2511,6 +2516,7 @@ export default function PharmacyPage() {
           // had no way to know a medicine's real rate and fell back to
           // taxing every item at one blanket invoice-level rate.
           taxRate: item.taxRate,
+          hsCode: item.hsCode,
         }));
 
       // Calculate discount amount based on type
@@ -7366,6 +7372,17 @@ export default function PharmacyPage() {
                                     Math.min(100, Math.max(0, isNaN(n) ? 0 : n)),
                                   );
                                 }}
+                              />
+                            </div>
+                            <div className="col-span-12 sm:col-span-4">
+                              {/* Mandatory for imported medicines only (VAT
+                                  Rules 2053 r.17) — set on the medicine's
+                                  catalog entry, not per sale. Blank is
+                                  normal for domestic/non-imported stock. */}
+                              <CustomInput
+                                disabled
+                                label="HS Code"
+                                value={item.hsCode || "-"}
                               />
                             </div>
 

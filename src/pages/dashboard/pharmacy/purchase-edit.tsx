@@ -54,6 +54,10 @@ interface LocalPurchaseItem {
    * from it, not added on top — matches the create-purchase flow in
    * pharmacy.tsx. */
   taxRate?: number;
+  /** Tax classification code, auto-filled from the selected medicine's
+   * catalog hsCode. Per VAT Rules 2053 r.17, only mandatory for imported
+   * medicines — optional for domestic ones, so this is routinely blank. */
+  hsCode?: string;
 }
 
 export default function PurchaseEditPage() {
@@ -279,6 +283,7 @@ export default function PurchaseEditPage() {
                 updatedItem.taxRate = selectedMedicine.isVatApplied
                   ? selectedMedicine.vatPercentage ?? 0
                   : 0;
+                updatedItem.hsCode = selectedMedicine.hsCode;
                 updatedItem.expiryDate = selectedMedicine.expiryDate
                   ? selectedMedicine.expiryDate.toISOString().split("T")[0]
                   : "";
@@ -364,6 +369,7 @@ export default function PurchaseEditPage() {
           amount: item.amount,
           type: item.type,
           taxRate: item.taxRate,
+          hsCode: item.hsCode,
         }));
 
       const updateData = {

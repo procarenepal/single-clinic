@@ -763,6 +763,7 @@ export default function PathologyInvoiceDetailPage() {
                   <tr>
                     <th className="text-center w-10">S.N.</th>
                     <th className="text-left">Test</th>
+                    <th className="text-center w-20">HS Code</th>
                     <th className="text-center w-16">Qty</th>
                     <th className="text-right w-24">Price</th>
                     <th className="text-right w-24">Amount</th>
@@ -784,6 +785,9 @@ export default function PathologyInvoiceDetailPage() {
                             </span>
                           )}
                         </p>
+                      </td>
+                      <td className="text-center text-[13px]">
+                        {item.hsCode || "—"}
                       </td>
                       <td className="text-center text-[13px]">
                         {item.quantity}
