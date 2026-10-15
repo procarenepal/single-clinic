@@ -51,8 +51,8 @@ const DEFAULT_CONTENT: LandingPageContent = {
   },
   stats: [
     { number: "5k+", label: "Happy Clients", icon: "Users" },
-    { number: "15+", label: "Years Expertise", icon: "Building2" },
-    { number: "100%", label: "K-Certified Products", icon: "ClipboardList" },
+    { number: "15+", label: "Years Expertise", icon: "Calendar" },
+    { number: "100%", label: "K-Certified Products", icon: "ShieldCheck" },
     { number: "4.9/5", label: "Patient Rating", icon: "Stethoscope" },
   ],
   services: [

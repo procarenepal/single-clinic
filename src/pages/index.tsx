@@ -20,6 +20,7 @@ import {
 
 import { Carousel } from "@/components/ui/Carousel";
 import { Reveal } from "@/components/ui/Reveal";
+import { CountUp } from "@/components/ui/CountUp";
 import { useParallax } from "@/hooks/useParallax";
 import {
   landingPageService,
@@ -31,6 +32,16 @@ import MeetTheTeam from "@/components/MeetTheTeam";
 // Shared brand gradient used for icon badges throughout the landing page.
 const BRAND_GRADIENT =
   "linear-gradient(135deg, rgb(var(--color-primary)) 0%, color-mix(in srgb, rgb(var(--color-primary)) 70%, #a78bfa) 100%)";
+// Illustrated stat icons, keyed by the icon name stored in the homepage content.
+// Both the current defaults and the older names resolve, so saved content works.
+const STAT_IMAGES: Record<string, string> = {
+  Users: "/images/stat_clients.png",
+  Calendar: "/images/stat_experience.png",
+  Building2: "/images/stat_experience.png",
+  ShieldCheck: "/images/stat_certified.png",
+  ClipboardList: "/images/stat_certified.png",
+  Stethoscope: "/images/stat_rating.png",
+};
 // Editorial display serif for headlines — loaded in index.html, scoped to this page only.
 const SERIF = { fontFamily: "'Fraunces', serif" };
 
@@ -39,8 +50,8 @@ function Eyebrow({ children }: { children: ReactNode }) {
     <div
       className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5"
       style={{
-        background: "rgba(var(--color-primary),0.08)",
-        border: "1px solid rgba(var(--color-primary),0.18)",
+        background: "rgb(var(--color-primary) / 0.08)",
+        border: "1px solid rgb(var(--color-primary) / 0.18)",
       }}
     >
       <span
@@ -150,6 +161,11 @@ export default function IndexPage() {
     );
   }
 
+  // Headline: the last word is set apart in italic brand colour.
+  const heroTitleWords = content.hero.title.trim().split(/\s+/);
+  const heroTitleAccent = heroTitleWords[heroTitleWords.length - 1];
+  const heroTitleLead = heroTitleWords.slice(0, -1).join(" ");
+
   const resolveIcon = (name: string) =>
     name === "Users"
       ? Users
@@ -163,11 +179,14 @@ export default function IndexPage() {
               ? Building
               : name === "Calendar"
                 ? Calendar
-                : MapPin;
+                : name === "ShieldCheck"
+                  ? ShieldCheck
+                  : MapPin;
 
+  // -mt-6 cancels the layout's pt-6 so the hero sits flush under the navbar.
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen -mt-6"
       style={{
         background: "rgb(var(--color-bg))",
         color: "rgb(var(--color-text))",
@@ -185,9 +204,9 @@ export default function IndexPage() {
       >
         <HeroBlobs />
 
-        <div className="relative max-w-7xl mx-auto px-5 lg:px-8 pt-10 lg:pt-24 pb-24 lg:pb-36 flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
+        <div className="relative max-w-7xl mx-auto px-5 lg:px-8 pt-10 lg:pt-16 pb-8 lg:pb-10 flex flex-col lg:flex-row items-center gap-10 lg:gap-14">
           {/* Copy */}
-          <Reveal className="flex-1 max-w-xl text-center lg:text-left">
+          <Reveal className="flex-1 lg:flex-[0.85] max-w-xl text-center lg:text-left">
             <div className="flex justify-center lg:justify-start">
               <Eyebrow>Advanced Aesthetic Medicine</Eyebrow>
             </div>
@@ -200,7 +219,17 @@ export default function IndexPage() {
                 color: "rgb(var(--color-text))",
               }}
             >
-              {content.hero.title}
+              {heroTitleLead}
+              {heroTitleLead && " "}
+              <span
+                style={{
+                  fontStyle: "italic",
+                  fontWeight: 500,
+                  color: "rgb(var(--color-primary))",
+                }}
+              >
+                {heroTitleAccent}
+              </span>
             </h1>
 
             <p
@@ -211,7 +240,7 @@ export default function IndexPage() {
             </p>
 
             {/* CTA row */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-10 items-center lg:items-start">
+            <div className="flex flex-col sm:flex-row gap-3 mb-10 items-center sm:justify-center lg:justify-start lg:items-start">
               <Link
                 className="inline-flex items-center justify-center gap-2 px-8 py-4 text-sm font-semibold text-white rounded-xl transition-transform duration-200 hover:-translate-y-0.5"
                 style={{
@@ -288,29 +317,23 @@ export default function IndexPage() {
             </div>
           </Reveal>
 
-          {/* Carousel with premium chrome */}
+          {/* Carousel with overlaid rating + doctor cards */}
           <Reveal
-            className="flex-1 w-full max-w-2xl relative"
+            className="flex-1 lg:flex-[1.25] w-full max-w-2xl relative"
             delay={150}
             direction="scale"
           >
             <div
-              className="hidden lg:block absolute -inset-3 rounded-[2rem] rotate-1"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(var(--color-primary),0.16), rgba(var(--color-primary),0.02))",
-              }}
-            />
-            <div
-              className="relative rounded-[1.75rem] overflow-hidden"
+              className="relative h-[260px] sm:h-[340px] lg:h-auto lg:aspect-[4/3] rounded-[1.75rem] overflow-hidden"
               style={{
                 background: "rgb(var(--color-surface))",
-                boxShadow: "0 12px 32px -12px rgba(0,0,0,0.1)",
+                boxShadow: "0 18px 40px -18px rgba(0,0,0,0.18)",
               }}
             >
-              <div className="h-[260px] sm:h-[340px] lg:h-[520px]">
+              <div className="absolute inset-0">
                 <Carousel
                   autoPlayInterval={5000}
+                  className="h-full"
                   items={[
                     <div key="1" className="relative w-full h-full group">
                       <img
@@ -318,8 +341,8 @@ export default function IndexPage() {
                         className="w-full h-full object-cover"
                         src="/images/banner_1.png"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                      <div className="absolute top-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">
                           Natural Glow
                         </p>
@@ -334,8 +357,8 @@ export default function IndexPage() {
                         className="w-full h-full object-cover"
                         src="/images/banner_2.png"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                      <div className="absolute top-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">
                           Medical Grade
                         </p>
@@ -350,8 +373,8 @@ export default function IndexPage() {
                         className="w-full h-full object-cover"
                         src="/images/banner_3.png"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                      <div className="absolute top-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">
                           Serene Wellness
                         </p>
@@ -361,73 +384,94 @@ export default function IndexPage() {
                       </div>
                     </div>,
                   ]}
+                  variant="counter"
                 />
               </div>
             </div>
 
-            {/* Floating rating badge */}
+            {/* Rating card — overlaps the top-right corner */}
             <div
-              className="hidden sm:flex absolute -top-5 -right-5 items-center gap-2.5 px-4 py-3 rounded-2xl"
+              className="hidden sm:flex absolute -top-5 right-4 flex-col gap-0.5 px-4 py-3 rounded-2xl z-20"
               style={{
                 background: "rgb(var(--color-surface))",
-                border: "1px solid rgb(var(--color-border))",
-                boxShadow: "0 8px 24px -12px rgba(0,0,0,0.08)",
+                boxShadow: "0 12px 28px -14px rgba(0,0,0,0.2)",
               }}
             >
-              <div className="flex text-amber-400">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} className="w-3 h-3 fill-amber-400" />
-                ))}
-              </div>
-              <div>
+              <div className="flex items-center gap-2">
+                <div className="flex text-amber-400">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star key={n} className="w-3 h-3 fill-amber-400" />
+                  ))}
+                </div>
                 <p
                   className="text-sm font-extrabold leading-none"
                   style={{ color: "rgb(var(--color-text))" }}
                 >
                   4.9/5
                 </p>
-                <p
-                  className="text-[10px] font-semibold uppercase tracking-wide mt-0.5"
-                  style={{ color: "rgb(var(--color-text-muted))" }}
-                >
-                  Patient Rating
-                </p>
               </div>
+              <p
+                className="text-[10px] font-medium text-right"
+                style={{ color: "rgb(var(--color-text-muted))" }}
+              >
+                Patient Rating
+              </p>
             </div>
 
-            {/* Secondary polaroid — breaks the grid, asymmetric overlap */}
-            <div
-              className="hidden md:block absolute -bottom-10 -left-10 w-36 rotate-[-6deg]"
-              style={{
-                background: "white",
-                padding: "10px 10px 34px",
-                borderRadius: "4px",
-                boxShadow: "0 8px 24px -12px rgba(0,0,0,0.15)",
-              }}
+            {/* Lead specialist card — bottom-left of the image */}
+            <a
+              className="hidden sm:flex absolute bottom-4 left-4 items-end z-20 group/doc"
+              href="#team"
             >
-              <div className="w-full aspect-square rounded-sm overflow-hidden">
+              <div
+                className="relative z-10 rounded-2xl p-1.5"
+                style={{
+                  background: "rgb(var(--color-surface))",
+                  boxShadow: "0 12px 28px -14px rgba(0,0,0,0.25)",
+                }}
+              >
                 <img
-                  alt="Specialist"
-                  className="w-full h-full object-cover"
+                  alt="Dr. Park"
+                  className="w-[84px] h-[96px] lg:w-[96px] lg:h-[108px] rounded-xl object-cover object-top"
                   src="/images/team_1.png"
                 />
               </div>
-              <p
-                className="absolute bottom-2 left-0 right-0 text-center text-[10px] font-semibold"
-                style={{ ...SERIF, fontStyle: "italic", color: "#333" }}
+              <div
+                className="-ml-4 mb-1 pl-7 pr-4 py-3 rounded-2xl flex items-center gap-5"
+                style={{
+                  background: "rgb(var(--color-surface))",
+                  boxShadow: "0 12px 28px -14px rgba(0,0,0,0.25)",
+                }}
               >
-                Dr. Park
-              </p>
-            </div>
+                <div>
+                  <p
+                    className="text-sm font-bold leading-tight"
+                    style={{ color: "rgb(var(--color-text))" }}
+                  >
+                    Dr. Park
+                  </p>
+                  <p
+                    className="text-[11px] font-medium mt-0.5"
+                    style={{ color: "rgb(var(--color-primary))" }}
+                  >
+                    Lead Aesthetic Specialist
+                  </p>
+                </div>
+                <ArrowRight
+                  className="w-4 h-4 transition-transform duration-200 group-hover/doc:translate-x-0.5"
+                  style={{ color: "rgb(var(--color-primary))" }}
+                />
+              </div>
+            </a>
           </Reveal>
         </div>
       </section>
 
       {/* ─────────────────────────────────────────────────────────────────────
-          STATS — floating card overlapping the hero
+          STATS — flat card directly under the hero
       ───────────────────────────────────────────────────────────────────── */}
       <Reveal
-        className="relative z-10 max-w-6xl mx-auto px-5 lg:px-8 -mt-10 lg:-mt-16"
+        className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8 mt-6 lg:mt-8"
         delay={100}
       >
         <div
@@ -435,37 +479,45 @@ export default function IndexPage() {
           style={{
             background: "rgb(var(--color-surface))",
             border: "1px solid rgb(var(--color-border))",
-            boxShadow: "0 8px 24px -12px rgba(0,0,0,0.08)",
+            boxShadow: "0 8px 24px -14px rgba(0,0,0,0.08)",
           }}
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-[rgb(var(--color-border))]">
             {content.stats.map((stat, index) => {
               const IconComponent = resolveIcon(stat.icon);
+              const statImage = STAT_IMAGES[stat.icon];
 
               return (
                 <div
                   key={index}
-                  className="flex items-center gap-4 px-4 sm:px-6 lg:px-8 py-8 lg:py-10"
+                  className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 py-3 lg:py-3.5"
                 >
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{
-                      background: BRAND_GRADIENT,
-                      boxShadow:
-                        "0 4px 12px -6px rgba(var(--color-primary),0.25)",
-                    }}
+                    className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgb(var(--color-primary) / 0.1)" }}
                   >
-                    <IconComponent className="w-5 h-5 text-white" />
+                    {statImage ? (
+                      <img
+                        alt=""
+                        className="w-7 h-7 object-contain"
+                        src={statImage}
+                      />
+                    ) : (
+                      <IconComponent
+                        className="w-5 h-5"
+                        style={{ color: "rgb(var(--color-primary))" }}
+                      />
+                    )}
                   </div>
                   <div>
                     <p
-                      className="text-2xl sm:text-3xl font-extrabold tabular-nums tracking-tight"
+                      className="text-lg sm:text-xl font-bold tabular-nums tracking-tight leading-tight"
                       style={{ color: "rgb(var(--color-text))" }}
                     >
-                      {stat.number}
+                      <CountUp value={stat.number} />
                     </p>
                     <p
-                      className="text-[11px] sm:text-xs font-semibold mt-0.5 leading-snug uppercase tracking-wide"
+                      className="text-xs leading-snug"
                       style={{ color: "rgb(var(--color-text-muted))" }}
                     >
                       {stat.label}
