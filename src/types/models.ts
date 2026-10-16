@@ -1661,6 +1661,9 @@ export interface PatientFollowup {
    * display-name string with no reliable way to query "my assigned follow-ups"
    * by identity. Populate both going forward; followedBy stays for display. */
   followedByUserId?: string;
+  /** Set instead of followedByUserId when the follow-up is assigned to an
+   * expert who has no login account (the picker lists all experts). */
+  followedByExpertId?: string;
 
   // Clinical notes
   service?: string; // Service received (e.g. "HYDRAFACIAL ST", "PRP FACE")

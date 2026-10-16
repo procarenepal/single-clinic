@@ -33,6 +33,8 @@ import {
   IoCloseCircleOutline,
   IoTrashOutline,
   IoPrintOutline,
+  IoCalendarOutline,
+  IoStorefrontOutline,
 } from "react-icons/io5";
 
 import { useAuthContext } from "@/context/AuthContext";
@@ -54,8 +56,26 @@ import {
   Vendor,
   ItemPurchase,
 } from "@/types/models";
+import {
+  DATE_PRESET_OPTIONS,
+  DatePreset,
+  VENDOR_ALL,
+  buildVendorOptions,
+  isWithinDateRange,
+  matchesVendor,
+  resolveDateRange,
+} from "@/utils/inventoryFilters";
 
 // Icons
+
+// Look shared by the registry's filter controls (matches the search box)
+const FILTER_SELECT_CLASSNAMES = {
+  trigger:
+    "h-9 min-h-9 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] shadow-none data-[hover=true]:bg-[rgb(var(--color-surface-2))]",
+  value: "text-[12px]",
+};
+const FILTER_DATE_INPUT_CLASS =
+  "h-9 px-3 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-xl text-[12px] focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all";
 
 export default function InventoryPage() {
   const { currentUser, userData, clinicId } = useAuthContext();
@@ -72,6 +92,11 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("items");
+  // Asset Registry filters: vendor-wise and date-wise
+  const [vendorFilter, setVendorFilter] = useState(VENDOR_ALL);
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
@@ -331,11 +356,26 @@ export default function InventoryPage() {
     }
   };
 
+  // Vendor-wise / date-wise filters for the Asset Registry
+  const vendorOptions = buildVendorOptions(items.map((i) => i.supplierName));
+  // A vendor with no assets left (e.g. the last one was disposed) means "all"
+  const activeVendor = vendorOptions.some((o) => o.key === vendorFilter)
+    ? vendorFilter
+    : VENDOR_ALL;
+  const { from: rangeFrom, to: rangeTo } = resolveDateRange(datePreset, {
+    from: dateFrom,
+    to: dateTo,
+  });
+  const isFiltering = activeVendor !== VENDOR_ALL || !!rangeFrom || !!rangeTo;
+  const canClearFilters = activeVendor !== VENDOR_ALL || datePreset !== "all";
+
   // Filter functions
   const filteredItems = items.filter(
     (item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase()),
+      matchesVendor(activeVendor, item.supplierName) &&
+      isWithinDateRange(item.purchaseDate, rangeFrom, rangeTo) &&
+      (item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   const filteredCategories = categories.filter((category) => {
@@ -364,7 +404,7 @@ export default function InventoryPage() {
     setItemsPage(1);
     setCategoriesPage(1);
     setLogsPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, activeVendor, datePreset, dateFrom, dateTo]);
 
   const paginatedItems = filteredItems.slice(
     (itemsPage - 1) * itemsPerPage,
@@ -1115,6 +1155,109 @@ export default function InventoryPage() {
           >
             <Tab key="items" title="Asset Registry">
               <div className="p-4 space-y-4">
+                {/* Vendor-wise / date-wise filters */}
+                {items.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 print:hidden">
+                    <Select
+                      aria-label="Filter by vendor"
+                      className="w-full sm:w-56"
+                      classNames={FILTER_SELECT_CLASSNAMES}
+                      disallowEmptySelection
+                      selectedKeys={[activeVendor]}
+                      size="sm"
+                      startContent={
+                        <IoStorefrontOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
+                      }
+                      onSelectionChange={(keys) => {
+                        const [first] = Array.from(keys);
+
+                        setVendorFilter(first ? String(first) : VENDOR_ALL);
+                      }}
+                    >
+                      {[
+                        { key: VENDOR_ALL, label: "All vendors" },
+                        ...vendorOptions,
+                      ].map((option) => (
+                        <SelectItem key={option.key} textValue={option.label}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </Select>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <IoCalendarOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
+                      <span className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))]">
+                        Purchase date
+                      </span>
+                      <Select
+                        aria-label="Filter by purchase date"
+                        className="w-full sm:w-40"
+                        classNames={FILTER_SELECT_CLASSNAMES}
+                        disallowEmptySelection
+                        selectedKeys={[datePreset]}
+                        size="sm"
+                        onSelectionChange={(keys) => {
+                          const [first] = Array.from(keys);
+                          const next = (
+                            first ? String(first) : "all"
+                          ) as DatePreset;
+
+                          // Start a custom range from the dates showing now
+                          if (next === "custom") {
+                            setDateFrom(rangeFrom);
+                            setDateTo(rangeTo);
+                          }
+                          setDatePreset(next);
+                        }}
+                      >
+                        {DATE_PRESET_OPTIONS.map((option) => (
+                          <SelectItem key={option.key} textValue={option.label}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </Select>
+                      {datePreset === "custom" && (
+                        <>
+                          <input
+                            aria-label="From date"
+                            className={FILTER_DATE_INPUT_CLASS}
+                            max={dateTo || undefined}
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                          />
+                          <span className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                            to
+                          </span>
+                          <input
+                            aria-label="To date"
+                            className={FILTER_DATE_INPUT_CLASS}
+                            min={dateFrom || undefined}
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                          />
+                        </>
+                      )}
+                    </div>
+
+                    {canClearFilters && (
+                      <button
+                        className="h-9 px-3 rounded-xl border border-rose-500/20 text-[12px] font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        type="button"
+                        onClick={() => {
+                          setVendorFilter(VENDOR_ALL);
+                          setDatePreset("all");
+                          setDateFrom("");
+                          setDateTo("");
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {filteredItems.length > 0 ? (
                   <>
                     <Table
@@ -1339,15 +1482,19 @@ export default function InventoryPage() {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-[rgb(var(--color-text))]">
-                        {searchQuery ? "No assets found" : "No assets yet"}
+                        {searchQuery || isFiltering
+                          ? "No assets found"
+                          : "No assets yet"}
                       </h3>
                       <p className="text-[13px] text-text-muted mt-1 max-w-sm mx-auto">
                         {searchQuery
                           ? `No assets match your search "${searchQuery}".`
-                          : "Start building your clinic inventory by adding machines, furniture, or equipment."}
+                          : isFiltering
+                            ? "No assets match the selected vendor or dates."
+                            : "Start building your clinic inventory by adding machines, furniture, or equipment."}
                       </p>
                     </div>
-                    {!searchQuery && (
+                    {!searchQuery && !isFiltering && (
                       <Button
                         color="primary"
                         startContent={<IoAdd />}
