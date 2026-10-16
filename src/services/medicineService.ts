@@ -1065,6 +1065,12 @@ export const medicineService = {
     unitPrice?: number;
     schemePrice?: number;
     schemeCostPrice?: number;
+    /** Stock-record settings: used when the batch is created, and applied
+     * on an existing batch when given. */
+    minimumStock?: number;
+    maximumStock?: number;
+    reorderLevel?: number;
+    location?: string;
   }): Promise<{
     stockId: string;
     previousRegularStock: number;
@@ -1119,6 +1125,10 @@ export const medicineService = {
             costPrice: params.costPrice,
             salePrice: params.salePrice,
             supplierId: params.supplierId,
+            minimumStock: params.minimumStock,
+            maximumStock: params.maximumStock,
+            reorderLevel: params.reorderLevel,
+            location: params.location,
           }),
           updatedAt: serverTimestamp(),
         });
@@ -1129,8 +1139,10 @@ export const medicineService = {
             batchNumber: params.batchNumber,
             currentStock: newRegularStock,
             schemeStock: newSchemeStock,
-            minimumStock: 10,
-            reorderLevel: 20,
+            minimumStock: params.minimumStock ?? 10,
+            maximumStock: params.maximumStock,
+            reorderLevel: params.reorderLevel ?? 20,
+            location: params.location,
             clinicId: params.clinicId,
             branchId: params.branchId || "",
             updatedBy: params.updatedBy,

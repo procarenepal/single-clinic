@@ -220,12 +220,14 @@ export default function StockTab({
     // through to Firestore, which then silently broke every downstream
     // low-stock comparison (`totalStock <= reorderLevel` is always false
     // against NaN), permanently hiding that item from low-stock alerts.
+    const isEdit = Boolean(currentStockItem);
+
     if (
       !stockFormData.medicineId ||
-      !stockFormData.currentStock ||
+      (!isEdit && !stockFormData.currentStock) ||
       !stockFormData.minimumStock ||
       !stockFormData.reorderLevel ||
-      isNaN(parseInt(stockFormData.currentStock)) ||
+      (!isEdit && isNaN(parseInt(stockFormData.currentStock))) ||
       isNaN(parseInt(stockFormData.minimumStock)) ||
       isNaN(parseInt(stockFormData.reorderLevel))
     ) {
@@ -241,36 +243,51 @@ export default function StockTab({
 
     setIsLoading(true);
     try {
-      const stockData: any = {
-        medicineId: stockFormData.medicineId,
-        branchId: branchScopeId || "",
-        schemeStock: 0,
-        currentStock: parseInt(stockFormData.currentStock),
+      const settings = {
         minimumStock: parseInt(stockFormData.minimumStock),
         maximumStock: stockFormData.maximumStock
           ? parseInt(stockFormData.maximumStock)
           : undefined,
         reorderLevel: parseInt(stockFormData.reorderLevel),
         location: stockFormData.location || undefined,
-        clinicId,
-        updatedBy: userData.id,
-        batchNumber: stockFormData.batchNumber || "DEFAULT",
-        expiryDate: stockFormData.expiryDate
-          ? new Date(stockFormData.expiryDate)
-          : null,
       };
+      const batchNumber = stockFormData.batchNumber || "DEFAULT";
 
       if (currentStockItem) {
-        await medicineService.updateMedicineStock(
-          currentStockItem.id,
-          stockData,
-        );
+        // Quantities are deliberately not written here. The form's
+        // currentStock was read when the modal opened, so saving it back
+        // overwrote any sale that landed meanwhile — with no ledger row
+        // to show for the change. Quantities move through Record
+        // Transaction, which re-reads and logs inside a transaction.
+        await medicineService.updateMedicineStock(currentStockItem.id, {
+          ...settings,
+          batchNumber,
+          expiryDate: stockFormData.expiryDate
+            ? new Date(stockFormData.expiryDate)
+            : null,
+          updatedBy: userData.id,
+        } as Partial<MedicineStock>);
         addToast({
           title: "Success",
-          description: "Stock updated successfully",
+          description: "Stock settings updated",
         });
       } else {
-        await medicineService.createMedicineStock(stockData);
+        // One transaction creates (or tops up) the batch and logs the
+        // opening quantity, instead of a bare document with no ledger row.
+        await medicineService.refillBatchStock({
+          medicineId: stockFormData.medicineId,
+          batchNumber,
+          clinicId,
+          branchId: branchScopeId || "",
+          isAdd: true,
+          regularQty: parseInt(stockFormData.currentStock),
+          schemeQty: 0,
+          updatedBy: userData.id,
+          expiryDate: stockFormData.expiryDate
+            ? new Date(stockFormData.expiryDate)
+            : undefined,
+          ...settings,
+        });
         addToast({
           title: "Success",
           description: "Stock record created successfully",
@@ -957,6 +974,12 @@ export default function StockTab({
                   </label>
                   <Input
                     required
+                    description={
+                      currentStockItem
+                        ? "Change quantities with Record Transaction so the movement is logged."
+                        : undefined
+                    }
+                    isReadOnly={!!currentStockItem}
                     name="currentStock"
                     placeholder="Enter current stock"
                     type="number"
