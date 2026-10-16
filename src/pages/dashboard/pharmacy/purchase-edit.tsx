@@ -4,7 +4,6 @@ import { Card, CardBody } from "@heroui/card";
 import { Input } from "@heroui/input";
 import { Button } from "@heroui/button";
 import { Select, SelectItem } from "@heroui/select";
-import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Divider } from "@heroui/divider";
 import {
   Modal,
@@ -14,51 +13,35 @@ import {
   ModalFooter,
 } from "@heroui/modal";
 import { Spinner } from "@heroui/spinner";
-import {
-  IoArrowBackOutline,
-  IoSaveOutline,
-  IoAddOutline,
-  IoTrashOutline,
-  IoMedicalOutline,
-  IoStorefrontOutline,
-} from "react-icons/io5";
+import { IoArrowBackOutline, IoSaveOutline } from "react-icons/io5";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
-import { medicineService } from "@/services/medicineService";
 import { pharmacyService } from "@/services/pharmacyService";
-import { itemService } from "@/services/itemService";
-import {
-  Medicine,
-  Item,
-  MedicinePurchase,
-  MedicinePurchaseItem,
-  PharmacySettings,
-} from "@/types/models";
+import { MedicinePurchase, PharmacySettings } from "@/types/models";
 
-// Local types for form handling
-interface LocalPurchaseItem {
-  id: string;
-  type: "medicine" | "item";
-  productId: string;
-  productName: string;
-  expiryDate?: string;
-  salePrice: number;
-  quantity: number;
-  amount: number;
-  /** Per-item VAT rate, e.g. 13 — auto-filled from the selected medicine's
-   * catalog rate, editable. Falls back to purchaseForm.taxPercentage when
-   * unset. salePrice is MRP (tax-INCLUSIVE); taxable/VAT are back-calculated
-   * from it, not added on top — matches the create-purchase flow in
-   * pharmacy.tsx. */
-  taxRate?: number;
-  /** Tax classification code, auto-filled from the selected medicine's
-   * catalog hsCode. Per VAT Rules 2053 r.17, only mandatory for imported
-   * medicines — optional for domestic ones, so this is routinely blank. */
-  hsCode?: string;
+// The only things a recorded sale can still change. Items and amounts are
+// frozen: stock was deducted and the ledger filing queued in the same
+// transaction that created the sale, and nothing re-balances either
+// afterwards — corrections go through a Return and a new sale.
+interface EditableFields {
+  patientName: string;
+  medicationDurationDays: number;
+  paymentType: string;
+  paymentNote: string;
 }
+
+const formFromPurchase = (purchase: MedicinePurchase): EditableFields => ({
+  patientName: purchase.patientName || "",
+  medicationDurationDays: purchase.medicationDurationDays || 0,
+  paymentType: purchase.paymentType || "",
+  paymentNote: purchase.paymentNote || "",
+});
+
+const npr = (amount: number | undefined) =>
+  `NPR ${(amount || 0).toLocaleString()}`;
 
 export default function PurchaseEditPage() {
   const { purchaseId } = useParams<{ purchaseId: string }>();
@@ -69,31 +52,20 @@ export default function PurchaseEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Data
   const [purchase, setPurchase] = useState<MedicinePurchase | null>(null);
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
   const [pharmacySettings, setPharmacySettings] =
     useState<PharmacySettings | null>(null);
 
-  // Form state
-  const [purchaseItems, setPurchaseItems] = useState<LocalPurchaseItem[]>([]);
-  const [purchaseForm, setPurchaseForm] = useState({
-    total: 0,
-    discount: 0,
-    taxPercentage: 0,
-    taxAmount: 0,
-    netAmount: 0,
-    paymentType: "cash" as string,
-    paymentNote: "",
+  const [form, setForm] = useState<EditableFields>({
     patientName: "",
     medicationDurationDays: 0,
+    paymentType: "cash",
+    paymentNote: "",
   });
+  const [savedForm, setSavedForm] = useState<EditableFields | null>(null);
 
-  // Modal state
   const confirmModalState = useModalState(false);
 
-  // Load data on component mount
   useEffect(() => {
     const loadData = async () => {
       if (!purchaseId || !clinicId) return;
@@ -104,17 +76,7 @@ export default function PurchaseEditPage() {
         const purchaseData =
           await pharmacyService.getMedicinePurchaseById(purchaseId);
 
-        if (!purchaseData) {
-          addToast({
-            title: "Error",
-            description: "Purchase record not found",
-            color: "danger",
-          });
-          navigate("/dashboard/pharmacy");
-
-          return;
-        }
-        if (purchaseData.clinicId !== clinicId) {
+        if (!purchaseData || purchaseData.clinicId !== clinicId) {
           addToast({
             title: "Error",
             description: "Purchase record not found",
@@ -135,50 +97,16 @@ export default function PurchaseEditPage() {
           return;
         }
 
-        const invoiceBranchId = purchaseData.branchId || undefined;
-        const [medicinesData, itemsData, settingsData] = await Promise.all([
-          medicineService.getMedicinesByClinic(
-            clinicId,
-            undefined,
-          ),
-          itemService.getItemsByClinic(clinicId),
-          pharmacyService.getPharmacySettings(clinicId),
-        ]);
+        const settingsData =
+          await pharmacyService.getPharmacySettings(clinicId);
 
         setPurchase(purchaseData);
-        setMedicines(medicinesData as Medicine[]);
-        setItems(itemsData);
         setPharmacySettings(settingsData as PharmacySettings);
 
-        // Convert purchase items to form format
-        const formattedItems: LocalPurchaseItem[] = purchaseData.items.map(
-          (item) => ({
-            id: item.id,
-            type: (item.type || "medicine") as "medicine" | "item",
-            productId: item.medicineId, // Use medicineId as productId for compatibility
-            productName: item.medicineName,
-            expiryDate: item.expiryDate,
-            salePrice: item.salePrice,
-            quantity: item.quantity,
-            amount: item.amount,
-            taxRate: (item as any).taxRate,
-          }),
-        );
+        const initial = formFromPurchase(purchaseData);
 
-        setPurchaseItems(formattedItems);
-
-        // Set form values
-        setPurchaseForm({
-          total: purchaseData.total,
-          discount: purchaseData.discount,
-          taxPercentage: purchaseData.taxPercentage,
-          taxAmount: purchaseData.taxAmount,
-          netAmount: purchaseData.netAmount,
-          paymentType: purchaseData.paymentType,
-          paymentNote: purchaseData.paymentNote || "",
-          patientName: purchaseData.patientName || "",
-          medicationDurationDays: purchaseData.medicationDurationDays || 0,
-        });
+        setForm(initial);
+        setSavedForm(initial);
       } catch (error) {
         console.error("Error loading purchase data:", error);
         addToast({
@@ -195,197 +123,37 @@ export default function PurchaseEditPage() {
     loadData();
   }, [purchaseId, clinicId, userData?.branchId, navigate]);
 
-  // Calculate amounts when items change. Sale prices are MRP — tax-INCLUSIVE
-  // — so VAT is back-calculated per item at that item's own rate (falling
-  // back to purchaseForm.taxPercentage), then summed, matching the
-  // create-purchase flow in pharmacy.tsx rather than adding one blended
-  // rate on top of the total.
-  useEffect(() => {
-    const total = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
-    const discountRatio =
-      total > 0 ? Math.min(1, purchaseForm.discount / total) : 0;
+  const isDirty =
+    savedForm !== null && JSON.stringify(form) !== JSON.stringify(savedForm);
 
-    let taxAmount = 0;
+  const paymentOptions: { key: string; name: string }[] = (
+    pharmacySettings?.enabledPaymentMethods || []
+  )
+    .filter((method) => method.isEnabled)
+    .map((method) => ({ key: method.key, name: method.name }));
 
-    purchaseItems.forEach((item) => {
-      const rate = item.taxRate ?? purchaseForm.taxPercentage;
-      const grossMrp = item.amount * (1 - discountRatio);
-      const itemTaxable = rate > 0 ? grossMrp / (1 + rate / 100) : grossMrp;
+  // A sale recorded with a method that has since been disabled in Settings
+  // still needs to show its own value, not an empty select.
+  if (
+    form.paymentType &&
+    !paymentOptions.some((option) => option.key === form.paymentType)
+  ) {
+    paymentOptions.push({ key: form.paymentType, name: form.paymentType });
+  }
 
-      taxAmount += grossMrp - itemTaxable;
-    });
-
-    taxAmount = Math.round(Math.max(0, taxAmount));
-    // total already includes tax (MRP-inclusive) — netAmount is just the
-    // discounted total, not total-plus-tax-again. taxAmount is kept as the
-    // informational taxable/VAT split for reporting/IRD, not an addition.
-    const netAmount = Math.round(total - purchaseForm.discount);
-
-    setPurchaseForm((prev) => ({
-      ...prev,
-      total,
-      taxAmount,
-      netAmount: Math.max(0, netAmount),
-    }));
-  }, [purchaseItems, purchaseForm.discount, purchaseForm.taxPercentage]);
-
-  // Add new purchase item row
-  const addPurchaseItem = () => {
-    setPurchaseItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        type: "medicine",
-        productId: "",
-        productName: "",
-        expiryDate: "",
-        salePrice: 0,
-        quantity: 1,
-        amount: 0,
-      },
-    ]);
-  };
-
-  // Remove purchase item row
-  const removePurchaseItem = (id: string) => {
-    if (purchaseItems.length > 1) {
-      setPurchaseItems((prev) => prev.filter((item) => item.id !== id));
-    }
-  };
-
-  // Update purchase item
-  const updatePurchaseItem = (
-    id: string,
-    field: keyof LocalPurchaseItem,
-    value: any,
-  ) => {
-    setPurchaseItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const updatedItem = { ...item, [field]: value };
-
-          // Auto-select product details when product is selected
-          if (field === "productId") {
-            if (updatedItem.type === "medicine") {
-              const selectedMedicine = medicines.find((m) => m.id === value);
-
-              if (selectedMedicine) {
-                updatedItem.productName = selectedMedicine.name;
-                updatedItem.salePrice = selectedMedicine.price || 0;
-                // Medicine.isVatApplied/vatPercentage are never "unset" —
-                // every medicine has an explicit true/false VAT status — so
-                // a VAT-exempt medicine must resolve to a definite 0% here,
-                // not `undefined` (which previously fell back to the
-                // invoice-level default rate via
-                // `item.taxRate ?? purchaseForm.taxPercentage` below,
-                // silently taxing an explicitly VAT-exempt medicine at the
-                // clinic's default rate instead of exempting it).
-                updatedItem.taxRate = selectedMedicine.isVatApplied
-                  ? selectedMedicine.vatPercentage ?? 0
-                  : 0;
-                updatedItem.hsCode = selectedMedicine.hsCode;
-                updatedItem.expiryDate = selectedMedicine.expiryDate
-                  ? selectedMedicine.expiryDate.toISOString().split("T")[0]
-                  : "";
-                updatedItem.amount =
-                  updatedItem.quantity * updatedItem.salePrice;
-              }
-            } else if (updatedItem.type === "item") {
-              const selectedItem = items.find((i) => i.id === value);
-
-              if (selectedItem) {
-                updatedItem.productName = selectedItem.name;
-                updatedItem.salePrice = selectedItem.salePrice || 0;
-                updatedItem.expiryDate = "";
-                updatedItem.amount =
-                  updatedItem.quantity * updatedItem.salePrice;
-              }
-            }
-          }
-
-          // When type changes, reset the item
-          if (field === "type") {
-            updatedItem.productId = "";
-            updatedItem.productName = "";
-            updatedItem.salePrice = 0;
-            updatedItem.expiryDate = "";
-            updatedItem.amount = 0;
-          }
-
-          // Auto-calculate amount when quantity or price changes
-          if (field === "quantity" || field === "salePrice") {
-            updatedItem.amount = updatedItem.quantity * updatedItem.salePrice;
-          }
-
-          return updatedItem;
-        }
-
-        return item;
-      }),
-    );
-  };
-
-  // Get available payment methods
-  const getAvailablePaymentMethods = () => {
-    if (!pharmacySettings?.enabledPaymentMethods) return [];
-
-    return pharmacySettings.enabledPaymentMethods.filter(
-      (method) => method.isEnabled,
-    );
-  };
-
-  // Handle save changes
   const handleSave = async () => {
     if (!purchase || !currentUser) return;
-
-    // Validate form
-    const hasValidItems = purchaseItems.some(
-      (item) => item.productId && item.quantity > 0 && item.salePrice > 0,
-    );
-
-    if (!hasValidItems) {
-      addToast({
-        title: "Validation Error",
-        description: "Please add at least one valid item.",
-        color: "warning",
-      });
-
-      return;
-    }
 
     try {
       setSaving(true);
 
-      // Convert LocalPurchaseItem back to MedicinePurchaseItem format
-      const updatedItems: MedicinePurchaseItem[] = purchaseItems
-        .filter((item) => item.productId && item.quantity > 0)
-        .map((item) => ({
-          id: item.id,
-          medicineId: item.productId,
-          medicineName: item.productName,
-          expiryDate: item.expiryDate || "",
-          salePrice: item.salePrice,
-          quantity: item.quantity,
-          amount: item.amount,
-          type: item.type,
-          taxRate: item.taxRate,
-          hsCode: item.hsCode,
-        }));
-
       const updateData = {
-        items: updatedItems,
-        total: purchaseForm.total,
-        discount: purchaseForm.discount,
-        taxPercentage: purchaseForm.taxPercentage,
-        taxAmount: purchaseForm.taxAmount,
-        netAmount: purchaseForm.netAmount,
-        paymentType: purchaseForm.paymentType,
-        paymentNote: purchaseForm.paymentNote,
-        patientName: purchaseForm.patientName || undefined,
-        medicationDurationDays:
-          purchaseForm.medicationDurationDays || undefined,
+        patientName: form.patientName.trim(),
+        medicationDurationDays: Math.max(0, form.medicationDurationDays || 0),
+        paymentNote: form.paymentNote.trim(),
         updatedBy: currentUser.uid,
-        updatedAt: new Date(),
+        // Older records can lack a payment type; don't write an empty one.
+        ...(form.paymentType ? { paymentType: form.paymentType } : {}),
       };
 
       await pharmacyService.updateMedicinePurchase(purchase.id, updateData);
@@ -396,13 +164,13 @@ export default function PurchaseEditPage() {
         color: "success",
       });
 
-      // Navigate back to detail page
       navigate(`/dashboard/pharmacy/purchase/${purchase.id}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating purchase:", error);
       addToast({
         title: "Error",
-        description: "Failed to update purchase. Please try again.",
+        description:
+          error?.message || "Failed to update purchase. Please try again.",
         color: "danger",
       });
     } finally {
@@ -410,13 +178,14 @@ export default function PurchaseEditPage() {
     }
   };
 
-  // Handle cancel with confirmation
-  const handleCancel = () => {
-    confirmModalState.open();
-  };
+  const goBack = () => navigate(`/dashboard/pharmacy/purchase/${purchaseId}`);
 
-  const confirmCancel = () => {
-    navigate(`/dashboard/pharmacy/purchase/${purchaseId}`);
+  const handleCancel = () => {
+    if (isDirty) {
+      confirmModalState.open();
+    } else {
+      goBack();
+    }
   };
 
   if (loading) {
@@ -463,21 +232,22 @@ export default function PurchaseEditPage() {
   }
 
   const isLocked = Boolean(purchase.irdSynced);
+  const taxLabel = pharmacySettings?.taxLabel || "Tax";
+  const returnedAmount =
+    purchase.totalReturnedAmount && purchase.totalReturnedAmount > 0
+      ? purchase.totalReturnedAmount
+      : (purchase.returns ?? []).reduce(
+          (sum, r) => sum + Math.abs(r.totalAmount || 0),
+          0,
+        );
 
   return (
     <>
       <div className="flex flex-col gap-6">
-        {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Button
-                isIconOnly
-                variant="light"
-                onPress={() =>
-                  navigate(`/dashboard/pharmacy/purchase/${purchaseId}`)
-                }
-              >
+              <Button isIconOnly variant="light" onPress={handleCancel}>
                 <IoArrowBackOutline size={20} />
               </Button>
               <h1 className={`${title({ size: "lg" })} text-primary`}>
@@ -501,7 +271,7 @@ export default function PurchaseEditPage() {
             </Button>
             <Button
               color="primary"
-              isDisabled={saving || isLocked}
+              isDisabled={saving || isLocked || !isDirty}
               isLoading={saving}
               startContent={<IoSaveOutline size={18} />}
               title={
@@ -520,344 +290,176 @@ export default function PurchaseEditPage() {
           <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 text-[13px] text-amber-800">
             <strong>This purchase has already been synced to IRD.</strong>{" "}
             Per IRD compliance rules, nothing on it can be changed anymore —
-            not the amounts, and not patient or item details either. Saving
-            has been disabled below. To reverse or adjust a synced purchase,
-            use Record Return from the purchase detail page instead.
+            not the amounts, and not patient or payment details either.
+            Saving has been disabled below. To reverse or adjust a synced
+            purchase, use Record Return from the purchase detail page instead.
           </div>
         )}
 
-        {/* Edit Form */}
         <Card>
           <CardBody className="space-y-6">
-            {/* Patient Name */}
-            <Input
-              label="Patient Name (optional)"
-              placeholder="Enter patient name"
-              value={purchaseForm.patientName}
-              onChange={(e) =>
-                setPurchaseForm((prev) => ({
-                  ...prev,
-                  patientName: e.target.value,
-                }))
-              }
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                isDisabled={isLocked}
+                label="Patient Name (optional)"
+                placeholder="Enter patient name"
+                value={form.patientName}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, patientName: e.target.value }))
+                }
+              />
 
-            <Input
-              description="Controls the reminder shown in the pharmacy list"
-              label="Medication Duration (days)"
-              min={0}
-              placeholder="e.g., 30"
-              type="number"
-              value={
-                purchaseForm.medicationDurationDays
-                  ? purchaseForm.medicationDurationDays.toString()
-                  : ""
-              }
-              onChange={(e) =>
-                setPurchaseForm((prev) => ({
-                  ...prev,
-                  medicationDurationDays: Math.max(
-                    0,
-                    parseInt(e.target.value, 10) || 0,
-                  ),
-                }))
-              }
-            />
+              <Input
+                description="Controls the reminder shown in the pharmacy list"
+                isDisabled={isLocked}
+                label="Medication Duration (days)"
+                min={0}
+                placeholder="e.g., 30"
+                type="number"
+                value={
+                  form.medicationDurationDays
+                    ? form.medicationDurationDays.toString()
+                    : ""
+                }
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    medicationDurationDays: Math.max(
+                      0,
+                      parseInt(e.target.value, 10) || 0,
+                    ),
+                  }))
+                }
+              />
 
-            {/* Purchase Items */}
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-stat-sm font-medium">Purchase Items</h4>
-                <Button
-                  color="primary"
-                  size="sm"
-                  startContent={<IoAddOutline />}
-                  variant="flat"
-                  onPress={addPurchaseItem}
-                >
-                  Add Item
-                </Button>
-              </div>
+              <Select
+                disallowEmptySelection
+                isDisabled={isLocked}
+                isRequired
+                label="Payment Type"
+                selectedKeys={form.paymentType ? [form.paymentType] : []}
+                onSelectionChange={(keys) => {
+                  const selectedKey = Array.from(keys)[0] as string;
 
-              <div className="space-y-4">
-                {purchaseItems.map((item) => (
-                  <Card key={item.id} className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-                      <div>
-                        <Select
-                          disallowEmptySelection
-                          isRequired
-                          label="Type *"
-                          selectedKeys={[item.type]}
-                          onSelectionChange={(keys) => {
-                            const selectedType = Array.from(keys)[0] as
-                              | "medicine"
-                              | "item";
-
-                            updatePurchaseItem(item.id, "type", selectedType);
-                          }}
-                        >
-                          <SelectItem
-                            key="medicine"
-                            startContent={<IoMedicalOutline />}
-                          >
-                            Medicine
-                          </SelectItem>
-                          <SelectItem
-                            key="item"
-                            startContent={<IoStorefrontOutline />}
-                          >
-                            Item
-                          </SelectItem>
-                        </Select>
-                      </div>
-
-                      <div
-                        className={
-                          item.type === "medicine"
-                            ? "md:col-span-1"
-                            : "md:col-span-2"
-                        }
-                      >
-                        <Autocomplete
-                          isRequired
-                          label={`${item.type === "medicine" ? "Medicine" : "Item"} *`}
-                          placeholder={`Select ${item.type}`}
-                          selectedKey={item.productId}
-                          onSelectionChange={(key) =>
-                            updatePurchaseItem(
-                              item.id,
-                              "productId",
-                              key as string,
-                            )
-                          }
-                        >
-                          {item.type === "medicine"
-                            ? medicines.map((medicine) => (
-                                <AutocompleteItem
-                                  key={medicine.id}
-                                  textValue={medicine.name}
-                                >
-                                  <div className="flex flex-col">
-                                    <span className="text-small">
-                                      {medicine.name}
-                                    </span>
-                                    <span className="text-tiny text-default-400">
-                                      {medicine.genericName} • NPR{" "}
-                                      {medicine.price}
-                                    </span>
-                                  </div>
-                                </AutocompleteItem>
-                              ))
-                            : items.map((itemData) => (
-                                <AutocompleteItem
-                                  key={itemData.id}
-                                  textValue={itemData.name}
-                                >
-                                  <div className="flex flex-col">
-                                    <span className="text-small">
-                                      {itemData.name}
-                                    </span>
-                                    <span className="text-tiny text-default-400">
-                                      {itemData.category} • NPR{" "}
-                                      {itemData.salePrice}
-                                    </span>
-                                  </div>
-                                </AutocompleteItem>
-                              ))}
-                        </Autocomplete>
-                      </div>
-
-                      {item.type === "medicine" && (
-                        <Input
-                          isRequired
-                          label="Expiry Date *"
-                          type="date"
-                          value={item.expiryDate || ""}
-                          onChange={(e) =>
-                            updatePurchaseItem(
-                              item.id,
-                              "expiryDate",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      )}
-
-                      <Input
-                        isRequired
-                        label="MRP, incl. tax (NPR) *"
-                        startContent="NPR"
-                        type="number"
-                        value={(item.salePrice || 0).toString()}
-                        onChange={(e) =>
-                          updatePurchaseItem(
-                            item.id,
-                            "salePrice",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                      />
-
-                      <Input
-                        label="Tax Rate (% of MRP)"
-                        max={100}
-                        min={0}
-                        type="number"
-                        value={(
-                          item.taxRate ?? purchaseForm.taxPercentage
-                        ).toString()}
-                        onChange={(e) => {
-                          const n = parseFloat(e.target.value);
-
-                          updatePurchaseItem(
-                            item.id,
-                            "taxRate",
-                            Math.min(100, Math.max(0, isNaN(n) ? 0 : n)),
-                          );
-                        }}
-                      />
-
-                      <Input
-                        isRequired
-                        label="Quantity *"
-                        type="number"
-                        value={(item.quantity || 0).toString()}
-                        onChange={(e) =>
-                          updatePurchaseItem(
-                            item.id,
-                            "quantity",
-                            parseInt(e.target.value) || 0,
-                          )
-                        }
-                      />
-
-                      <div className="flex gap-2 items-end">
-                        <Input
-                          isReadOnly
-                          label="Amount"
-                          startContent="NPR"
-                          type="number"
-                          value={(item.amount || 0).toString()}
-                        />
-                        {purchaseItems.length > 1 && (
-                          <Button
-                            isIconOnly
-                            color="danger"
-                            variant="flat"
-                            onPress={() => removePurchaseItem(item.id)}
-                          >
-                            <IoTrashOutline />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
+                  setForm((prev) => ({ ...prev, paymentType: selectedKey }));
+                }}
+              >
+                {paymentOptions.map((option) => (
+                  <SelectItem key={option.key}>{option.name}</SelectItem>
                 ))}
+              </Select>
+
+              <Input
+                isDisabled={isLocked}
+                label="Payment Note (optional)"
+                placeholder="Add any payment related notes..."
+                value={form.paymentNote}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, paymentNote: e.target.value }))
+                }
+              />
+            </div>
+
+            <Divider />
+
+            <div>
+              <h4 className="text-stat-sm font-medium">Items Sold</h4>
+              <p className="text-[13px] text-default-500 mt-1 mb-4">
+                Items and amounts can&apos;t be changed after a sale — the
+                stock was already deducted and the invoice recorded when it
+                was made. To correct a line, record a Return from the purchase
+                detail page and make a new sale.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-default-500 border-b border-default-200">
+                      <th className="py-2 pr-3 font-medium">Item</th>
+                      <th className="py-2 pr-3 font-medium">Batch</th>
+                      <th className="py-2 pr-3 font-medium">Expiry</th>
+                      <th className="py-2 pr-3 font-medium text-right">Qty</th>
+                      <th className="py-2 pr-3 font-medium text-right">
+                        MRP
+                      </th>
+                      <th className="py-2 pr-3 font-medium text-right">
+                        {taxLabel} %
+                      </th>
+                      <th className="py-2 pr-3 font-medium">HS Code</th>
+                      <th className="py-2 font-medium text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchase.items.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="border-b border-default-100 last:border-0"
+                      >
+                        <td className="py-2 pr-3">
+                          <div>{item.medicineName}</div>
+                          {item.type === "item" && (
+                            <div className="text-tiny text-default-400">
+                              Item
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3">{item.batchNumber || "—"}</td>
+                        <td className="py-2 pr-3">{item.expiryDate || "—"}</td>
+                        <td className="py-2 pr-3 text-right">
+                          {item.quantity}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          {npr(item.mrp ?? item.salePrice)}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          {item.taxRate ?? purchase.taxPercentage}
+                        </td>
+                        <td className="py-2 pr-3">{item.hsCode || "—"}</td>
+                        <td className="py-2 text-right">{npr(item.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 
             <Divider />
 
-            {/* Summary Section */}
             <div>
               <h4 className="text-stat-sm font-medium mb-4">
                 Purchase Summary
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  isReadOnly
-                  label="Total *"
-                  startContent="NPR"
-                  type="number"
-                  value={(purchaseForm.total || 0).toString()}
-                />
-
-                <Input
-                  label="Discount"
-                  startContent="NPR"
-                  type="number"
-                  value={(purchaseForm.discount || 0).toString()}
-                  onChange={(e) =>
-                    setPurchaseForm((prev) => ({
-                      ...prev,
-                      discount: parseFloat(e.target.value) || 0,
-                    }))
-                  }
-                />
-
-                <Input
-                  endContent="%"
-                  label={`${pharmacySettings?.taxLabel || "Tax"} %`}
-                  type="number"
-                  value={(purchaseForm.taxPercentage || 0).toString()}
-                  onChange={(e) =>
-                    setPurchaseForm((prev) => ({
-                      ...prev,
-                      taxPercentage: parseFloat(e.target.value) || 0,
-                    }))
-                  }
-                />
-
-                <Input
-                  isReadOnly
-                  description="Based on total and tax%"
-                  label="Tax Amount"
-                  startContent="NPR"
-                  type="number"
-                  value={(purchaseForm.taxAmount || 0).toString()}
-                />
-
-                <Input
-                  isReadOnly
-                  classNames={{
-                    input: "font-bold text-stat-sm",
-                  }}
-                  label="Net Amount *"
-                  startContent="NPR"
-                  type="number"
-                  value={(purchaseForm.netAmount || 0).toString()}
-                />
-
-                <Select
-                  disallowEmptySelection
-                  isRequired
-                  label="Choose Payment Type *"
-                  selectedKeys={[purchaseForm.paymentType]}
-                  onSelectionChange={(keys) => {
-                    const selectedKey = Array.from(keys)[0] as string;
-
-                    setPurchaseForm((prev) => ({
-                      ...prev,
-                      paymentType: selectedKey,
-                    }));
-                  }}
-                >
-                  {getAvailablePaymentMethods().map((method) => (
-                    <SelectItem key={method.key}>{method.name}</SelectItem>
-                  ))}
-                </Select>
-
-                <div className="md:col-span-2">
-                  <Input
-                    label="Payment Note (optional)"
-                    placeholder="Add any payment related notes..."
-                    value={purchaseForm.paymentNote}
-                    onChange={(e) =>
-                      setPurchaseForm((prev) => ({
-                        ...prev,
-                        paymentNote: e.target.value,
-                      }))
-                    }
-                  />
+              <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <dt className="text-default-500">Total</dt>
+                  <dd>{npr(purchase.total)}</dd>
                 </div>
-              </div>
+                <div>
+                  <dt className="text-default-500">Discount</dt>
+                  <dd>{npr(purchase.discount)}</dd>
+                </div>
+                <div>
+                  <dt className="text-default-500">{taxLabel} Amount</dt>
+                  <dd>{npr(purchase.taxAmount)}</dd>
+                </div>
+                <div>
+                  <dt className="text-default-500">Net Amount</dt>
+                  <dd className="font-bold text-stat-sm">
+                    {npr(purchase.netAmount)}
+                  </dd>
+                </div>
+                {returnedAmount > 0 && (
+                  <div>
+                    <dt className="text-default-500">Returned</dt>
+                    <dd>{npr(returnedAmount)}</dd>
+                  </div>
+                )}
+              </dl>
             </div>
           </CardBody>
         </Card>
       </div>
 
-      {/* Confirmation Modal */}
       <Modal
         isDismissable={false}
         isOpen={confirmModalState.isOpen}
@@ -881,7 +483,7 @@ export default function PurchaseEditPage() {
             >
               Stay and Continue Editing
             </Button>
-            <Button color="danger" onPress={confirmCancel}>
+            <Button color="danger" onPress={goBack}>
               Discard Changes
             </Button>
           </ModalFooter>

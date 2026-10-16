@@ -936,33 +936,73 @@ export const pharmacyService = {
   },
 
   /**
-   * Update a medicine purchase
+   * Update the bookkeeping and contact details of a medicine purchase.
+   * Items, amounts and identity fields are refused outright — see below.
    */
   async updateMedicinePurchase(
     id: string,
     updateData: Partial<
-      Omit<MedicinePurchase, "id" | "createdAt" | "updatedAt">
+      Omit<
+        MedicinePurchase,
+        | "id"
+        | "createdAt"
+        | "updatedAt"
+        | "items"
+        | "total"
+        | "discount"
+        | "taxPercentage"
+        | "taxAmount"
+        | "taxableAmount"
+        | "exemptAmount"
+        | "netAmount"
+        | "purchaseNo"
+        | "purchaseDate"
+        | "clinicId"
+        | "branchId"
+        | "createdBy"
+      >
     >,
   ): Promise<void> {
     try {
+      // Items and amounts are frozen the moment a sale is created: stock was
+      // deducted and the ledger filing queued inside that same transaction,
+      // and nothing in this function re-balances either. Letting a caller
+      // overwrite them left the shelf, the Stock Book and the invoice
+      // disagreeing with no trace. Corrections go through a Return.
+      const frozenFields = new Set([
+        "items",
+        "total",
+        "discount",
+        "taxPercentage",
+        "taxAmount",
+        "taxableAmount",
+        "exemptAmount",
+        "netAmount",
+        "purchaseNo",
+        "purchaseDate",
+        "clinicId",
+        "branchId",
+        "createdBy",
+      ]);
+      const frozenTouched = Object.keys(updateData).filter((key) =>
+        frozenFields.has(key),
+      );
+
+      if (frozenTouched.length > 0) {
+        throw new Error(
+          `Items and amounts of a pharmacy sale cannot be edited (${frozenTouched.join(", ")}). Record a Return and make a new sale instead.`,
+        );
+      }
+
       const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, id);
       const prevDoc = await getDoc(docRef);
       const prevData = prevDoc.exists() ? prevDoc.data() : null;
 
       // IRD COMPLIANCE (Clause 6(ख)/(ट)): once a purchase is synced to IRD,
-      // neither its financial fields nor any other business/identity data
-      // may be silently modified — this function previously had no guard at
-      // all, unlike its appointment/pathology billing counterparts. Only
+      // no business/identity data may be silently modified either. Only
       // system-driven bookkeeping fields (payment recording, sync retries)
       // may still change post-sync.
       if (prevData && (prevData as any).irdSynced) {
-        const financialKeys = [
-          "total",
-          "discount",
-          "taxPercentage",
-          "taxAmount",
-          "netAmount",
-        ];
         const allowedPostSyncFields = new Set([
           "paymentStatus",
           "paymentHistory",
@@ -985,12 +1025,6 @@ export const pharmacyService = {
               : (newVal || 0) !== (oldVal || 0);
 
           if (!changed) continue;
-
-          if (financialKeys.includes(key) || key === "items") {
-            throw new Error(
-              "IRD Tax Compliance Error: Financial fields of an IRD-synced purchase cannot be modified. Issue a Return instead.",
-            );
-          }
 
           throw new Error(
             "IRD Tax Compliance Error: Data of an IRD-synced purchase cannot be modified. Issue a Return instead.",
