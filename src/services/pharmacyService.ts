@@ -24,6 +24,7 @@ import {
   PaymentMethod,
 } from "../types/models";
 import { calculateTaxInclusiveBreakdown } from "../utils/taxEngine";
+import { computeReturnTaxSplit } from "./core/pharmacyReturnTaxCore";
 import { planStockDeduction } from "./core/stockFefoCore";
 
 const MEDICINE_PURCHASES_COLLECTION = "medicinePurchases";
@@ -1321,22 +1322,46 @@ export const pharmacyService = {
         const now = Timestamp.now();
         const generatedId = doc(collection(db, "temp")).id;
 
+        // Each returned line reverses the VAT it was actually sold with —
+        // its own rate and HS code, read from the original line — rather
+        // than one ratio blended across the whole original cart, which
+        // filed VAT on a return of an exempt medicine whenever the cart
+        // also held a taxable one.
+        const taxSplit = computeReturnTaxSplit({
+          originalItems: originalPurchase.items || [],
+          purchaseTaxPercentage: originalPurchase.taxPercentage || 0,
+          returnItems: returnData.items,
+        });
+        const taxLineByItem = new Map(
+          taxSplit.lines.map((line) => [line.purchaseItemId, line]),
+        );
+
         const returnRecord: any = {
           id: generatedId,
           clinicId: returnData.clinicId,
           branchId: returnData.branchId || "",
           purchaseId: returnData.purchaseId,
           totalAmount: returnData.totalAmount,
+          taxableAmount: taxSplit.taxableAmount,
+          taxAmount: taxSplit.taxAmount,
+          exemptAmount: taxSplit.exemptAmount,
           refundMethod: returnData.refundMethod,
-          items: returnData.items.map((item: any) => ({
-            id: item.id,
-            purchaseItemId: item.purchaseItemId,
-            medicineId: item.medicineId,
-            medicineName: item.medicineName,
-            quantity: item.quantity,
-            amount: item.amount,
-            ...(item.reason && { reason: item.reason }),
-          })),
+          items: returnData.items.map((item: any) => {
+            const taxLine = taxLineByItem.get(item.purchaseItemId);
+
+            return {
+              id: item.id,
+              purchaseItemId: item.purchaseItemId,
+              medicineId: item.medicineId,
+              medicineName: item.medicineName,
+              quantity: item.quantity,
+              amount: item.amount,
+              taxRate: taxLine?.taxRate ?? 0,
+              taxAmount: taxLine?.taxAmount ?? 0,
+              ...(taxLine?.hsCode && { hsCode: taxLine.hsCode }),
+              ...(item.reason && { reason: item.reason }),
+            };
+          }),
           createdBy: returnData.createdBy,
           createdAt: now,
           ...(returnData.notes && { notes: returnData.notes }),
@@ -1372,15 +1397,6 @@ export const pharmacyService = {
         // only console.warn'd and left no trace at all — strictly worse than
         // the sale path, because nothing recorded that a filing was owed.
         const returnGross = Math.abs(Number(returnData.totalAmount) || 0);
-        const originalRatio =
-          (originalPurchase.netAmount || 0) > 0 && (originalPurchase.taxAmount || 0) > 0
-            ? (originalPurchase.taxAmount || 0) / (originalPurchase.netAmount || 0)
-            : 0;
-        const qTaxAmount = originalRatio > 0
-          ? Math.round(returnGross * originalRatio)
-          : 0;
-        const qTaxable = originalRatio > 0 ? returnGross - qTaxAmount : 0;
-        const qExempt = originalRatio > 0 ? 0 : returnGross;
 
         const returnOutboxRef = doc(
           collection(db, BILLING_SYNC_OUTBOX_COLLECTION),
@@ -1391,9 +1407,9 @@ export const pharmacyService = {
           patientName: originalPurchase.patientName,
           patientPanVat: (originalPurchase as any).patientPanVat,
           totalAmount: -returnGross,
-          taxableAmount: -qTaxable,
-          taxAmount: -qTaxAmount,
-          exemptAmount: -qExempt,
+          taxableAmount: -taxSplit.taxableAmount,
+          taxAmount: -taxSplit.taxAmount,
+          exemptAmount: -taxSplit.exemptAmount,
           irdEnabled: Boolean(clinicForReturn?.irdEnabled),
           // The original sale's fiscal year, matching what the existing
           // inline sync already sends — a credit note is filed against the
@@ -1415,14 +1431,18 @@ export const pharmacyService = {
           idempotencyDiscriminator: returnOutboxRef.id,
           sourceCollection: MEDICINE_PURCHASES_COLLECTION,
           sourceDocId: purchaseId,
-          items: returnData.items.map((item: any) => ({
-            itemName: item.medicineName || "Return Item",
-            quantity: -Math.abs(item.quantity || 1),
-            rate: Math.abs((item.amount || 0) / (item.quantity || 1)),
-            totalAmount: -Math.abs(item.amount || 0),
-            isTaxable: originalRatio > 0,
-            hsCode: item.hsCode,
-          })),
+          items: returnData.items.map((item: any) => {
+            const taxLine = taxLineByItem.get(item.purchaseItemId);
+
+            return {
+              itemName: item.medicineName || "Return Item",
+              quantity: -Math.abs(item.quantity || 1),
+              rate: Math.abs((item.amount || 0) / (item.quantity || 1)),
+              totalAmount: -Math.abs(item.amount || 0),
+              isTaxable: (taxLine?.taxRate ?? 0) > 0,
+              hsCode: taxLine?.hsCode,
+            };
+          }),
         });
 
         transaction.set(returnOutboxRef, {

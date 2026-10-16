@@ -1046,6 +1046,13 @@ export interface MedicinePurchaseReturnItem {
   quantity: number;
   /** Amount attributed to this line in the return (after discount/tax allocation) */
   amount: number;
+  /** VAT rate the original line was sold at — copied from it, so the
+   * credit note reverses this line's own VAT rather than a cart-wide ratio. */
+  taxRate?: number;
+  /** VAT backed out of this line's MRP-inclusive refund at taxRate. */
+  taxAmount?: number;
+  /** Copied from the original line; see MedicinePurchaseItem.hsCode. */
+  hsCode?: string;
   reason?: string;
 }
 
@@ -1057,6 +1064,11 @@ export interface MedicinePurchaseReturn {
   purchaseId: string;
   /** Negative value representing the credit/refund to the patient */
   totalAmount: number;
+  /** Positive split of totalAmount, summed per line at each line's own
+   * rate — the figures the credit note is filed with. */
+  taxableAmount?: number;
+  taxAmount?: number;
+  exemptAmount?: number;
   /** How the refund/credit was given (cash, card, adjustment, etc.) */
   refundMethod?: string;
   /** Mandatory documented reason for the return — required per IRD's reversal provisions. */

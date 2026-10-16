@@ -145,9 +145,11 @@ function returnsToComparables(purchase: any): ComparableDoc[] {
       number: normNumber(r.creditNoteNumber ?? ""),
       date: toDate(r.createdAt),
       total: -Math.abs(n(r.totalAmount)),
-      taxable: 0,
-      tax: 0,
-      exempt: 0,
+      // Returns recorded before the per-line split was stored have none of
+      // these and compare as 0, exactly as they always did.
+      taxable: -Math.abs(n(r.taxableAmount)),
+      tax: -Math.abs(n(r.taxAmount)),
+      exempt: -Math.abs(n(r.exemptAmount)),
       discount: 0,
       irdSynced: Boolean(r.irdSynced),
       javaInvoiceId: r.javaInvoiceId as number,
