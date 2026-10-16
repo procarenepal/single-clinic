@@ -510,6 +510,30 @@ export default function BillingCounterPage() {
       return;
     }
 
+    // A medicine line at NPR 0 still leaves the shelf — the price field
+    // accepts 0, and nothing else checked it, so stock went out with
+    // nothing billed for it. Services and lab tests can legitimately be
+    // free (a package session is a zero-price line), medicine cannot.
+    const unpriced = items.find(
+      (it) =>
+        !(it.quantity > 0) || (it.lineKind === "medicine" && !(it.price > 0)),
+    );
+
+    if (unpriced) {
+      addToast({
+        title: `${unpriced.appointmentTypeName || "A line"} needs a quantity${
+          unpriced.lineKind === "medicine" ? " and a price" : ""
+        } above 0`,
+        description:
+          unpriced.lineKind === "medicine"
+            ? "Dispensing medicine at NPR 0 would deduct stock with nothing billed for it."
+            : "Set the quantity before issuing the invoice.",
+        color: "danger",
+      });
+
+      return;
+    }
+
     // This counter had no awareness of front office at all. Front office
     // now accumulates a visit's charges on the appointment and files ONE
     // invoice at checkout — and for that whole window the appointment

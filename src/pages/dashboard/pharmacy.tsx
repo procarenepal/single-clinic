@@ -1238,7 +1238,9 @@ export default function PharmacyPage() {
         setMedicineStocks(sMap);
         setRawStocks(sData);
 
-        setItems(itemsData);
+        // Inventory records clinic assets (an autoclave, a laser handpiece)
+        // in the same collection with salePrice 0; they are not for sale.
+        setItems(itemsData.filter((item) => item.itemType !== "asset"));
         setPurchases([
           ...(purchasesData as MedicinePurchase[]),
           ...billingCounterMedicineSales,
@@ -2497,15 +2499,28 @@ export default function PharmacyPage() {
       return;
     }
 
-    // Validate form
-    const hasValidItems = purchaseItems.some(
-      (item) => item.productId && item.quantity > 0 && item.salePrice > 0,
+    // Validate form. Every chosen line must carry a quantity and a price —
+    // checking that SOME line did let a second line with its price cleared
+    // to 0 through, which then left the shelf with nothing billed for it.
+    const chosenItems = purchaseItems.filter((item) => item.productId);
+    const incomplete = chosenItems.find(
+      (item) => !(item.quantity > 0) || !(item.salePrice > 0),
     );
 
-    if (!hasValidItems) {
+    if (chosenItems.length === 0) {
       addToast({
         title: "Validation Error",
         description: "Please add at least one valid item.",
+        color: "warning",
+      });
+
+      return;
+    }
+
+    if (incomplete) {
+      addToast({
+        title: "Validation Error",
+        description: `${incomplete.productName || "An item"} needs a quantity and a price above 0.`,
         color: "warning",
       });
 
