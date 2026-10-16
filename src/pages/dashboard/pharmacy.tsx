@@ -38,6 +38,11 @@ import {
 
 import { calculateTaxInclusiveBreakdown } from "@/utils/taxEngine";
 import {
+  billingLineRate,
+  creditNotesAsReturns,
+  vatOn,
+} from "@/services/core/billingCounterPharmacyCore";
+import {
   courseDurationInDays,
   suggestedDispenseQuantity,
 } from "@/services/core/prescriptionDoseCore";
@@ -324,6 +329,7 @@ import {
   Medicine,
   Item,
   MedicineStock,
+  MedicinePurchaseItem,
 } from "@/types/models";
 
 
@@ -405,17 +411,6 @@ const calculateFEFOAmount = (item: any, batches: MedicineStock[]): number => {
 
   return totalAmount;
 };
-
-interface MedicinePurchaseItem {
-  id: string;
-  medicineId: string;
-  medicineName: string;
-  expiryDate: string;
-  salePrice: number;
-  quantity: number;
-  amount: number;
-  type?: "medicine" | "item";
-}
 
 interface ItemPurchaseItem {
   id: string;
@@ -1147,52 +1142,84 @@ export default function PharmacyPage() {
         // MedicinePurchase-shaped row so this module's existing sales
         // list/stat cards/daily reports (all driven off `purchases`) show
         // it for free, instead of silently excluding real, paid revenue.
-        const billingCounterMedicineSales: MedicinePurchase[] = (
-          (appointmentBillingData as any[]) || []
-        )
-          .filter((b) => b.status !== "cancelled")
+        const billingDocs = ((appointmentBillingData as any[]) || []).filter(
+          (b) => b.status !== "cancelled",
+        );
+
+        // Reversals are separate credit-note documents; they become the
+        // original row's returns (see creditNotesAsReturns) rather than
+        // phantom sales of their own.
+        const creditNotesByOriginal = new Map<string, any[]>();
+
+        for (const b of billingDocs) {
+          if (b.isCreditNote && b.linkedInvoiceId) {
+            creditNotesByOriginal.set(b.linkedInvoiceId, [
+              ...(creditNotesByOriginal.get(b.linkedInvoiceId) || []),
+              b,
+            ]);
+          }
+        }
+
+        const billingCounterMedicineSales: MedicinePurchase[] = billingDocs
+          .filter((b) => !b.isCreditNote)
           .flatMap((b) =>
             (b.items || [])
               .filter((item: any) => item.lineKind === "medicine")
-              .map((item: any) => ({
-                id: `bc:${b.id}:${item.id}`,
-                purchaseNo: b.invoiceNumber,
-                items: [
-                  {
-                    id: item.id,
-                    medicineId: item.appointmentTypeId,
-                    medicineName: item.appointmentTypeName,
-                    expiryDate:
-                      item.batchAllocations?.[0]?.expiryDate || "",
-                    salePrice: item.price,
-                    quantity: item.quantity,
-                    amount: item.amount,
-                    batchNumber: item.batchAllocations?.[0]?.batchNumber,
-                    taxRate: item.taxRate,
-                    hsCode: item.hsCode,
-                  },
-                ],
-                total: (item.price || 0) * (item.quantity || 0),
-                discount: item.discountAmount || 0,
-                taxPercentage: item.taxRate || 0,
-                taxAmount: 0,
-                netAmount: item.amount || 0,
-                paymentType: b.paymentMethod || "cash",
-                paymentStatus: b.paymentStatus,
-                paymentNote: "",
-                patientName: b.patientName,
-                patientPanVat: b.patientPanVat || b.buyerPan,
-                purchaseDate: b.invoiceDate,
-                clinicId: b.clinicId,
-                branchId: b.branchId || b.clinicId,
-                irdSynced: b.irdSynced,
-                cbmsResponseCode: b.cbmsResponseCode,
-                createdBy: b.createdBy,
-                createdAt: b.invoiceDate,
-                updatedAt: b.invoiceDate,
-                sourceType: "billing-counter" as const,
-                sourceBillingId: b.id,
-              })),
+              .map((item: any): MedicinePurchase => {
+                // Billing Counter lines are tax-exclusive — rebuild the
+                // VAT so the row shows what was actually collected.
+                const rate = billingLineRate(b, item);
+                const lineAmount = item.amount || 0;
+                const vat = vatOn(lineAmount, rate);
+                const { returns, totalReturnedAmount } = creditNotesAsReturns({
+                  invoice: b,
+                  item,
+                  rate,
+                  creditNotes: creditNotesByOriginal.get(b.id) || [],
+                });
+
+                return {
+                  id: `bc:${b.id}:${item.id}`,
+                  purchaseNo: b.invoiceNumber,
+                  items: [
+                    {
+                      id: item.id,
+                      medicineId: item.appointmentTypeId,
+                      medicineName: item.appointmentTypeName,
+                      expiryDate:
+                        item.batchAllocations?.[0]?.expiryDate || "",
+                      salePrice: item.price,
+                      quantity: item.quantity,
+                      amount: lineAmount,
+                      batchNumber: item.batchAllocations?.[0]?.batchNumber,
+                      taxRate: rate,
+                      hsCode: item.hsCode,
+                    },
+                  ],
+                  total: (item.price || 0) * (item.quantity || 0),
+                  discount: item.discountAmount || 0,
+                  taxPercentage: rate,
+                  taxAmount: vat,
+                  netAmount: lineAmount + vat,
+                  paymentType: b.paymentMethod || "cash",
+                  paymentStatus: b.paymentStatus,
+                  paymentNote: "",
+                  patientName: b.patientName,
+                  patientPanVat: b.patientPanVat || b.buyerPan,
+                  purchaseDate: b.invoiceDate,
+                  clinicId: b.clinicId,
+                  branchId: b.branchId || b.clinicId,
+                  irdSynced: b.irdSynced,
+                  cbmsResponseCode: b.cbmsResponseCode,
+                  createdBy: b.createdBy,
+                  createdAt: b.invoiceDate,
+                  updatedAt: b.invoiceDate,
+                  returns,
+                  totalReturnedAmount,
+                  sourceType: "billing-counter" as const,
+                  sourceBillingId: b.id,
+                };
+              }),
           );
 
         setMedicines(medicinesData as Medicine[]);
