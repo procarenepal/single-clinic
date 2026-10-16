@@ -5,6 +5,7 @@ import type {
   FollowupUpdatedStatus,
   FollowupStatus,
   User,
+  Expert,
 } from "@/types/models";
 
 import React, { useState, useEffect } from "react";
@@ -28,6 +29,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { useLoggedInClinicianName } from "@/hooks/useLoggedInClinicianName";
 import { useClinicianNameMap } from "@/hooks/useClinicianNameMap";
 import { resolveStaffDisplayName } from "@/services/core/clinicianDisplayCore";
+import { expertService } from "@/services/expertService";
 import { followupService } from "@/services/followupService";
 import { patientService } from "@/services/patientService";
 import { prescriptionService } from "@/services/prescriptionService";
@@ -71,14 +73,35 @@ export default function FollowupModal({
   const [patientHistory, setPatientHistory] = useState<any>(null);
   const [activeFollowupId, setActiveFollowupId] = useState<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
 
   useEffect(() => {
     if (isOpen && clinicId) {
       patientService.getPatientsByClinic(clinicId).then(setPatients);
       userService.getClinicUsers(clinicId).then(setUsers);
+      expertService
+        .getExpertsByClinic(clinicId)
+        .then(setExperts)
+        .catch(() => setExperts([]));
       setPatientHistory(null);
     }
   }, [isOpen, clinicId]);
+
+  // Every active expert gets a place in "Followed By". Experts who already have
+  // a login account are in `users` (under their real name), so only those with
+  // no account are added here — matching by email, as the name map does.
+  const expertsWithoutAccount = React.useMemo(() => {
+    const accountEmails = new Set(
+      users.map((u) => (u.email || "").trim().toLowerCase()).filter(Boolean),
+    );
+
+    return experts.filter(
+      (x) =>
+        x.isActive !== false &&
+        !x.isDeleted &&
+        !(x.email && accountEmails.has(x.email.trim().toLowerCase())),
+    );
+  }, [users, experts]);
 
   const [formData, setFormData] = useState({
     patientId: "",
@@ -103,6 +126,7 @@ export default function FollowupModal({
     nextFollowupDate: "",
     followedBy: "",
     followedByUserId: "",
+    followedByExpertId: "",
     noteHistory: [] as any[],
     newNote: "",
   });
@@ -172,8 +196,10 @@ export default function FollowupModal({
             ? new Date(followup.nextFollowupDate).toISOString().split("T")[0]
             : "",
           followedBy: followup.followedBy || loggedInClinicianName,
-          followedByUserId:
-            followup.followedByUserId || currentUser?.uid || "",
+          followedByUserId: followup.followedByExpertId
+            ? ""
+            : followup.followedByUserId || currentUser?.uid || "",
+          followedByExpertId: followup.followedByExpertId || "",
           noteHistory: followup.noteHistory || [],
           newNote: "",
         });
@@ -202,6 +228,7 @@ export default function FollowupModal({
           nextFollowupDate: "",
           followedBy: loggedInClinicianName,
           followedByUserId: currentUser?.uid || "",
+          followedByExpertId: "",
           noteHistory: [],
           newNote: "",
         });
@@ -362,7 +389,10 @@ export default function FollowupModal({
         createdBy: followup?.createdBy || currentUser?.uid || "",
         nextFollowupDate: parseDate(formData.nextFollowupDate),
         followedBy: formData.followedBy,
-        followedByUserId: formData.followedByUserId || undefined,
+        // null (not undefined) so switching between a user and an expert
+        // clears the other field instead of being dropped from the update.
+        followedByUserId: (formData.followedByUserId || null) as any,
+        followedByExpertId: (formData.followedByExpertId || null) as any,
         noteHistory: finalNoteHistory,
       };
 
@@ -417,8 +447,8 @@ export default function FollowupModal({
       backdrop="blur"
       classNames={{
         base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] !max-w-[1100px]",
-        header: "border-b border-[rgb(var(--color-border))] py-4",
-        footer: "border-t border-[rgb(var(--color-border))] py-3",
+        header: "border-b border-[rgb(var(--color-border))] py-5 px-6",
+        footer: "border-t border-[rgb(var(--color-border))] py-4 px-6",
       }}
       isOpen={isOpen}
       scrollBehavior="inside"
@@ -430,31 +460,33 @@ export default function FollowupModal({
           <>
             <ModalHeader>
               <div>
-                <h2 className="text-[16px] font-bold text-primary">
+                <h2 className="text-lg font-semibold text-[rgb(var(--color-text))]">
                   {followup ? "Edit Follow-up" : "Add New Follow-up"}
                 </h2>
-                <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">
+                <p className="text-xs text-[rgb(var(--color-text-muted))] mt-0.5">
                   Track and manage patient follow-ups and treatment schedules.
                 </p>
               </div>
             </ModalHeader>
-            <ModalBody className="py-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2">
+            <ModalBody className="py-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-5">
+                  <h3 className="flex items-center gap-2 rounded-lg bg-[rgb(var(--color-surface-2))] px-3 py-2 text-[13px] font-semibold text-[rgb(var(--color-text))] before:h-4 before:w-1 before:rounded-full before:bg-primary before:content-['']">
                     Patient & Visit Info
                   </h3>
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Patient Name <span className="text-danger">*</span>
                     </label>
                     <Autocomplete
+                      radius="lg"
+                      variant="bordered"
                       allowsCustomValue
                       inputValue={formData.patientName}
                       items={filteredPatients}
                       placeholder="Search or enter patient name"
                       selectedKey={formData.patientId || null}
-                      size="sm"
+                      size="md"
                       onInputChange={(val) => handleChange("patientName", val)}
                       onSelectionChange={async (key) => {
                         if (!key) {
@@ -645,12 +677,14 @@ export default function FollowupModal({
                     </Autocomplete>
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Mobile Number
                     </label>
                     <Input
+                      radius="lg"
+                      variant="bordered"
                       placeholder="Enter number"
-                      size="sm"
+                      size="md"
                       value={formData.patientMobile}
                       onChange={(e) =>
                         handleChange("patientMobile", e.target.value)
@@ -660,12 +694,14 @@ export default function FollowupModal({
                   <div className="flex gap-4">
                     {/* Category Selection */}
                     <div className="flex-1">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Category
                       </label>
                       <Select
+                        radius="lg"
+                        variant="bordered"
                         selectedKeys={[formData.category]}
-                        size="sm"
+                        size="md"
                         onChange={(e) =>
                           handleChange("category", e.target.value)
                         }
@@ -677,11 +713,13 @@ export default function FollowupModal({
                       </Select>
                     </div>
                     <div className="w-1/3">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Visit Date
                       </label>
                       <Input
-                        size="sm"
+                        radius="lg"
+                        variant="bordered"
+                        size="md"
                         type="date"
                         value={formData.visitDate}
                         onChange={(e) =>
@@ -690,12 +728,14 @@ export default function FollowupModal({
                       />
                     </div>
                     <div className="w-1/3">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Session
                       </label>
                       <Input
+                        radius="lg"
+                        variant="bordered"
                         placeholder="e.g. 1st, 2nd"
-                        size="sm"
+                        size="md"
                         value={formData.session}
                         onChange={(e) =>
                           handleChange("session", e.target.value)
@@ -706,7 +746,7 @@ export default function FollowupModal({
 
                   {patientHistory && (
                     <div className="mt-4 p-3 bg-primary/5 rounded-[10px] border border-primary/10">
-                      <h4 className="text-[11px] font-bold text-primary uppercase tracking-wider mb-2">
+                      <h4 className="text-xs font-semibold text-primary mb-2">
                         Patient Overview & History
                       </h4>
                       <div className="space-y-1.5">
@@ -786,17 +826,19 @@ export default function FollowupModal({
                     </div>
                   )}
 
-                  <h3 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2 mt-6">
+                  <h3 className="flex items-center gap-2 rounded-lg bg-[rgb(var(--color-surface-2))] px-3 py-2 text-[13px] font-semibold text-[rgb(var(--color-text))] before:h-4 before:w-1 before:rounded-full before:bg-primary before:content-[''] mt-8">
                     Status & Tracking
                   </h3>
                   <div className="flex gap-4">
                     <div className="flex-1">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Initial Status
                       </label>
                       <Select
+                        radius="lg"
+                        variant="bordered"
                         selectedKeys={[formData.initStatus]}
-                        size="sm"
+                        size="md"
                         onChange={(e) =>
                           handleChange("initStatus", e.target.value)
                         }
@@ -814,15 +856,17 @@ export default function FollowupModal({
                       </Select>
                     </div>
                     <div className="flex-1">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Updated Status
                       </label>
                       <Select
+                        radius="lg"
+                        variant="bordered"
                         placeholder="Select status"
                         selectedKeys={
                           formData.updatedStatus ? [formData.updatedStatus] : []
                         }
-                        size="sm"
+                        size="md"
                         onChange={(e) =>
                           handleChange("updatedStatus", e.target.value)
                         }
@@ -842,7 +886,7 @@ export default function FollowupModal({
                     </div>
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Overall Status
                     </label>
                     {/* Grouped into Lifecycle (is this follow-up still open)
@@ -853,8 +897,10 @@ export default function FollowupModal({
                         so nothing downstream that reads overallStatus needs
                         to change. */}
                     <Select
+                      radius="lg"
+                      variant="bordered"
                       selectedKeys={[formData.overallStatus]}
-                      size="sm"
+                      size="md"
                       onChange={(e) =>
                         handleChange("overallStatus", e.target.value)
                       }
@@ -876,23 +922,48 @@ export default function FollowupModal({
                     </Select>
                   </div>
                   <div className="mt-4">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Followed By
                     </label>
                     <Select
+                      radius="lg"
+                      variant="bordered"
                       placeholder="Select staff"
                       selectedKeys={
-                        formData.followedByUserId
-                          ? [formData.followedByUserId]
-                          : []
+                        formData.followedByExpertId
+                          ? [`expert:${formData.followedByExpertId}`]
+                          : formData.followedByUserId
+                            ? [formData.followedByUserId]
+                            : []
                       }
-                      size="sm"
+                      size="md"
                       onChange={(e) => {
                         // Store the real user id (for reliable "my assigned
                         // follow-ups" queries later) alongside the display
                         // name (kept for existing UI rendering) — previously
                         // only the display-name string was stored, with no
                         // way to look this up by actual identity.
+                        const pickedExpert = e.target.value.startsWith(
+                          "expert:",
+                        )
+                          ? expertsWithoutAccount.find(
+                              (x) => `expert:${x.id}` === e.target.value,
+                            )
+                          : undefined;
+
+                        // An expert with no login account: no user id exists,
+                        // so keep the expert id (and their name) instead.
+                        if (pickedExpert) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            followedByUserId: "",
+                            followedByExpertId: pickedExpert.id,
+                            followedBy: pickedExpert.name,
+                          }));
+
+                          return;
+                        }
+
                         const selectedUser = users.find(
                           (u) => u.id === e.target.value,
                         );
@@ -900,6 +971,7 @@ export default function FollowupModal({
                         setFormData((prev) => ({
                           ...prev,
                           followedByUserId: e.target.value,
+                          followedByExpertId: "",
                           followedBy: selectedUser
                             ? resolveStaffDisplayName(
                               selectedUser,
@@ -909,25 +981,37 @@ export default function FollowupModal({
                         }));
                       }}
                     >
-                      {users.map((u) => (
-                        <SelectItem key={u.id}>
-                          {resolveStaffDisplayName(u, clinicianNameMap)}
-                        </SelectItem>
-                      ))}
+                      {[
+                        ...users.map((u) => (
+                          <SelectItem key={u.id}>
+                            {resolveStaffDisplayName(u, clinicianNameMap)}
+                          </SelectItem>
+                        )),
+                        ...expertsWithoutAccount.map((x) => (
+                          <SelectItem
+                            key={`expert:${x.id}`}
+                            textValue={`${x.name} (Expert)`}
+                          >
+                            {x.name} (Expert)
+                          </SelectItem>
+                        )),
+                      ]}
                     </Select>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2">
+                <div className="space-y-5 md:border-l md:border-[rgb(var(--color-border))] md:pl-8">
+                  <h3 className="flex items-center gap-2 rounded-lg bg-[rgb(var(--color-surface-2))] px-3 py-2 text-[13px] font-semibold text-[rgb(var(--color-text))] before:h-4 before:w-1 before:rounded-full before:bg-primary before:content-['']">
                     Follow-up Dates
                   </h3>
                   <div className="mb-4">
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Next Follow-up Date
                     </label>
                     <Input
-                      size="sm"
+                      radius="lg"
+                      variant="bordered"
+                      size="md"
                       type="date"
                       value={formData.nextFollowupDate}
                       onChange={(e) =>
@@ -937,11 +1021,13 @@ export default function FollowupModal({
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         First Follow-up
                       </label>
                       <Input
-                        size="sm"
+                        radius="lg"
+                        variant="bordered"
+                        size="md"
                         type="date"
                         value={formData.firstDate}
                         onChange={(e) =>
@@ -950,11 +1036,13 @@ export default function FollowupModal({
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Second Follow-up
                       </label>
                       <Input
-                        size="sm"
+                        radius="lg"
+                        variant="bordered"
+                        size="md"
                         type="date"
                         value={formData.secondDate}
                         onChange={(e) =>
@@ -963,11 +1051,13 @@ export default function FollowupModal({
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Third Follow-up
                       </label>
                       <Input
-                        size="sm"
+                        radius="lg"
+                        variant="bordered"
+                        size="md"
                         type="date"
                         value={formData.thirdDate}
                         onChange={(e) =>
@@ -976,11 +1066,13 @@ export default function FollowupModal({
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Fourth Follow-up
                       </label>
                       <Input
-                        size="sm"
+                        radius="lg"
+                        variant="bordered"
+                        size="md"
                         type="date"
                         value={formData.fourthDate}
                         onChange={(e) =>
@@ -989,11 +1081,13 @@ export default function FollowupModal({
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Fifth Follow-up
                       </label>
                       <Input
-                        size="sm"
+                        radius="lg"
+                        variant="bordered"
+                        size="md"
                         type="date"
                         value={formData.fifthDate}
                         onChange={(e) =>
@@ -1003,18 +1097,20 @@ export default function FollowupModal({
                     </div>
                   </div>
 
-                  <h3 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2 mt-6">
+                  <h3 className="flex items-center gap-2 rounded-lg bg-[rgb(var(--color-surface-2))] px-3 py-2 text-[13px] font-semibold text-[rgb(var(--color-text))] before:h-4 before:w-1 before:rounded-full before:bg-primary before:content-[''] mt-8">
                     Treatment Details
                   </h3>
 
                   {formData.category !== "pharmacy" && (
                     <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         {formData.category === "pathology" ? "Lab Tests" : "Service / Procedures"}
                       </label>
                       <Input
+                        radius="lg"
+                        variant="bordered"
                         placeholder={formData.category === "pathology" ? "e.g. CBC, Lipid Profile" : "e.g. PRP FACE, Consultation"}
-                        size="sm"
+                        size="md"
                         value={formData.service}
                         onChange={(e) => handleChange("service", e.target.value)}
                       />
@@ -1023,25 +1119,29 @@ export default function FollowupModal({
 
                   {(formData.category === "pharmacy" || formData.category === "general" || formData.category === "appointment") && (
                     <div>
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                         Medicines / Products
                       </label>
                       <Input
+                        radius="lg"
+                        variant="bordered"
                         placeholder="e.g. Amoxicillin, TPS NIACINAMIDE 5%"
-                        size="sm"
+                        size="md"
                         value={formData.product}
                         onChange={(e) => handleChange("product", e.target.value)}
                       />
                     </div>
                   )}
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    <label className="text-xs font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Add New Note
                     </label>
                     <div className="flex gap-2">
                       <Input
+                        radius="lg"
+                        variant="bordered"
                         placeholder="Enter new note here..."
-                        size="sm"
+                        size="md"
                         value={formData.newNote}
                         onChange={(e) =>
                           handleChange("newNote", e.target.value)
@@ -1093,7 +1193,7 @@ export default function FollowupModal({
 
                   {formData.noteHistory && formData.noteHistory.length > 0 && (
                     <div className="mt-4">
-                      <h4 className="text-[11px] font-bold text-primary uppercase tracking-wider mb-2">
+                      <h4 className="text-xs font-semibold text-primary mb-2">
                         Notes History
                       </h4>
                       <div className="space-y-2">
@@ -1123,7 +1223,7 @@ export default function FollowupModal({
 
                   {formData.logs && formData.logs.length > 0 && (
                     <div className="mt-6 pt-6 border-t border-[rgb(var(--color-border))]">
-                      <h3 className="text-[12px] font-bold text-primary uppercase tracking-wider mb-3">
+                      <h3 className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-3">
                         Action History
                       </h3>
                       <div className="space-y-3">
@@ -1153,9 +1253,8 @@ export default function FollowupModal({
             </ModalBody>
             <ModalFooter>
               <Button
-                className="font-semibold"
-                color="danger"
-                variant="light"
+                className="font-medium"
+                variant="bordered"
                 onPress={onClose}
               >
                 Cancel

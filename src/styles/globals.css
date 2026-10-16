@@ -401,6 +401,16 @@
     outline-offset: 2px;
     border-radius: var(--card-radius);
   }
+
+  /* HeroUI outlined fields (variant="bordered") already darken their own border
+     on focus. The newer HeroUI theme that ships inside @heroui/react switches
+     the inner <input> outline off with Tailwind v4-only classes, which this
+     Tailwind v3 build never generates — so the rule above also drew a second,
+     purple box inside that border. Keep just the field's own border.
+     (Flat fields have no border, so they keep the outline as their focus cue.) */
+  [data-slot="input-wrapper"].border-medium [data-slot="input"]:focus-visible {
+    outline: none;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
