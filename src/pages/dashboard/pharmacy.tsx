@@ -6,7 +6,6 @@ import {
   isToday,
   isSameDay,
   format,
-  subDays,
 } from "date-fns";
 import toast from "react-hot-toast";
 import {
@@ -42,6 +41,7 @@ import {
   creditNotesAsReturns,
   vatOn,
 } from "@/services/core/billingCounterPharmacyCore";
+import { stockTotalAtEndOfDay } from "@/services/core/stockMovementCore";
 import {
   courseDurationInDays,
   suggestedDispenseQuantity,
@@ -1667,38 +1667,11 @@ export default function PharmacyPage() {
     });
   };
 
-  // Get total items sold (patient purchases) for a specific date
-  const getSalesQuantityForDate = (date: Date): number => {
-    const selectedDate = new Date(date);
-
-    selectedDate.setHours(0, 0, 0, 0);
-
-    return purchases
-      .filter((purchase) => {
-        if (!purchase.purchaseDate) return false;
-        const purchaseDate =
-          purchase.purchaseDate instanceof Date
-            ? purchase.purchaseDate
-            : new Date(purchase.purchaseDate);
-        const purchaseDateForComparison = new Date(purchaseDate);
-
-        purchaseDateForComparison.setHours(0, 0, 0, 0);
-
-        return isSameDay(purchaseDateForComparison, selectedDate);
-      })
-      .reduce(
-        (sum, purchase) =>
-          sum +
-          (purchase.items?.reduce(
-            (itemSum: number, item: { quantity: number }) =>
-              itemSum + (item.quantity || 0),
-            0,
-          ) || 0),
-        0,
-      );
-  };
-
-  // Calculate total stock for a specific date - computed end-of-day: opening + refills - sales
+  // Total stock as it stood at the end of a date: today's live total, less
+  // every movement logged after it (see stockTotalAtEndOfDay). The old
+  // opening-snapshot + refills - sales chain ignored returns and
+  // adjustments and then cached its answer as the next day's opening, so
+  // one unaccounted movement corrupted every later date.
   const calculateTotalStockForDate = async (date: Date) => {
     if (!clinicId || !date) {
       setTotalStock(null);
@@ -1708,73 +1681,25 @@ export default function PharmacyPage() {
 
     setIsLoadingStockSummary(true);
     try {
-      const selectedDateStr = date.toISOString().split("T")[0];
-      const todayStr = new Date().toISOString().split("T")[0];
-
-      // For today: use current stock (live) and save snapshot for future computations
-      if (selectedDateStr === todayStr) {
-        const allStock = await medicineService.getStockByClinic(clinicId);
-        const total = allStock.reduce((sum, stock) => {
-          const regularStock = stock.currentStock || 0;
-          const schemeStock = stock.schemeStock || 0;
-
-          return sum + regularStock + schemeStock;
-        }, 0);
-
-        setTotalStock(total);
-        await medicineService.saveDailyStockSnapshot(
-          clinicId,
-          effectiveBranchId,
-          date,
-          total,
-        );
-
-        return;
-      }
-
-      // For past dates: compute end-of-day = opening (prev day) + refills - sales
-      const prevDate = subDays(date, 1);
-      const openingSnapshot = await medicineService.getDailyStockSnapshot(
-        clinicId,
-        effectiveBranchId,
-        prevDate,
-      );
-
-      if (openingSnapshot === null) {
-        setTotalStock(null);
-
-        return;
-      }
-
-      const startOfDay = new Date(date);
-
-      startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(date);
 
       endOfDay.setHours(23, 59, 59, 999);
 
-      const refillTransactions =
-        await medicineService.getStockTransactionsByClinic(
+      const [allStock, laterMovements] = await Promise.all([
+        medicineService.getStockByClinic(clinicId),
+        medicineService.getStockTransactionsByClinic(
           clinicId,
-          "purchase",
-          startOfDay,
-          endOfDay,
-        );
-      const refillQuantity = refillTransactions.reduce(
-        (sum, t) => sum + (t.quantity || 0),
+          undefined,
+          new Date(endOfDay.getTime() + 1),
+        ),
+      ]);
+      const liveTotal = allStock.reduce(
+        (sum, stock) =>
+          sum + (stock.currentStock || 0) + (stock.schemeStock || 0),
         0,
       );
-      const salesQuantity = getSalesQuantityForDate(date);
-      const total = openingSnapshot + refillQuantity - salesQuantity;
-      const computedTotal = Math.max(0, total);
 
-      await medicineService.saveDailyStockSnapshot(
-        clinicId,
-        effectiveBranchId,
-        date,
-        computedTotal,
-      );
-      setTotalStock(computedTotal);
+      setTotalStock(stockTotalAtEndOfDay(liveTotal, laterMovements));
     } catch (error) {
       console.error("Error calculating total stock for date:", error);
       setTotalStock(null);

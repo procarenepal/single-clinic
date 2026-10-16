@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -33,11 +32,15 @@ const MEDICINE_BRANDS_COLLECTION = "medicineBrands";
 const MEDICINE_CATEGORIES_COLLECTION = "medicineCategories";
 const MEDICINE_STOCK_COLLECTION = "medicineStock";
 const STOCK_TRANSACTIONS_COLLECTION = "stockTransactions";
+
+// Firestore document ids cannot contain "/"; a batch number otherwise is
+// fine as-is.
+const newBatchStockId = (medicineId: string, batchNumber: string) =>
+  `${medicineId}_b_${batchNumber.replace(/\//g, "_")}`;
 const SUPPLIERS_COLLECTION = "suppliers";
 const PURCHASE_RECORDS_COLLECTION = "supplier_purchase_records";
 const SUPPLIER_PAYMENTS_COLLECTION = "supplier_payments";
 const SUPPLIER_LEDGER_ENTRIES_COLLECTION = "supplier_ledger_entries";
-const DAILY_STOCK_SNAPSHOTS_COLLECTION = "dailyStockSnapshots";
 
 export const medicineService = {
   // ============= MEDICINE BRANDS =============
@@ -1057,6 +1060,11 @@ export const medicineService = {
     costPrice?: number;
     salePrice?: number;
     supplierId?: string;
+    invoiceNumber?: string;
+    /** Legacy per-unit price, kept on the movement log only. */
+    unitPrice?: number;
+    schemePrice?: number;
+    schemeCostPrice?: number;
   }): Promise<{
     stockId: string;
     previousRegularStock: number;
@@ -1075,15 +1083,20 @@ export const medicineService = {
       where("clinicId", "==", params.clinicId),
     );
     const existingSnapshot = await getDocs(existingQuery);
-    const existingRef = existingSnapshot.empty
-      ? null
+    // A batch that doesn't exist yet gets a deterministic id, so two
+    // refills racing to create the same new batch contend on one document
+    // inside the transaction instead of each creating their own.
+    const stockRef = existingSnapshot.empty
+      ? doc(
+          db,
+          MEDICINE_STOCK_COLLECTION,
+          newBatchStockId(params.medicineId, params.batchNumber),
+        )
       : existingSnapshot.docs[0].ref;
 
     return runTransaction(db, async (transaction) => {
-      const existingSnap = existingRef
-        ? await transaction.get(existingRef)
-        : null;
-      const existingData = existingSnap?.exists() ? existingSnap.data() : null;
+      const existingSnap = await transaction.get(stockRef);
+      const existingData = existingSnap.exists() ? existingSnap.data() : null;
 
       const currentRegularStock = existingData?.currentStock || 0;
       const currentSchemeStock = existingData?.schemeStock || 0;
@@ -1095,8 +1108,8 @@ export const medicineService = {
         ? currentSchemeStock + params.schemeQty
         : Math.max(0, currentSchemeStock - params.schemeQty);
 
-      if (existingRef) {
-        transaction.update(existingRef, {
+      if (existingData) {
+        transaction.update(stockRef, {
           ...this.stripUndefined({
             currentStock: newRegularStock,
             schemeStock: newSchemeStock,
@@ -1109,42 +1122,88 @@ export const medicineService = {
           }),
           updatedAt: serverTimestamp(),
         });
-
-        return {
-          stockId: existingRef.id,
-          previousRegularStock: currentRegularStock,
-          previousSchemeStock: currentSchemeStock,
-          newRegularStock,
-          newSchemeStock,
-        };
+      } else {
+        transaction.set(stockRef, {
+          ...this.stripUndefined({
+            medicineId: params.medicineId,
+            batchNumber: params.batchNumber,
+            currentStock: newRegularStock,
+            schemeStock: newSchemeStock,
+            minimumStock: 10,
+            reorderLevel: 20,
+            clinicId: params.clinicId,
+            branchId: params.branchId || "",
+            updatedBy: params.updatedBy,
+            expiryDate: params.expiryDate,
+            costPrice: params.costPrice,
+            salePrice: params.salePrice,
+            supplierId: params.supplierId,
+          }),
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        });
       }
 
-      const newRef = doc(collection(db, MEDICINE_STOCK_COLLECTION));
+      // The movement log is written in the same transaction as the stock
+      // change. Stock Book and the Daily Sales Report's historical stock
+      // both read it as the ledger, so a refill that changed stock but
+      // failed to log it was invisible to both.
+      const logBase = {
+        medicineId: params.medicineId,
+        type: params.isAdd ? ("purchase" as const) : ("adjustment" as const),
+        batchNumber: params.batchNumber,
+        expiryDate: params.expiryDate,
+        supplierId: params.supplierId,
+        invoiceNumber: params.invoiceNumber,
+        clinicId: params.clinicId,
+        branchId: params.branchId || "",
+        createdBy: params.updatedBy,
+      };
 
-      transaction.set(newRef, {
-        ...this.stripUndefined({
-          medicineId: params.medicineId,
-          batchNumber: params.batchNumber,
-          currentStock: newRegularStock,
-          schemeStock: newSchemeStock,
-          minimumStock: 10,
-          reorderLevel: 20,
-          clinicId: params.clinicId,
-          branchId: params.branchId || "",
-          updatedBy: params.updatedBy,
-          expiryDate: params.expiryDate,
-          costPrice: params.costPrice,
-          salePrice: params.salePrice,
-          supplierId: params.supplierId,
-        }),
-        updatedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-      });
+      if (params.regularQty !== 0) {
+        const unit = params.unitPrice ?? params.salePrice;
+
+        transaction.set(doc(collection(db, STOCK_TRANSACTIONS_COLLECTION)), {
+          ...this.stripUndefined({
+            ...logBase,
+            quantity: params.isAdd ? params.regularQty : -params.regularQty,
+            previousStock: currentRegularStock,
+            newStock: newRegularStock,
+            isSchemeStock: false,
+            salePrice: params.salePrice,
+            costPrice: params.costPrice,
+            unitPrice: params.unitPrice,
+            totalAmount:
+              unit !== undefined ? unit * params.regularQty : undefined,
+          }),
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      if (params.schemeQty !== 0) {
+        transaction.set(doc(collection(db, STOCK_TRANSACTIONS_COLLECTION)), {
+          ...this.stripUndefined({
+            ...logBase,
+            quantity: params.isAdd ? params.schemeQty : -params.schemeQty,
+            previousStock: currentSchemeStock,
+            newStock: newSchemeStock,
+            isSchemeStock: true,
+            schemePrice: params.schemePrice,
+            salePrice: params.schemePrice,
+            costPrice: params.schemeCostPrice,
+            totalAmount:
+              params.schemePrice !== undefined
+                ? params.schemePrice * params.schemeQty
+                : undefined,
+          }),
+          createdAt: serverTimestamp(),
+        });
+      }
 
       return {
-        stockId: newRef.id,
-        previousRegularStock: 0,
-        previousSchemeStock: 0,
+        stockId: stockRef.id,
+        previousRegularStock: currentRegularStock,
+        previousSchemeStock: currentSchemeStock,
         newRegularStock,
         newSchemeStock,
       };
@@ -2231,61 +2290,6 @@ export const medicineService = {
   },
 
   // ============= DAILY STOCK SNAPSHOTS =============
-  async saveDailyStockSnapshot(
-    clinicId: string,
-    branchId: string | undefined,
-    date: Date,
-    totalStock: number,
-  ): Promise<void> {
-    try {
-      // Create date string in YYYY-MM-DD format for consistent querying
-      const dateStr = date.toISOString().split("T")[0];
-      const docId = `${clinicId}_${branchId || "main"}_${dateStr}`;
-
-      const snapshotData = {
-        id: docId,
-        clinicId,
-        branchId: branchId || "",
-        date: dateStr,
-        totalStock,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      const docRef = doc(db, DAILY_STOCK_SNAPSHOTS_COLLECTION, docId);
-
-      await setDoc(docRef, snapshotData, { merge: true });
-    } catch (error) {
-      console.error("Error saving daily stock snapshot:", error);
-      throw error;
-    }
-  },
-
-  async getDailyStockSnapshot(
-    clinicId: string,
-    branchId: string | undefined,
-    date: Date,
-  ): Promise<number | null> {
-    try {
-      const dateStr = date.toISOString().split("T")[0];
-      const docId = `${clinicId}_${branchId || "main"}_${dateStr}`;
-
-      const docRef = doc(db, DAILY_STOCK_SNAPSHOTS_COLLECTION, docId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-
-        return data.totalStock || null;
-      }
-
-      return null;
-    } catch (error) {
-      console.error("Error getting daily stock snapshot:", error);
-
-      return null;
-    }
-  },
   // ============= SEEDING =============
   async seedDefaultMedicines(
     clinicId: string,
