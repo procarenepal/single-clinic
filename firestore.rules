@@ -2129,11 +2129,11 @@ match /medicines/{medicineId} {
                   belongsToClinic(resource.data.clinicId) &&
                   request.resource.data.clinicId == resource.data.clinicId));
   
-  // Allow clinic users to delete their own clinic's medicines
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId)));
+  // Removing a catalogue entry is an administrator's call, not any clinic
+  // member's — the page-level "Access Denied" for other roles was only
+  // ever cosmetic while this allowed it. isSuperAdmin() here covers the
+  // clinic-admin role too.
+  allow delete: if isSuperAdmin();
 }
 
 // Medicines collection-level rules for queries
@@ -2177,11 +2177,9 @@ match /medicineStock/{stockId} {
                   belongsToClinic(resource.data.clinicId) &&
                   request.resource.data.clinicId == resource.data.clinicId));
   
-  // Allow clinic users to delete their own clinic's medicine stock
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId)));
+  // A batch is never removed, only drawn down — no application code
+  // deletes these, and a deleted batch would orphan its ledger rows.
+  allow delete: if false;
 }
 
 // Medicine Stock collection-level rules for queries
@@ -2218,18 +2216,12 @@ match /stockTransactions/{transactionId} {
                   belongsToClinic(request.resource.data.clinicId) &&
                   request.resource.data.createdBy == request.auth.uid));
   
-  // Allow clinic users to update their own clinic's stock transactions (though typically immutable)
-  allow update: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId) &&
-                  request.resource.data.clinicId == resource.data.clinicId));
-  
-  // Allow clinic users to delete their own clinic's stock transactions
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId)));
+  // The stock ledger. Every report of past stock is rebuilt from these
+  // rows, so once written they are immutable — no application code
+  // updates or deletes them, and a client that could would be able to
+  // rewrite history. Same treatment as medicinePurchases.
+  allow update: if false;
+  allow delete: if false;
 }
 
 // Stock Transactions collection-level rules for queries
@@ -2724,6 +2716,18 @@ match /medicinePurchases/{purchaseId} {
     return resource.data.get('irdSynced', false) == true;
   }
 
+  // Items and amounts are frozen from the moment a sale is created: stock
+  // was deducted and the filing queued in that same transaction, and
+  // nothing re-balances either afterwards. Mirrors what
+  // pharmacyService.updateMedicinePurchase refuses; corrections are
+  // returns.
+  function frozenUntouched() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['items', 'total', 'discount', 'taxPercentage', 'taxAmount',
+               'taxableAmount', 'exemptAmount', 'netAmount', 'purchaseNo',
+               'purchaseDate', 'createdBy']);
+  }
+
   // Mirrors pharmacyService.updateMedicinePurchase's post-sync allowlist
   // plus what a return writes onto the purchase (the nested returns[] and
   // its running total). Amounts, items and tax stay frozen.
@@ -2752,6 +2756,7 @@ match /medicinePurchases/{purchaseId} {
                  (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)))
                 && request.resource.data.clinicId == resource.data.clinicId
                 && notTouchingIrdState()
+                && frozenUntouched()
                 && (!isLocked() || onlyBookkeeping());
 
   // IRD requires a billing record to survive entry — superseded by a credit
