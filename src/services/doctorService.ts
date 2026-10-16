@@ -207,7 +207,16 @@ export const doctorService = {
       );
       const snap = await getDocs(qy);
 
-      if (snap.empty) return null;
+      if (snap.empty) {
+        // Emails are saved as typed, so one with a capital letter never matches
+        // the lowercase query above — look again without regard to case.
+        const wanted = email.trim().toLowerCase();
+        const doctors = await this.getDoctors(clinicId);
+
+        return (
+          doctors.find((d) => d.email?.trim().toLowerCase() === wanted) ?? null
+        );
+      }
       const first = snap.docs[0];
       const data = first.data();
       const createdAt = data.createdAt

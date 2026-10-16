@@ -131,7 +131,7 @@ export default function DoctorDashboard() {
         setDoctorName(doc.name || "");
 
         const [pts, appts, rxs] = await Promise.all([
-          patientService.getPatientsByDoctor(doc.id, clinicId),
+          patientService.getPatients(clinicId),
           appointmentService.getAppointmentsByClinic(clinicId),
           prescriptionService.getPrescriptionsByClinic(clinicId),
         ]);
@@ -276,7 +276,7 @@ export default function DoctorDashboard() {
           href="/dashboard/patients"
           icon={<IoPersonOutline />}
           label="My Patients"
-          sub="Assigned to you"
+          sub="Assigned & treated"
           value={patients.length}
         />
         <StatMini
