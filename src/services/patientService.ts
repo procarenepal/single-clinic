@@ -23,6 +23,7 @@ import { Patient } from "../types/models";
 
 import { cacheService } from "@/services/cacheService";
 import { sendWelcomeSMS } from "@/services/sendMessageService";
+import { getPatientScope } from "@/services/patientAccess";
 import { resolveClinicId } from "./currentClinic";
 
 const PATIENTS_COLLECTION = "patients";
@@ -289,6 +290,42 @@ export const patientService = {
    */
   async getPatients(clinicId?: string): Promise<Patient[]> {
     try {
+      // A doctor only ever gets their own patients (assigned or treated) —
+      // never the clinic-wide list or its cache (see patientAccess).
+      const scope = await getPatientScope();
+
+      if (scope.restricted) {
+        if (!scope.doctorId) return [];
+
+        const assigned = await this.getPatientsByDoctor(
+          scope.doctorId,
+          clinicId,
+        );
+        // Plus the patients they have treated (an appointment or prescription)
+        // who are assigned to another doctor
+        const have = new Set(assigned.map((p) => p.id));
+        const scopedClinicId = resolveClinicId(clinicId);
+        const treated = (
+          await Promise.all(
+            [...scope.treatedPatientIds]
+              .filter((id) => !have.has(id))
+              .map((id) => this.getPatientById(id).catch(() => null)),
+          )
+        ).filter(
+          (p): p is Patient =>
+            !!p && (!scopedClinicId || p.clinicId === scopedClinicId),
+        );
+
+        return [...assigned, ...treated].sort((a, b) => {
+          const aVal = (a as any).regNumberNumeric ?? 0;
+          const bVal = (b as any).regNumberNumeric ?? 0;
+
+          if (bVal !== aVal) return bVal - aVal;
+
+          return (b.regNumber || "").localeCompare(a.regNumber || "");
+        });
+      }
+
       const cacheKey = clinicId || "standalone";
       const cached = cacheService.getClinicPatients(cacheKey);
 
@@ -684,16 +721,26 @@ export const patientService = {
       branchId?: string;
     } = {} as any,
   ): Promise<{ patients: Patient[]; lastDoc: QueryDocumentSnapshot | null }> {
+    const scope = await getPatientScope();
+
+    // A doctor is always limited to their own patients, whatever was asked for.
+    // (Assigned patients only — getPatients is what adds the ones they treated.)
+    if (scope.restricted && !scope.doctorId) {
+      return { patients: [], lastDoc: null };
+    }
+
     const {
       pageSize,
       lastDoc,
-      doctorId,
-      expertId,
+      doctorId: requestedDoctorId,
+      expertId: requestedExpertId,
       searchPrefix,
       gender,
       isCritical,
       branchId,
     } = options;
+    const doctorId = scope.restricted ? scope.doctorId : requestedDoctorId;
+    const expertId = scope.restricted ? undefined : requestedExpertId;
     const prefix = searchPrefix?.trim();
     const hasNameSearch = Boolean(prefix);
 
@@ -826,15 +873,28 @@ export const patientService = {
       branchId?: string;
     } = {} as any,
   ): Promise<number> {
-    const { doctorId, expertId, searchPrefix, gender, isCritical, branchId } =
-      options as {
-        doctorId?: string;
-        expertId?: string;
-        searchPrefix?: string;
-        gender?: string;
-        isCritical?: boolean;
-        branchId?: string;
-      };
+    const scope = await getPatientScope();
+
+    if (scope.restricted && !scope.doctorId) return 0;
+
+    const {
+      doctorId: requestedDoctorId,
+      expertId: requestedExpertId,
+      searchPrefix,
+      gender,
+      isCritical,
+      branchId,
+    } = options as {
+      doctorId?: string;
+      expertId?: string;
+      searchPrefix?: string;
+      gender?: string;
+      isCritical?: boolean;
+      branchId?: string;
+    };
+    // A doctor is always limited to their own patients, whatever was asked for
+    const doctorId = scope.restricted ? scope.doctorId : requestedDoctorId;
+    const expertId = scope.restricted ? undefined : requestedExpertId;
     const prefix = searchPrefix?.trim();
     const hasNameSearch = Boolean(prefix);
 

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
+import { canEditPatient, getPatientScope } from "@/services/patientAccess";
 import { doctorService } from "@/services/doctorService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { expertService } from "@/services/expertService";
@@ -307,7 +308,7 @@ function ReferralSourceSelect({
 export default function PatientEditPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData } = useAuthContext();
+  const { clinicId, currentUser } = useAuthContext();
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -408,29 +409,16 @@ export default function PatientEditPage() {
       }
 
       // Authorization Check: Doctors should only edit patients assigned to them
-      const isAdmin = userData?.role === "clinic-admin";
+      if (!canEditPatient(await getPatientScope(), patientData)) {
+        addToast({
+          title: "Access Denied",
+          description:
+            "You are only authorized to edit patients assigned to you.",
+          color: "danger",
+        });
+        navigate("/dashboard/patients");
 
-      if (!isAdmin && userData?.email) {
-        try {
-          const docInfo = await doctorService.getDoctorByEmail(
-            userData.email,
-            clinicId,
-          );
-
-          if (docInfo && patientData.doctorId !== docInfo.id) {
-            addToast({
-              title: "Access Denied",
-              description:
-                "You are only authorized to edit patients assigned to you.",
-              color: "danger",
-            });
-            navigate("/dashboard/patients");
-
-            return;
-          }
-        } catch (e) {
-          console.error("Linkage check failed:", e);
-        }
+        return;
       }
 
       setPatient(patientData);

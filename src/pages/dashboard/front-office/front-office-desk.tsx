@@ -36,6 +36,7 @@ import {
   getClinicianTypeDefaults,
 } from "./QuickIntakeModal";
 import { QueueList } from "./QueueList";
+import { StageListModal } from "./StageListModal";
 
 import { title } from "@/components/primitives";
 import { useAuthContext } from "@/context/AuthContext";
@@ -326,6 +327,17 @@ export default function FrontOfficeDesk() {
   // Resolved IDs for the currently logged-in doctor or expert
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
   const [currentExpertId, setCurrentExpertId] = useState<string | null>(null);
+
+  // A doctor/expert login that matches no clinician profile has no patients of
+  // its own — it gets an empty board, never the whole clinic's.
+  const isUnlinkedClinician =
+    !hasFullFrontOfficeAccess &&
+    !currentDoctorId &&
+    !currentExpertId &&
+    (userData?.role === "doctor" || userData?.role === "expert");
+
+  // Which stat card's patient list is open
+  const [openStatCard, setOpenStatCard] = useState<string | null>(null);
 
   // "Send Back to Lobby" — undo mis-routing/premature triage. Only ever
   // offered for pre-billing stages (triage-done/doctor/expert); reversing
@@ -3094,6 +3106,8 @@ export default function FrontOfficeDesk() {
   const filteredAppointments = appointments.filter((appt) => {
     const stage = getPatientStage(appt);
 
+    // A clinician login with no clinician profile sees nothing here
+    if (isUnlinkedClinician) return false;
 
     // If logged-in user has clinician profiles, only show their own patients
     if (currentDoctorId || currentExpertId) {
@@ -3176,24 +3190,43 @@ export default function FrontOfficeDesk() {
     label,
     value,
     colorClass,
+    onClick,
   }: {
     icon: React.ReactNode;
     label: string;
     value: number;
     colorClass: string;
-  }) => (
-    <div className="bg-surface border border-border-base p-4 rounded flex items-center gap-4 hover:border-primary/50 transition-colors">
-      <div
-        className={`w-10 h-10 rounded-full flex items-center justify-center ${colorClass}`}
+    onClick?: () => void;
+  }) => {
+    const className =
+      "bg-surface border border-border-base p-4 rounded flex items-center gap-4 hover:border-primary/50 transition-colors";
+    const content = (
+      <>
+        <div
+          className={`w-10 h-10 rounded-full flex items-center justify-center ${colorClass}`}
+        >
+          {icon}
+        </div>
+        <div>
+          <p className="text-[12px] font-medium text-text-muted">{label}</p>
+          <p className="text-2xl font-bold text-text-main mt-0.5">{value}</p>
+        </div>
+      </>
+    );
+
+    return onClick ? (
+      <button
+        aria-label={`${label}: ${value}. View patients`}
+        className={`${className} w-full text-left cursor-pointer`}
+        type="button"
+        onClick={onClick}
       >
-        {icon}
-      </div>
-      <div>
-        <p className="text-[12px] font-medium text-text-muted">{label}</p>
-        <p className="text-2xl font-bold text-text-main mt-0.5">{value}</p>
-      </div>
-    </div>
-  );
+        {content}
+      </button>
+    ) : (
+      <div className={className}>{content}</div>
+    );
+  };
 
   const getTriageClass = (
     type: "bp" | "temp" | "pulse" | "spo2",
@@ -5276,6 +5309,8 @@ export default function FrontOfficeDesk() {
 
       {(() => {
         const getQueueFilter = (a: Appointment) => {
+          if (isUnlinkedClinician) return false;
+
           if (currentDoctorId || currentExpertId) {
             const isMyDoctorPatient =
               currentDoctorId && a.doctorId === currentDoctorId;
@@ -5308,106 +5343,138 @@ export default function FrontOfficeDesk() {
         else if (showExpertCard && !showBillingCards)
           gridColsClass = "lg:grid-cols-5";
 
+        // The patients behind each card's number — clicking a card lists them
+        const queue = appointments.filter(getQueueFilter);
+        const lobbyList = queue.filter((a) => {
+          const s = getPatientStage(a);
+
+          if (s === "scheduled") return true;
+          if (s !== "lobby") return false;
+          const consBill = getPendingBillForAppointment(a);
+          const isConsBillPending = Boolean(consBill);
+
+          return isConsBillPending;
+        });
+        const triageList = queue.filter(
+          (a) => getPatientStage(a) === "triage-done",
+        );
+        const doctorCabinList = appointments
+          .filter(
+            (a) =>
+              !isUnlinkedClinician &&
+              (!currentDoctorId || a.doctorId === currentDoctorId),
+          )
+          .filter((a) => getPatientStage(a) === "doctor");
+        const expertCabinList = appointments
+          .filter(
+            (a) =>
+              !isUnlinkedClinician &&
+              (!currentExpertId || a.assignedExpertId === currentExpertId),
+          )
+          .filter((a) => getPatientStage(a) === "expert");
+        const invoiceList = queue.filter(
+          (a) => getPatientStage(a) === "billing",
+        );
+        const pharmacyList = queue.filter(
+          (a) => getPatientStage(a) === "pharmacy",
+        );
+        const appointmentsLabel =
+          selectedDate.toDateString() === new Date().toDateString()
+            ? "Today's Appointments"
+            : `${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} Appointments`;
+
+        const statLists: Record<
+          string,
+          { title: string; rows: Appointment[] }
+        > = {
+          appointments: { title: appointmentsLabel, rows: queue },
+          lobby: { title: "Waiting in Lobby", rows: lobbyList },
+          triage: { title: "Triage Completed", rows: triageList },
+          doctor: { title: "In Doctor Cabin", rows: doctorCabinList },
+          expert: { title: "In Expert Cabin", rows: expertCabinList },
+          billing: { title: "Invoice Pending", rows: invoiceList },
+          pharmacy: { title: "Pharmacy Pending", rows: pharmacyList },
+        };
+        const openList = openStatCard ? statLists[openStatCard] : null;
+
         return (
-          <div
-            className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 ${gridColsClass} gap-3.5`}
-          >
-            <StatCard
-              colorClass="bg-surface-3 text-text-muted"
-              icon={<IoCalendarOutline className="w-5 h-5" />}
-              label={
-                selectedDate.toDateString() === new Date().toDateString()
-                  ? "Today's Appointments"
-                  : `${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} Appointments`
-              }
-              value={appointments.filter(getQueueFilter).length}
-            />
-            <StatCard
-              colorClass="bg-teal-500/10 text-teal-600"
-              icon={<IoPeopleOutline className="w-5 h-5" />}
-              label="Waiting in Lobby"
-              value={
-                appointments.filter(getQueueFilter).filter((a) => {
-                  const s = getPatientStage(a);
-
-                  if (s === "scheduled") return true;
-                  if (s !== "lobby") return false;
-                  const consBill = getPendingBillForAppointment(a);
-                  const isConsBillPending = Boolean(consBill);
-
-                  return isConsBillPending;
-                }).length
-              }
-            />
-            <StatCard
-              colorClass="bg-indigo-500/10 text-indigo-600"
-              icon={<IoHeartOutline className="w-5 h-5" />}
-              label="Triage Completed"
-              value={
-                appointments
-                  .filter(getQueueFilter)
-                  .filter((a) => getPatientStage(a) === "triage-done").length
-              }
-            />
-            <StatCard
-              colorClass="bg-amber-500/10 text-amber-600"
-              icon={<IoTimeOutline className="w-5 h-5" />}
-              label="In Doctor Cabin"
-              value={
-                appointments
-                  .filter(
-                    (a) => !currentDoctorId || a.doctorId === currentDoctorId,
-                  )
-                  .filter((a) => getPatientStage(a) === "doctor").length
-              }
-            />
-            {(!currentDoctorId ||
-              hasFullFrontOfficeAccess ||
-              currentExpertId) && (
+          <>
+            <div
+              className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 ${gridColsClass} gap-3.5`}
+            >
+              <StatCard
+                colorClass="bg-surface-3 text-text-muted"
+                icon={<IoCalendarOutline className="w-5 h-5" />}
+                label={appointmentsLabel}
+                value={queue.length}
+                onClick={() => setOpenStatCard("appointments")}
+              />
+              <StatCard
+                colorClass="bg-teal-500/10 text-teal-600"
+                icon={<IoPeopleOutline className="w-5 h-5" />}
+                label="Waiting in Lobby"
+                value={lobbyList.length}
+                onClick={() => setOpenStatCard("lobby")}
+              />
+              <StatCard
+                colorClass="bg-indigo-500/10 text-indigo-600"
+                icon={<IoHeartOutline className="w-5 h-5" />}
+                label="Triage Completed"
+                value={triageList.length}
+                onClick={() => setOpenStatCard("triage")}
+              />
+              <StatCard
+                colorClass="bg-amber-500/10 text-amber-600"
+                icon={<IoTimeOutline className="w-5 h-5" />}
+                label="In Doctor Cabin"
+                value={doctorCabinList.length}
+                onClick={() => setOpenStatCard("doctor")}
+              />
+              {(!currentDoctorId ||
+                hasFullFrontOfficeAccess ||
+                currentExpertId) && (
                 <StatCard
                   colorClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
                   icon={<IoPeopleOutline className="w-5 h-5" />}
                   label="In Expert Cabin"
-                  value={
-                    appointments
-                      .filter(
-                        (a) =>
-                          !currentExpertId ||
-                          a.assignedExpertId === currentExpertId,
-                      )
-                      .filter((a) => getPatientStage(a) === "expert").length
-                  }
+                  value={expertCabinList.length}
+                  onClick={() => setOpenStatCard("expert")}
                 />
               )}
-            {(hasFullFrontOfficeAccess || currentExpertId) && (
-              <>
-                <StatCard
-                  colorClass="bg-saffron-500/10 text-saffron-600"
-                  icon={<IoCardOutline className="w-5 h-5" />}
-                  label="Invoice Pending"
-                  value={
-                    appointments.filter(getQueueFilter).filter((a) => {
-                      const s = getPatientStage(a);
-
-                      return s === "billing";
-                    }).length
-                  }
-                />
-                <StatCard
-                  colorClass="bg-purple-500/10 text-purple-600"
-                  icon={<IoReceiptOutline className="w-5 h-5" />}
-                  label="Pharmacy Pending"
-                  value={
-                    appointments.filter(getQueueFilter).filter((a) => {
-                      const s = getPatientStage(a);
-
-                      return s === "pharmacy";
-                    }).length
-                  }
-                />
-              </>
-            )}
-          </div>
+              {(hasFullFrontOfficeAccess || currentExpertId) && (
+                <>
+                  <StatCard
+                    colorClass="bg-saffron-500/10 text-saffron-600"
+                    icon={<IoCardOutline className="w-5 h-5" />}
+                    label="Invoice Pending"
+                    value={invoiceList.length}
+                    onClick={() => setOpenStatCard("billing")}
+                  />
+                  <StatCard
+                    colorClass="bg-purple-500/10 text-purple-600"
+                    icon={<IoReceiptOutline className="w-5 h-5" />}
+                    label="Pharmacy Pending"
+                    value={pharmacyList.length}
+                    onClick={() => setOpenStatCard("pharmacy")}
+                  />
+                </>
+              )}
+            </div>
+            <StageListModal
+              isOpen={Boolean(openList)}
+              rows={(openList?.rows ?? []).map((a) => ({
+                id: a.id,
+                patientId: a.patientId,
+                name: getPatientName(a.patientId),
+                reg: getPatientReg(a.patientId),
+                clinician: getDoctorName(a),
+                time: a.startTime,
+                stage: getStageBadge(getPatientStage(a), a),
+              }))}
+              title={openList?.title ?? ""}
+              onClose={() => setOpenStatCard(null)}
+            />
+          </>
         );
       })()}
 
@@ -5512,6 +5579,8 @@ export default function FrontOfficeDesk() {
         <div className="flex border-b border-border-base bg-surface-2 p-1 gap-1 flex-wrap">
           {(() => {
             const getQueueFilter = (a: Appointment) => {
+              if (isUnlinkedClinician) return false;
+
               if (currentDoctorId || currentExpertId) {
                 const isMyDoctorPatient =
                   currentDoctorId && a.doctorId === currentDoctorId;
@@ -5606,7 +5675,9 @@ export default function FrontOfficeDesk() {
                 name: "👨‍⚕️ DOCTOR QUEUE",
                 count: appointments
                   .filter(
-                    (a) => !currentDoctorId || a.doctorId === currentDoctorId,
+                    (a) =>
+                      !isUnlinkedClinician &&
+                      (!currentDoctorId || a.doctorId === currentDoctorId),
                   )
                   .filter((a) => {
                     const s = getPatientStage(a);
@@ -5623,8 +5694,9 @@ export default function FrontOfficeDesk() {
                 count: appointments
                   .filter(
                     (a) =>
-                      !currentExpertId ||
-                      a.assignedExpertId === currentExpertId,
+                      !isUnlinkedClinician &&
+                      (!currentExpertId ||
+                        a.assignedExpertId === currentExpertId),
                   )
                   .filter((a) => {
                     const s = getPatientStage(a);

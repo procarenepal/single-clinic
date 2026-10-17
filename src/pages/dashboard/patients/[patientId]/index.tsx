@@ -20,6 +20,7 @@ import {
 
 import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
+import { canViewPatient, getPatientScope } from "@/services/patientAccess";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { appointmentService } from "@/services/appointmentService";
 import { prescriptionService } from "@/services/prescriptionService";
@@ -58,12 +59,7 @@ import PatientWalletTab from "@/components/patients/PatientWalletTab";
 export default function PatientDetailPage() {
   const { patientId } = useParams();
   const navigate = useNavigate();
-  const {
-    clinicId,
-    currentUser,
-    userData,
-    isLoading: authLoading,
-  } = useAuthContext();
+  const { clinicId, currentUser, isLoading: authLoading } = useAuthContext();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -104,29 +100,19 @@ export default function PatientDetailPage() {
       const patientData = await patientService.getPatientById(patientId);
 
       // Authorization Check: Doctors should only view patients assigned to them
-      const isAdmin = userData?.role === "clinic-admin";
+      if (
+        patientData &&
+        !canViewPatient(await getPatientScope(), patientData)
+      ) {
+        addToast({
+          title: "Access Denied",
+          description:
+            "You are only authorized to view patients assigned to you.",
+          color: "danger",
+        });
+        navigate("/dashboard/patients");
 
-      if (!isAdmin && userData?.email) {
-        try {
-          const docInfo = await doctorService.getDoctorByEmail(
-            userData.email,
-            clinicId,
-          );
-
-          if (docInfo && patientData && patientData.doctorId !== docInfo.id) {
-            addToast({
-              title: "Access Denied",
-              description:
-                "You are only authorized to view patients assigned to you.",
-              color: "danger",
-            });
-            navigate("/dashboard/patients");
-
-            return;
-          }
-        } catch (e) {
-          console.error("Linkage check failed:", e);
-        }
+        return;
       }
 
       setPatient(patientData);

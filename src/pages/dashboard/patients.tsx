@@ -507,10 +507,8 @@ export default function PatientsPage() {
             clinicId,
           );
         } else if (currentDoctorId) {
-          data = await patientService.getPatientsByDoctor(
-            currentDoctorId,
-            clinicId,
-          );
+          // A doctor's own patients: assigned to them, or treated by them
+          data = await patientService.getPatients(clinicId);
         } else {
           data = await patientService.getPatients(clinicId);
         }
