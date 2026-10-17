@@ -2277,7 +2277,9 @@ export interface AuditLog {
   | "ird_synced"
   | "ird_sync_failed"
   | "refund_issued"
-  | "billing_discount_tax_changed";
+  | "billing_discount_tax_changed"
+  | "visit_marked_no_show"
+  | "visit_cancelled";
   performedBy: string; // User ID who performed the action
   performedByEmail?: string; // User email for display
   performedByName?: string; // User name for display

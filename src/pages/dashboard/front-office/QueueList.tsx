@@ -262,8 +262,12 @@ export const QueueList: React.FC<QueueListProps> = ({
                           {patientName}
                         </Link>
                         {getStageBadge(getPatientStage(appts[0]), appts[0])}
+                        {/* "triage-done" — the real stage name; the stage
+                            is never literally "triage", so this check
+                            matched nothing and a triaged-and-waiting
+                            patient showed no wait time at all. */}
                         {(getPatientStage(appts[0]) === "lobby" ||
-                          getPatientStage(appts[0]) === "triage" ||
+                          getPatientStage(appts[0]) === "triage-done" ||
                           getPatientStage(appts[0]) === "doctor" ||
                           getPatientStage(appts[0]) === "expert") && (
                             <WaitTimeIndicator

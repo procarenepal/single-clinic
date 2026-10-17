@@ -59,6 +59,7 @@ import { hrService } from "@/services/hrService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { packageService } from "@/services/packageService";
 import { walletService } from "@/services/walletService";
+import { auditLogService } from "@/services/auditLogService";
 import { splitDepositApplication } from "@/services/core/visitSettleCore";
 import {
   getVisitPaymentGate,
@@ -511,6 +512,27 @@ export default function FrontOfficeDesk() {
           depositFromCredit: 0,
           updatedAt: new Date(),
         } as any);
+        // Releasing a collected deposit (as standing credit, or back into
+        // the wallet for the credit share) is a money event with
+        // otherwise no trace of who released it or when — the notes
+        // marker above is free text any clinic member can edit away via
+        // a plain appointments update.
+        if (clinicId) {
+          auditLogService
+            .logEvent(
+              "visit_marked_no_show",
+              clinicId,
+              {
+                appointmentId: appt.id,
+                patientId: appt.patientId,
+                depositReleasedAsCredit: strandedDeposit - creditTaken,
+                creditReturnedToWallet: creditTaken,
+              },
+            )
+            .catch((auditErr) =>
+              console.error("Failed to audit-log the no-show:", auditErr),
+            );
+        }
         addToast({
           title: "Marked No-Show",
           description: strandedDeposit > 0
@@ -5984,6 +6006,10 @@ export default function FrontOfficeDesk() {
                 id: "urgent",
                 name: "🚨 ACTION REQUIRED",
                 count: appointments.filter(getQueueFilter).filter((a) => {
+                  // Same rule as the urgent tab's own row filter below —
+                  // this badge previously disagreed with it on every one
+                  // of these conditions, not just the wait clock.
+                  if (a.isUrgent) return true;
                   const s = getPatientStage(a);
 
                   if (s === "billing") return true;
@@ -5995,21 +6021,24 @@ export default function FrontOfficeDesk() {
 
                   if (
                     !a.onHold &&
-                    a.createdAt &&
                     (s === "lobby" ||
                       s === "triage-done" ||
                       s === "doctor" ||
                       s === "expert")
                   ) {
-                    const dObj = (a.createdAt as any).seconds
-                      ? new Date((a.createdAt as any).seconds * 1000)
-                      : new Date(a.createdAt);
+                    // Same clock the row filter below uses — checkedInAt,
+                    // never the record's creation. This badge used to
+                    // count from createdAt instead, so a visit pre-booked
+                    // yesterday and just checked in 5 minutes ago showed
+                    // 1,440 minutes here while the urgent tab's own row
+                    // filter correctly excluded it — the count and the
+                    // list disagreed.
+                    const start = visitWaitStart(a as any);
 
                     if (
-                      !isNaN(dObj.getTime()) &&
-                      Math.floor(
-                        (new Date().getTime() - dObj.getTime()) / 60000,
-                      ) > 30
+                      start &&
+                      Math.floor((new Date().getTime() - start.getTime()) / 60000) >
+                        30
                     ) {
                       return true;
                     }

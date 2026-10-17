@@ -42,6 +42,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
 import { appointmentService } from "@/services/appointmentService";
 import { patientPackageService } from "@/services/patientPackageService";
+import { auditLogService } from "@/services/auditLogService";
 import {
   reverseVisitPlan,
   canCompleteCheckout,
@@ -475,6 +476,26 @@ export default function AppointmentsPage() {
               "Failed to release the visit's package session:",
               err,
             ),
+          );
+      }
+
+      // A cancel/no-show that releases a collected deposit as standing
+      // wallet credit is a money event with no trace otherwise — the
+      // notes marker is free text any clinic member can edit away.
+      if (appt.clinicId || clinicId) {
+        auditLogService
+          .logEvent(
+            newStatus === "cancelled" ? "visit_cancelled" : "visit_marked_no_show",
+            appt.clinicId || clinicId || "",
+            {
+              appointmentId: appt.id,
+              patientId: appt.patientId,
+              depositReleasedAsCredit: plan.walletCreditRetained,
+              reason,
+            },
+          )
+          .catch((auditErr) =>
+            console.error("Failed to audit-log the status change:", auditErr),
           );
       }
 
