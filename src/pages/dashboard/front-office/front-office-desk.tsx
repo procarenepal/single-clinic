@@ -1964,6 +1964,7 @@ export default function FrontOfficeDesk() {
           cabinName: routingCabin,
           updatedAt: new Date(),
         };
+        let doctorConsultationSkipped = false;
 
         if (routingTarget === "doctor") {
           if (!routingDoctorId || routingDoctorId === "unassigned") {
@@ -2006,6 +2007,16 @@ export default function FrontOfficeDesk() {
             routingAppointment.doctorId &&
             routingAppointment.doctorId !== "unassigned"
           ) {
+            // This is a routing-board hack, not a clinical fact: it exists
+            // so the board's stage can skip the doctor cabin, not because
+            // the doctor's consultation actually happened. If the doctor's
+            // fee was already collected at check-in, that line stays on
+            // the visit — nothing here removes it, so it is still filed
+            // and commissioned at Settle. Flagged below rather than
+            // acted on automatically: whether a booked-but-unseen
+            // consultation should still be billed is a clinic policy
+            // call, not one this screen should make silently.
+            doctorConsultationSkipped = true;
             updateData.doctorConsultationCompleted = true;
 
             // Append-only — see the "routed to: Doctor" branch above for why.
@@ -2082,6 +2093,15 @@ export default function FrontOfficeDesk() {
           description: `Patient routed to ${routingCabin || "unassigned Room/Cabin"}.`,
           color: "success",
         });
+        if (doctorConsultationSkipped) {
+          addToast({
+            title: "Doctor's Consultation Fee Still On This Visit",
+            description:
+              "The doctor was skipped — their consultation fee, if already collected, remains on the invoice and will still be commissioned at Settle. Remove it from the visit first if the doctor should not be billed.",
+            color: "warning",
+            duration: 15000,
+          });
+        }
         setIsRoutingModalOpen(false);
         setRoutingAppointment(null);
         setRoutingTarget("default");
@@ -2611,6 +2631,7 @@ export default function FrontOfficeDesk() {
       // silently erased by triage the way a flat overwrite previously did.
       const priorNotes = selectedAppointment.notes || "";
       const triageNoteLine = `[Triage Vitals Recorded] BP: ${formattedBP}, Temp: ${formattedTemp}\nComplaints: ${formattedComplaints}`;
+      let doctorConsultationSkipped = false;
       const updateData: any = {
         notes: priorNotes ? `${priorNotes}\n${triageNoteLine}` : triageNoteLine,
         // Structured record of the same fact. Triage completion drove the
@@ -2669,6 +2690,11 @@ export default function FrontOfficeDesk() {
           selectedAppointment.doctorId &&
           selectedAppointment.doctorId !== "unassigned"
         ) {
+          // Routing-board hack, not a clinical fact — see the identical
+          // comment and fix in handleConfirmRoute. Does not remove the
+          // doctor's consultation fee if it was already collected at
+          // check-in, so it is still invoiced and commissioned at Settle.
+          doctorConsultationSkipped = true;
           updateData.doctorConsultationCompleted = true;
         }
         routed = true;
@@ -2713,6 +2739,15 @@ export default function FrontOfficeDesk() {
           : "Vitals recorded successfully.",
         color: "success",
       });
+      if (doctorConsultationSkipped) {
+        addToast({
+          title: "Doctor's Consultation Fee Still On This Visit",
+          description:
+            "The doctor was skipped — their consultation fee, if already collected, remains on the invoice and will still be commissioned at Settle. Remove it from the visit first if the doctor should not be billed.",
+          color: "warning",
+          duration: 15000,
+        });
+      }
 
       setIsTriageModalOpen(false);
       setSelectedAppointment(null);
@@ -3021,6 +3056,14 @@ export default function FrontOfficeDesk() {
           ...currentAppt,
           appointmentTypeId:
             consultationTypeId || selectedAppointment.appointmentTypeId,
+          // A package-session visit's own patientPackageId, if carried
+          // over unchanged, made describeRoutingFee take the package
+          // branch FIRST — reporting the session "already on this visit"
+          // (true, but irrelevant here) and never reaching the catalogue
+          // lookup that would actually price this consultation. The
+          // comment above this block already claimed the handoff charges
+          // the consultation; this is what made that claim true.
+          patientPackageId: undefined,
           // Without a configured consultation the doctor's fee cannot be
           // priced; describeRoutingFee refuses rather than charging the
           // expert's service again or nothing at all.
