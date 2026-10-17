@@ -2549,6 +2549,33 @@ export default function FrontOfficeDesk() {
     if (e) e.preventDefault();
     if (!selectedAppointment || !clinicId) return;
 
+    // triageCompletedAt exists specifically because the old free-text
+    // marker could be typed by hand with no vitals ever taken (see the
+    // comment below on that field). Saving with every field blank stamped
+    // the exact same structured flag unconditionally, which made it just
+    // as fakeable as what it replaced — one click with nothing entered
+    // passed the clinical-documentation gate the same as a real triage.
+    const anyVitalRecorded = [
+      vitals.bpSystolic,
+      vitals.bpDiastolic,
+      vitals.pulse,
+      vitals.temp,
+      vitals.weight,
+      vitals.spo2,
+      vitals.complaints,
+    ].some((v) => v && v.trim().length > 0);
+
+    if (!anyVitalRecorded) {
+      addToast({
+        title: "Nothing to Record",
+        description:
+          "Enter at least one vital sign or a chief complaint before saving triage.",
+        color: "warning",
+      });
+
+      return;
+    }
+
     setTriageSaving(true);
     try {
       // Format a clean, highly readable medical vitals string
@@ -2613,7 +2640,27 @@ export default function FrontOfficeDesk() {
               )
             : false;
 
-      if (routeTarget && hasAssignedClinicianForTarget) {
+      // Same invariant handleConfirmRoute enforces: one patient cannot be
+      // actively with two clinicians at once. This path has no such check
+      // of its own, so triaging a sibling appointment and routing it
+      // straight from here could put the same patient "in" two cabins
+      // simultaneously — one via Routing, one via Triage.
+      const otherActiveAppt = appointments.find(
+        (a) =>
+          a.patientId === selectedAppointment.patientId &&
+          a.id !== selectedAppointment.id &&
+          (getPatientStage(a) === "doctor" || getPatientStage(a) === "expert"),
+      );
+      let routed = false;
+
+      if (routeTarget && hasAssignedClinicianForTarget && otherActiveAppt) {
+        addToast({
+          title: "Patient Already With a Clinician",
+          description: `Vitals were saved, but the patient was NOT routed — ${getPatientName(selectedAppointment.patientId)} is currently in ${otherActiveAppt.cabinName || "a cabin"} with ${getDoctorName(otherActiveAppt)}. Complete or send back that visit first.`,
+          color: "warning",
+          duration: 10000,
+        });
+      } else if (routeTarget && hasAssignedClinicianForTarget) {
         updateData.status = "in-progress";
         // Fallback to assigned cabin if it's already selected
         updateData.cabinName = selectedAppointment.cabinName || "";
@@ -2624,6 +2671,7 @@ export default function FrontOfficeDesk() {
         ) {
           updateData.doctorConsultationCompleted = true;
         }
+        routed = true;
       } else if (routeTarget && !hasAssignedClinicianForTarget) {
         addToast({
           title: "No Clinician Assigned",
@@ -2637,32 +2685,32 @@ export default function FrontOfficeDesk() {
         updateData,
       );
 
-      // Trigger notification for Doctor that Triage is done and patient is ready
-      if (clinicId) {
+      // Trigger notification for Doctor that Triage is done and patient is
+      // ready — only when the patient was ACTUALLY routed there. This used
+      // to fire whenever a doctor happened to be assigned, including a
+      // plain "Save Vitals Only" with no routing at all, telling the
+      // doctor a patient was "waiting in your cabin" who was still sitting
+      // in Lobby/Triage.
+      if (clinicId && routed && routeTarget === "doctor") {
         const patObj = patients.find(
           (p) => p.id === selectedAppointment.patientId,
         );
         const patName = patObj ? patObj.name : "Patient";
 
-        if (
-          selectedAppointment.doctorId &&
-          selectedAppointment.doctorId !== "unassigned"
-        ) {
-          NotificationService.sendNotification(clinicId, {
-            title: "Patient Vitals Recorded",
-            message: `Vitals for patient ${patName} have been recorded. They are now waiting in your cabin.`,
-            type: "doctor_queue",
-            targetRole: "doctor",
-            targetUserId: selectedAppointment.doctorId,
-          });
-        }
+        NotificationService.sendNotification(clinicId, {
+          title: "Patient Vitals Recorded",
+          message: `Vitals for patient ${patName} have been recorded. They are now waiting in your cabin.`,
+          type: "doctor_queue",
+          targetRole: "doctor",
+          targetUserId: selectedAppointment.doctorId,
+        });
       }
 
       addToast({
         title: "Triage Vitals Saved",
-        description: routeTarget
+        description: routed
           ? `Vitals recorded and patient routed to ${routeTarget === "doctor" ? "Doctor" : "Expert"} cabin.`
-          : "Vitals recorded successfully. Patient is ready for doctor cabin.",
+          : "Vitals recorded successfully.",
         color: "success",
       });
 
@@ -3530,16 +3578,19 @@ export default function FrontOfficeDesk() {
   };
 
   const renderTriageModal = () => {
-    const patientAppts = selectedAppointment
-      ? appointments.filter(
-        (a) => a.patientId === selectedAppointment.patientId,
-      )
-      : [];
-    const hasDoctor = patientAppts.some(
-      (a) => a.doctorId && a.doctorId !== "unassigned",
+    // THIS appointment's own clinician fields — not any sibling's. The
+    // modal's "Save & Send to Doctor/Expert" buttons must agree with what
+    // handleSaveTriage actually checks (selectedAppointment.doctorId /
+    // assignedExpertId) or a sibling appointment having a doctor could
+    // show a routing button that silently does nothing but save vitals,
+    // with a toast that used to claim it worked anyway.
+    const hasDoctor = Boolean(
+      selectedAppointment?.doctorId &&
+        selectedAppointment.doctorId !== "unassigned",
     );
-    const hasExpert = patientAppts.some(
-      (a) => a.assignedExpertId && a.assignedExpertId !== "unassigned",
+    const hasExpert = Boolean(
+      (selectedAppointment as any)?.assignedExpertId &&
+        (selectedAppointment as any).assignedExpertId !== "unassigned",
     );
 
     return (
