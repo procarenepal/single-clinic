@@ -36,8 +36,9 @@ export function labLinesAsPathologyBilling(
 
   if (labItems.length === 0) return null;
 
-  // splitRevenueByLineKind only understands positive invoices, so a credit
-  // note (negated lines and total) is split on its magnitudes and negated.
+  // The split is taken on magnitudes so the paid/balance arithmetic below
+  // works in positive numbers; the credit note's sign goes back on at the
+  // end of each figure.
   const sign = (invoice.totalAmount || 0) < 0 ? -1 : 1;
   const magnitude = (n: number | undefined) => Math.abs(n || 0);
   const split = splitRevenueByLineKind(

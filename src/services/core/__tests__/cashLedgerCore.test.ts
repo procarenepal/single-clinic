@@ -134,6 +134,12 @@ describe("shareOfInvoiceForKind", () => {
   it("ignores a nothing-collected invoice", () => {
     expect(shareOfInvoiceForKind(1000, 300, 0)).toBe(0);
   });
+
+  it("keeps a credit note's refund negative so the kind nets it", () => {
+    // The reversal of the 1000 invoice above: every figure negated. The
+    // pharmacy card previously saw 0 here and kept the original 150.
+    expect(shareOfInvoiceForKind(-1000, -300, -500)).toBe(-150);
+  });
 });
 
 describe("splitRevenueByLineKind", () => {
@@ -207,6 +213,22 @@ describe("splitRevenueByLineKind", () => {
     expect(splitRevenueByLineKind([], 500).clinical).toBe(500);
     expect(splitRevenueByLineKind(undefined, 500).clinical).toBe(500);
     expect(splitRevenueByLineKind([{ amount: 0 }], 500).clinical).toBe(500);
+  });
+
+  it("splits a credit note the same way, with the sign kept", () => {
+    // A reversed mixed invoice used to land entirely in clinical, so the
+    // pathology and pharmacy cards never netted the reversal.
+    const split = splitRevenueByLineKind(
+      [
+        { amount: -500, lineKind: "service" },
+        { amount: -300, lineKind: "lab" },
+        { amount: -200, lineKind: "medicine" },
+      ],
+      -1130,
+    );
+
+    expect(split).toEqual({ clinical: -565, pathology: -339, pharmacy: -226 });
+    expect(split.clinical + split.pathology + split.pharmacy).toBe(-1130);
   });
 });
 

@@ -132,8 +132,12 @@ export function splitRevenueByLineKind(
 
   const base: RevenueByKind = { ...empty };
 
+  // A credit note is the same invoice with every figure negated, so the
+  // split works on magnitudes and the sign goes back on at the end —
+  // otherwise its whole reversal fell into "clinical" and the pharmacy
+  // and pathology cards never netted it.
   for (const item of items) {
-    const amount = item.amount || 0;
+    const amount = Math.abs(item.amount || 0);
 
     // Lines written before lineKind existed are all services.
     if (item.lineKind === "lab") base.pathology += amount;
@@ -147,16 +151,18 @@ export function splitRevenueByLineKind(
     return { ...empty, clinical: totalAmount };
   }
 
+  const sign = totalAmount < 0 ? -1 : 1;
+  const magnitude = Math.abs(totalAmount);
   const round2 = (n: number) => Math.round(n * 100) / 100;
-  const clinical = round2((base.clinical / lineTotal) * totalAmount);
-  const pathology = round2((base.pathology / lineTotal) * totalAmount);
+  const clinical = round2((base.clinical / lineTotal) * magnitude);
+  const pathology = round2((base.pathology / lineTotal) * magnitude);
 
   return {
-    clinical,
-    pathology,
+    clinical: sign * clinical,
+    pathology: sign * pathology,
     // Absorbs any rounding remainder so the three always sum to the
     // invoice total exactly.
-    pharmacy: round2(totalAmount - clinical - pathology),
+    pharmacy: sign * round2(magnitude - clinical - pathology),
   };
 }
 
@@ -175,9 +181,14 @@ export function shareOfInvoiceForKind(
   kindAmount: number,
   amount: number,
 ): number {
-  if (totalAmount <= 0 || amount <= 0 || kindAmount <= 0) return 0;
+  if (!totalAmount || !kindAmount || !amount) return 0;
 
-  return (amount * kindAmount) / totalAmount;
+  // A refund on a credit note is a negative amount against negative
+  // figures; the share keeps the money's own sign so it nets.
+  const share =
+    (Math.abs(amount) * Math.abs(kindAmount)) / Math.abs(totalAmount);
+
+  return amount < 0 ? -share : share;
 }
 
 /**
