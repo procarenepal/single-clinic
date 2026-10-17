@@ -991,8 +991,16 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                     );
                   })()}
 
-                  {/* Payment details for Package Sales */}
-                  {quickIntakeForm.appointmentTypeId.startsWith("pkg_") && (
+                  {/* Payment details for Package Sales. Gated on the
+                      FIRST CLINICIAN ROW's own appointmentTypeId — the
+                      same field Submit treats as "is this a package sale"
+                      (it copies row 0's value onto the form-level field,
+                      but only inside the submit handler itself) — not the
+                      form-level field, which is never actually a package
+                      id while this form is still being filled in. */}
+                  {String(
+                    quickIntakeForm.clinicians?.[0]?.appointmentTypeId || "",
+                  ).startsWith("pkg_") && (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                         <div>
@@ -1077,10 +1085,14 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                     />
                   </div>
 
-                  {/* Checkbox for bypass workflow */}
-                  {quickIntakeForm.appointmentTypeId.startsWith(
-                    "consume_pkg_",
-                  ) && (
+                  {/* Checkbox for bypass workflow — same fix as the
+                      package-sale block above: gate on the first
+                      clinician row's own appointmentTypeId, not the
+                      form-level field (never actually "consume_pkg_"
+                      until the submit handler mutates it). */}
+                  {String(
+                    quickIntakeForm.clinicians?.[0]?.appointmentTypeId || "",
+                  ).startsWith("consume_pkg_") && (
                     <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-500/10 rounded border border-indigo-500/20">
                       <input
                         checked={quickIntakeForm.sendDirectlyToCabin}
