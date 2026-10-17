@@ -10,13 +10,20 @@ import {
   ModalFooter,
 } from "@/components/ui";
 import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
-import { AppointmentBillingSettings, Patient, TreatmentPackage } from "@/types/models";
+import {
+  AppointmentBillingSettings,
+  Doctor,
+  Expert,
+  Patient,
+  TreatmentPackage,
+} from "@/types/models";
 import { packageService } from "@/services/packageService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { walletService } from "@/services/walletService";
 import { patientService } from "@/services/patientService";
 import { patientPackageService } from "@/services/patientPackageService";
 import { appointmentService } from "@/services/appointmentService";
+import { ensureSessionLine } from "@/services/visitLineService";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 
@@ -24,12 +31,16 @@ interface SellPackageModalProps {
   isOpen: boolean;
   onClose: () => void;
   patients: Patient[];
+  doctors: Doctor[];
+  experts: Expert[];
 }
 
 export default function SellPackageModal({
   isOpen,
   onClose,
   patients,
+  doctors,
+  experts,
 }: SellPackageModalProps) {
   const { clinicId, currentUser } = useAuthContext();
   const [packages, setPackages] = useState<TreatmentPackage[]>([]);
@@ -44,7 +55,11 @@ export default function SellPackageModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [startSessionInstantly, setStartSessionInstantly] = useState(false);
-  const [applyTax, setApplyTax] = useState(false);
+  // "doctor:<id>" or "expert:<id>" — who performs the first session when
+  // starting it instantly. There was previously no way to set this at all;
+  // the session visit was created with doctorId "unassigned" and Settle
+  // later refused it with "No clinician is on this visit".
+  const [sessionClinicianKey, setSessionClinicianKey] = useState("");
 
   // New vs Existing mode
   const [saleMode, setSaleMode] = useState<"existing" | "new">("existing");
@@ -73,7 +88,7 @@ export default function SellPackageModal({
       setReference("");
       setNotes("");
       setStartSessionInstantly(false);
-      setApplyTax(false);
+      setSessionClinicianKey("");
       setSaleMode("existing");
       setNewPatientForm({
         name: "",
@@ -145,6 +160,37 @@ export default function SellPackageModal({
 
     if (!pkg || !clinicId || !currentUser) return;
 
+    let sessionClinician: {
+      id: string;
+      name: string;
+      kind: "doctor" | "expert";
+    } | null = null;
+
+    if (startSessionInstantly) {
+      const [kind, id] = sessionClinicianKey.split(":") as [
+        "doctor" | "expert" | undefined,
+        string | undefined,
+      ];
+      const person =
+        kind === "doctor"
+          ? doctors.find((d) => d.id === id)
+          : kind === "expert"
+            ? experts.find((e) => e.id === id)
+            : undefined;
+
+      if (!person) {
+        addToast({
+          title: "Clinician Required",
+          description:
+            "Select who performs the first session before starting it instantly.",
+          color: "warning",
+        });
+
+        return;
+      }
+      sessionClinician = { id: person.id, name: person.name, kind };
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -178,14 +224,18 @@ export default function SellPackageModal({
         finalPatientPanVat = pat.patientPanVat;
       }
 
-      // 2. Create the Billing record
+      // 2. Create the Billing record. Tax comes from the package's own
+      // flag (Settings › Packages), gated by the clinic's master switch —
+      // not a per-sale checkbox staff had to remember to tick, which
+      // previously let the identical package sell with or without VAT
+      // depending on who was at the desk.
       const billingData = appointmentBillingService.buildPackageSaleBillingData({
         pkg,
         clinicId,
         patientId: finalPatientId,
         patientName: finalPatientName,
         patientPanVat: finalPatientPanVat,
-        applyTax,
+        applyTax: pkg.isTaxable === true && Boolean(billingSettings?.enableTax),
         defaultTaxPercentage: billingSettings?.defaultTaxPercentage,
         createdBy: currentUser.uid,
         // Identity for this one sale — see buildPackageSaleBillingData.
@@ -195,11 +245,14 @@ export default function SellPackageModal({
       const { id: billingId } =
         await appointmentBillingService.createBilling(billingData);
 
-      // 3. Record Payment (if price > 0)
-      if (pkg.price > 0) {
+      // 3. Record Payment for the invoice's actual total — VAT included
+      // when the package is taxable. Paying the bare pkg.price left every
+      // taxable sale "partial" by exactly the VAT despite the patient
+      // having paid in full at the desk.
+      if (billingData.totalAmount > 0) {
         await appointmentBillingService.recordPayment(
           billingId,
-          pkg.price,
+          billingData.totalAmount,
           paymentMethod,
           reference,
           notes || `Purchased ${pkg.name}`,
@@ -247,13 +300,16 @@ export default function SellPackageModal({
       }
 
       // 6. Start First Session Instantly
-      if (startSessionInstantly) {
+      if (startSessionInstantly && sessionClinician && patientPkgId) {
         const now = new Date();
         const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
         const newApptId = await appointmentService.createAppointment({
           patientId: finalPatientId,
-          doctorId: "unassigned",
+          doctorId:
+            sessionClinician.kind === "doctor" ? sessionClinician.id : "unassigned",
+          assignedExpertId:
+            sessionClinician.kind === "expert" ? sessionClinician.id : undefined,
           appointmentTypeId: "package-session",
           patientPackageId: patientPkgId,
           appointmentDate: now,
@@ -263,13 +319,45 @@ export default function SellPackageModal({
           clinicId: clinicId,
           branchId: clinicId,
           createdBy: currentUser.uid,
-          billingId: billingId,
-          billingStatus: "paid",
-          paymentStatus: "paid",
+          // Neither billingId (that would be the PACKAGE SALE's invoice,
+          // not this visit's) nor a "paid" stamp belongs here — see the
+          // identical fix and reasoning in front-office-desk.tsx's Quick
+          // Intake package-session paths. This visit needs to reach
+          // Settle for the session's commission to actually be generated.
         } as any);
 
-        if (patientPkgId) {
-          await patientPackageService.startSession(patientPkgId, newApptId);
+        await patientPackageService.startSession(patientPkgId, newApptId);
+
+        // The session's commission-only line, for whoever was picked
+        // above — without this the visit reaches Settle with nothing on
+        // it to bill, and the clinician earns nothing for the session.
+        try {
+          await ensureSessionLine({
+            appointment: { id: newApptId },
+            patientPackageId: patientPkgId,
+            packages,
+            performer: sessionClinician,
+            ctx: {
+              clinicId,
+              userId: currentUser.uid,
+              pricing: {
+                taxPercentage: billingSettings?.defaultTaxPercentage,
+                isTaxEnabled: billingSettings?.enableTax,
+              },
+            },
+          });
+        } catch (sessionLineErr) {
+          console.error(
+            "Error recording the first package session's commission line:",
+            sessionLineErr,
+          );
+          addToast({
+            title: "Session Started, but Not Logged for Commission",
+            description:
+              "The package session visit was created, but its commission line could not be recorded — add it from the queue before Settle.",
+            color: "warning",
+            duration: 15000,
+          });
         }
       }
 
@@ -506,37 +594,67 @@ export default function SellPackageModal({
               />
             </div>
 
-            <div className="flex items-center gap-2 mt-2">
-              <input
-                checked={applyTax}
-                className="w-4 h-4 text-primary rounded border-border-base focus:ring-primary"
-                id="applyTax"
-                type="checkbox"
-                onChange={(e) => setApplyTax(e.target.checked)}
-              />
-              <label
-                className="text-[12px] font-medium text-text-main cursor-pointer select-none"
-                htmlFor="applyTax"
-              >
-                Apply Tax to Invoice
-              </label>
-            </div>
+            {selectedPkg && (
+              <p className="text-[11.5px] text-text-muted">
+                {selectedPkg.isTaxable
+                  ? "VAT applies to this package per Settings › Packages."
+                  : "This package is VAT-exempt per Settings › Packages."}
+              </p>
+            )}
 
             {selectedPkg && (selectedPkg.totalSessions || 0) > 0 && (
-              <div className="flex items-center gap-2 mt-2 p-2 bg-primary/5 rounded border border-primary/10">
-                <input
-                  checked={startSessionInstantly}
-                  className="w-4 h-4 text-primary rounded border-border-base focus:ring-primary"
-                  id="startSession"
-                  type="checkbox"
-                  onChange={(e) => setStartSessionInstantly(e.target.checked)}
-                />
-                <label
-                  className="text-[12px] font-medium text-text-main cursor-pointer select-none"
-                  htmlFor="startSession"
-                >
-                  Start first session instantly (Add to Lobby Queue)
-                </label>
+              <div className="mt-2 p-2 bg-primary/5 rounded border border-primary/10 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    checked={startSessionInstantly}
+                    className="w-4 h-4 text-primary rounded border-border-base focus:ring-primary"
+                    id="startSession"
+                    type="checkbox"
+                    onChange={(e) => {
+                      setStartSessionInstantly(e.target.checked);
+                      if (!e.target.checked) setSessionClinicianKey("");
+                    }}
+                  />
+                  <label
+                    className="text-[12px] font-medium text-text-main cursor-pointer select-none"
+                    htmlFor="startSession"
+                  >
+                    Start first session instantly (Add to Lobby Queue)
+                  </label>
+                </div>
+                {startSessionInstantly && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-text-muted mb-1 block">
+                      Performed By <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      className="w-full px-3 py-2 text-[13px] border border-border-base rounded bg-white focus:outline-none focus:border-primary"
+                      value={sessionClinicianKey}
+                      onChange={(e) => setSessionClinicianKey(e.target.value)}
+                    >
+                      <option value="">Select a doctor or expert</option>
+                      {doctors.length > 0 && (
+                        <optgroup label="Doctors">
+                          {doctors.map((d) => (
+                            <option key={d.id} value={`doctor:${d.id}`}>
+                              Dr. {d.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {experts.length > 0 && (
+                        <optgroup label="Experts">
+                          {experts.map((e) => (
+                            <option key={e.id} value={`expert:${e.id}`}>
+                              {e.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
           </ModalBody>

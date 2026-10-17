@@ -2704,16 +2704,35 @@ export default function FrontOfficeDesk() {
       let packageIdToConsume = selectedAppointment.patientPackageId;
       let actualProcedureName = procedure.procedureType;
 
-      if (procedure.procedureType.startsWith("consume_pkg_")) {
-        packageIdToConsume = procedure.procedureType.replace(
-          "consume_pkg_",
-          "",
-        );
+      // procedureType is a comma-joined multi-select list (ProcedureModal
+      // appends each new pick to the END), so a "Consume Session" choice
+      // alongside a catalogue procedure — e.g. "CO2 Laser Resurfacing,
+      // consume_pkg_<id>" — was never detected by a whole-string
+      // startsWith: it only matched when the package pick happened to be
+      // the very first thing selected. Checking each comma-separated
+      // token catches it regardless of position.
+      const procedureTypeTokens = procedure.procedureType
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const consumePkgToken = procedureTypeTokens.find((t) =>
+        t.startsWith("consume_pkg_"),
+      );
+
+      if (consumePkgToken) {
+        packageIdToConsume = consumePkgToken.replace("consume_pkg_", "");
         const pkg = modalActivePackages.find(
           (p) => p.id === packageIdToConsume,
         );
+        const displayName = pkg ? pkg.packageName : "Package Session";
 
-        actualProcedureName = pkg ? pkg.packageName : "Package Session";
+        // Swap just the raw token for a human-readable name — any OTHER
+        // selected procedure name in the same list stays intact, since a
+        // visit can combine a catalogue procedure with consuming a
+        // package session in one log.
+        actualProcedureName = procedureTypeTokens
+          .map((t) => (t === consumePkgToken ? displayName : t))
+          .join(", ");
       }
 
       const clinicianName = getLoggedInClinicianName("Clinician");
@@ -2781,6 +2800,13 @@ export default function FrontOfficeDesk() {
         const procList = getProcedureList(actualProcedureName);
         const itemsList: any[] = [];
         let calculatedFee = 0;
+        // Set when a selected name is neither a package-session token nor
+        // a catalogue service — in practice, "Other". Distinguishes "there
+        // was nothing left to bill because everything was already on the
+        // visit" (correctly silent) from "a typed fee has nowhere to go
+        // because nothing the catalogue prices was actually selected" —
+        // which used to discard the fee with no record and no warning.
+        let hadUnbillableSelection = false;
 
         procList.forEach((procName) => {
           if (procName.startsWith("consume_pkg_")) return;
@@ -2807,6 +2833,8 @@ export default function FrontOfficeDesk() {
               });
               calculatedFee += Number(matchingType.price || 0);
             }
+          } else {
+            hadUnbillableSelection = true;
           }
         });
 
@@ -2831,6 +2859,19 @@ export default function FrontOfficeDesk() {
           recommendedProcedureData =
             (currentAppt as any).recommendedProcedure || null;
           // skip the rest of the feeNum>0 block
+
+          // A typed fee with nowhere to go is not the same as "nothing left
+          // to bill" — this app deliberately never files a charge the
+          // catalogue didn't price, but silently proceeding left staff
+          // believing the fee was recorded when it was simply dropped.
+          if (hadUnbillableSelection) {
+            addToast({
+              title: "Fee Not Recorded",
+              description: `A fee of NPR ${feeNum.toLocaleString()} was entered for "${actualProcedureName}", which is not a catalogue service and cannot be billed. Add it under Settings › Appointment Types, or select the matching catalogue service instead.`,
+              color: "warning",
+              duration: 15000,
+            });
+          }
         } else {
           const newItems = itemsList;
 
@@ -6549,6 +6590,8 @@ export default function FrontOfficeDesk() {
       <SellPackageModal
         isOpen={isSellPackageModalOpen}
         patients={patients}
+        doctors={doctors}
+        experts={experts}
         onClose={() => setIsSellPackageModalOpen(false)}
       />
     </div>
