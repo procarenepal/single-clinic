@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (type-check, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npx vitest run
+
+      # The real .env is gitignored; the example carries every key the build
+      # needs to resolve, which is enough to prove the production bundle
+      # compiles. Values are irrelevant to the build itself.
+      - name: Production build
+        run: |
+          cp .env.example .env
+          npx vite build --mode production
+
+  backend:
+    name: Billing backend (tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: billing-backend
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      # Startup decrypts stored IRD credentials with this key; the test
+      # profile has no rows to decrypt, so any valid 32-byte key will do.
+      IRD_CONFIG_ENC_KEY: 2gojAuFu1LtI+rCHSJb+GYlrCmbyGev6RJwLhJN0gDw=
+      DB_PASSWORD: unused-under-h2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+
+      # mvnw is checked in without the executable bit (Windows checkout).
+      - name: Tests (H2 in-memory, test profile)
+        run: bash ./mvnw -B -q test
