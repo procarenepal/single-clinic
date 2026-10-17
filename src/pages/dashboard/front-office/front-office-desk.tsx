@@ -3956,6 +3956,33 @@ export default function FrontOfficeDesk() {
       return;
     }
 
+    // A referral alone (no doctor, no expert, no package) is only a real
+    // booking if it is for a FUTURE date — staff can assign a clinician
+    // before that visit actually happens. Checking in TODAY with nothing
+    // but a referral put the patient straight into the Lobby Queue with
+    // no clinician and no chargeable line: validClinicianRows was empty,
+    // so no line was ever appended, and the visit later refused at Check
+    // In / Settle with "No clinician is on this visit" — a dead end that
+    // this screen's own success toast gave no hint of.
+    if (!hasDoctor && !hasExpert && !isPackageSale && hasReferral) {
+      const intakeDate = quickIntakeForm.appointmentDate
+        ? parseLocalDate(quickIntakeForm.appointmentDate)
+        : new Date();
+      const isTodayIntake =
+        intakeDate.toDateString() === new Date().toDateString();
+
+      if (isTodayIntake) {
+        addToast({
+          title: "Validation Error",
+          description:
+            "A referral alone cannot be checked in today with no Doctor or Expert — assign one, or schedule this for a future date instead.",
+          color: "danger",
+        });
+
+        return;
+      }
+    }
+
     const totalReferralSplit = quickIntakeForm.referrals.reduce(
       (sum: number, ref: any) => sum + (Number(ref.commissionPercentage) || 0),
       0,
@@ -4059,10 +4086,15 @@ export default function FrontOfficeDesk() {
         patientNameToUse = selectedExistingPatient.name;
         patientPanVatToUse = selectedExistingPatient.patientPanVat;
 
-        // Optionally update existing patient's doctor, referrals or expert in background if changed
+        // Optionally update existing patient's doctor, referrals or expert
+        // in background if changed. quickIntakeForm.doctorId is the
+        // literal string "unassigned" whenever the first clinician row is
+        // an expert — truthy, so the plain `if (quickIntakeForm.doctorId)`
+        // below wrote "unassigned" straight onto the patient's profile,
+        // erasing whichever doctor they already had on file.
         const updateData: any = {};
 
-        if (quickIntakeForm.doctorId)
+        if (quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned")
           updateData.doctorId = quickIntakeForm.doctorId;
         if (quickIntakeForm.assignedExpertId)
           updateData.assignedExpertId = quickIntakeForm.assignedExpertId;

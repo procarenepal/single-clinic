@@ -184,6 +184,35 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
 
   const modalRoot = document.body;
 
+  // The catalogue total for a selected-items list — not already-billed
+  // items, since charging those again would bill them twice. Shared by
+  // the auto-fill on toggle and the live mismatch warning below: both
+  // need the exact same number, or the warning would fire against a
+  // total that disagrees with what was actually auto-filled.
+  const computeCatalogueFeeTotal = (list: string[]): number => {
+    let totalFee = 0;
+
+    list.forEach((item) => {
+      if (item.startsWith("consume_pkg_")) {
+        // package consumption has 0 fee
+      } else {
+        const matchingType = appointmentTypes.find((t) => t.name === item);
+
+        if (matchingType) {
+          const wasAlreadyBilled = (
+            (appointment as any).pendingVisitItems || []
+          ).some((l: any) => l.appointmentTypeId === matchingType.id);
+
+          if (!wasAlreadyBilled) {
+            totalFee += Number(matchingType.price || 0);
+          }
+        }
+      }
+    });
+
+    return totalFee;
+  };
+
   const handleToggleProcedure = (val: string) => {
     setProcedure((prev) => {
       const currentList = getProcedureList(prev.procedureType);
@@ -198,39 +227,10 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
 
       const newTypeStr = newList.join(", ");
 
-      // Recalculate fee
-      let totalFee = 0;
-
-      newList.forEach((item) => {
-        if (item.startsWith("consume_pkg_")) {
-          // package consumption has 0 fee
-        } else {
-          const matchingType = appointmentTypes.find((t) => t.name === item);
-
-          if (matchingType) {
-            let wasAlreadyBilled = false;
-
-            // Already on the visit (the booked service appended at
-            // check-in) — charging it again here would bill it twice.
-            if (
-              ((appointment as any).pendingVisitItems || []).some(
-                (l: any) => l.appointmentTypeId === matchingType.id,
-              )
-            ) {
-              wasAlreadyBilled = true;
-            }
-
-            if (!wasAlreadyBilled) {
-              totalFee += Number(matchingType.price || 0);
-            }
-          }
-        }
-      });
-
       return {
         ...prev,
         procedureType: newTypeStr,
-        fee: String(totalFee),
+        fee: String(computeCatalogueFeeTotal(newList)),
       };
     });
   };
@@ -403,6 +403,36 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                       setProcedure((p) => ({ ...p, fee: e.target.value }))
                     }
                   />
+                  {(() => {
+                    // This field adds ON TOP of catalogue pricing — it was
+                    // never a way to reduce it, but nothing said so. A
+                    // lower typed number used to be recorded in the note
+                    // and saved to recommendedProcedure.fee as if it were
+                    // the agreed charge, while Finalise still billed every
+                    // selected item at its full catalogue price — so a
+                    // patient told "4,000" at the desk was billed 5,000.
+                    const selected = getProcedureList(procedure.procedureType);
+                    const catalogueTotal = computeCatalogueFeeTotal(selected);
+                    const typed = Number(procedure.fee);
+
+                    if (
+                      procedure.fee.trim() &&
+                      !isNaN(typed) &&
+                      typed < catalogueTotal
+                    ) {
+                      return (
+                        <p className="text-[10px] font-semibold text-danger mt-1">
+                          ⚠️ The selected items price at NPR{" "}
+                          {catalogueTotal.toLocaleString()} and will be billed
+                          at that amount regardless — this field only adds
+                          extra charge, it cannot lower it. Apply a discount
+                          at checkout instead if a reduction was agreed.
+                        </p>
+                      );
+                    }
+
+                    return null;
+                  })()}
                 </div>
 
                 {/* Energy (Fluence) */}
