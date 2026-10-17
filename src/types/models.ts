@@ -2562,6 +2562,18 @@ export interface PathologyBilling {
   creditNoteReason?: string;
   hasCreditNote?: boolean; // set on the ORIGINAL invoice once it has been reversed — prevents issuing a second Credit Note against it
 
+  /**
+   * Set only on a row synthesised from the lab lines of a Billing Counter
+   * invoice (an appointmentBilling document that mixed a consultation or
+   * medicine with lab tests), not a real pathologyBilling document. The
+   * pathology screens read only their own collection, so lab tests billed
+   * through the counter were invisible to them while the hospital-wide
+   * Daily Report counted them. Actions that need a real pathologyBilling
+   * document do not apply to such a row.
+   */
+  sourceType?: "billing-counter";
+  sourceBillingId?: string;
+
   // Robust Pathology Workflow Fields
   labReferenceNo?: string; // Internal Lab tracking ID
   sampleCollectionDate?: Date;

@@ -20,6 +20,8 @@ import { patientService } from "@/services/patientService";
 import { pathologyService } from "@/services/pathologyService";
 import { labTechnicianService } from "@/services/labTechnicianService";
 import { pathologyBillingService } from "@/services/pathologyBillingService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { counterLabInvoicesAsPathologyBillings } from "@/services/core/pathologyCounterCore";
 import { clinicService } from "@/services/clinicService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
@@ -51,6 +53,7 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 const TAB_KEYS = [
   "tests",
@@ -243,7 +246,7 @@ export default function PathologyPage() {
 
   // Daily Report state
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    formatLocalDate(),
   );
 
   // Search states
@@ -408,6 +411,7 @@ export default function PathologyPage() {
           clinicData,
           layoutConfigData,
           patientsData,
+          counterInvoicesData,
         ] = await Promise.all([
           pathologyService.getTestsByClinic(clinicId),
           pathologyService.getCategoriesByClinic(clinicId),
@@ -421,16 +425,27 @@ export default function PathologyPage() {
           doctorId && allowedPatientIds
             ? patientService.getPatientsByDoctor(doctorId, clinicId)
             : patientService.getPatientsByClinic(clinicId),
+          appointmentBillingService
+            .getBillingByClinic(clinicId)
+            .catch(() => []),
         ]);
 
+        // Lab tests are also billed through the Billing Counter, which
+        // stores the invoice in appointmentBilling. Those rows join this
+        // module's own invoices here, so every screen driven off
+        // `billings` — the Daily Report above all — sees them.
+        const allBillings = [
+          ...billingsData,
+          ...counterLabInvoicesAsPathologyBillings(counterInvoicesData),
+        ];
         let filteredTests = testsData;
-        let filteredBillings = billingsData;
+        let filteredBillings = allBillings;
 
         if (allowedPatientIds) {
           filteredTests = testsData.filter(
             (t) => t.patientId && allowedPatientIds?.has(t.patientId),
           );
-          filteredBillings = billingsData.filter(
+          filteredBillings = allBillings.filter(
             (b) => b.patientId && allowedPatientIds?.has(b.patientId),
           );
         }
@@ -466,7 +481,15 @@ export default function PathologyPage() {
       Promise.all([
         pathologyBillingService.getBillingByClinic(clinicId),
         pathologyService.getTestsByClinic(clinicId),
-      ]).then(([newBillings, newTests]) => {
+        appointmentBillingService
+          .getBillingByClinic(clinicId)
+          .catch(() => []),
+      ]).then(([ownBillings, newTests, counterInvoices]) => {
+        const newBillings = [
+          ...ownBillings,
+          ...counterLabInvoicesAsPathologyBillings(counterInvoices),
+        ];
+
         if (currentDoctorId) {
           // If we are filtering by doctor, we need their patient IDs to filter these fresh fetches
           patientService
@@ -607,7 +630,7 @@ export default function PathologyPage() {
 
   // Daily Report filtered data
   const dailyReportData = useMemo(() => {
-    const selectedDateObj = new Date(selectedDate);
+    const selectedDateObj = parseLocalDate(selectedDate);
     const startOfDay = new Date(selectedDateObj.setHours(0, 0, 0, 0));
     const endOfDay = new Date(selectedDateObj.setHours(23, 59, 59, 999));
 
@@ -672,9 +695,17 @@ export default function PathologyPage() {
     const billingDerivedTests: DailyTestRow[] = validBillings.flatMap(
       (billing) =>
         billing.items.map((item, idx) => {
-          const categoryName = categories.find(
-            (c) => c.id === item.testId,
-          )?.name;
+          // A counter-billed lab line's testId is the priced test type,
+          // which points at its category through targetId; this module's
+          // own lines carry the category id directly.
+          const pricedType = testTypes.find((t) => t.id === item.testId);
+          const categoryId =
+            pricedType?.targetType === "category"
+              ? pricedType.targetId
+              : item.testId;
+          const categoryName =
+            categories.find((c) => c.id === categoryId)?.name ??
+            pricedType?.name;
 
           return {
             id: `${billing.id}-${idx}`,
@@ -755,7 +786,7 @@ export default function PathologyPage() {
       technicianBreakdown,
       totalPatients,
     };
-  }, [tests, billings, selectedDate, categories]);
+  }, [tests, billings, selectedDate, categories, testTypes]);
 
   // Test form handlers
   const resetTestForm = () => {
@@ -2612,10 +2643,16 @@ export default function PathologyPage() {
     delete tabLabels.dailyReport;
   }
 
+  // The badge opens the Billing tab's invoice list, which reads only this
+  // module's own documents — a counter-billed invoice is paid and managed
+  // on the appointment invoice itself, so it is not counted here.
   const unpaidBillingsCount = billings.filter(
     (b) =>
-      b.status === "draft" ||
-      (b.balanceAmount > 0 && b.status !== "cancelled" && b.status !== "paid"),
+      b.sourceType !== "billing-counter" &&
+      (b.status === "draft" ||
+        (b.balanceAmount > 0 &&
+          b.status !== "cancelled" &&
+          b.status !== "paid")),
   ).length;
 
   const seedHIVTest = async () => {
