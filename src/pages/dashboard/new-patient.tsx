@@ -56,6 +56,7 @@ import {
   Expert,
   StaffMember,
 } from "@/types/models";
+import { parseLocalDate, formatLocalDate } from "@/utils/localDate";
 
 // Custom UI
 import { Button } from "@/components/ui/button";
@@ -824,7 +825,7 @@ const NewPatientPage: React.FC = () => {
     "idle" | "checking" | "duplicate" | "clear"
   >("idle");
   const TOTAL_STEPS = 2;
-  const formattedToday = new Date().toISOString().split("T")[0];
+  const formattedToday = formatLocalDate();
 
   // ── OPD Ticket
   const [opdTicket, setOpdTicket] = useState<{
@@ -970,7 +971,7 @@ const NewPatientPage: React.FC = () => {
             }));
 
           if (type === "ad-to-bs") {
-            const d = new Date(value);
+            const d = parseLocalDate(value);
             const v = validateADDate(d);
 
             if (!v.isValid) {
@@ -1140,7 +1141,7 @@ const NewPatientPage: React.FC = () => {
     }
     setLoadingAppointments(true);
     appointmentService
-      .getAppointmentsByDate(new Date(appt.appointmentDate), undefined)
+      .getAppointmentsByDate(parseLocalDate(appt.appointmentDate), undefined)
       .then(setExistingAppointments)
       .catch(console.error)
       .finally(() => setLoadingAppointments(false));
@@ -1149,7 +1150,7 @@ const NewPatientPage: React.FC = () => {
   // ── Helpers ─────────────────────────────────────────────────────────────
   const calcAge = (dob: string): string => {
     if (!dob) return "";
-    const b = new Date(dob);
+    const b = parseLocalDate(dob);
     const t = new Date();
 
     let years = t.getFullYear() - b.getFullYear();
@@ -1462,7 +1463,7 @@ const NewPatientPage: React.FC = () => {
     if (profile.relation) patientData.relation = profile.relation;
     if (profile.gender)
       patientData.gender = profile.gender as "male" | "female" | "other";
-    if (profile.dob) patientData.dob = new Date(profile.dob);
+    if (profile.dob) patientData.dob = parseLocalDate(profile.dob);
     if (profile.bloodGroup) patientData.bloodGroup = profile.bloodGroup as any;
     if (profile.age) patientData.age = parseInt(profile.age, 10);
 
@@ -1737,7 +1738,7 @@ const NewPatientPage: React.FC = () => {
             patientId,
             doctorId: appt.doctor,
             appointmentTypeId: appt.appointmentType,
-            appointmentDate: new Date(appt.appointmentDate),
+            appointmentDate: parseLocalDate(appt.appointmentDate),
             startTime: appt.startTime || undefined,
             endTime: appt.endTime || undefined,
             status: "scheduled" as const,
@@ -1751,7 +1752,7 @@ const NewPatientPage: React.FC = () => {
           if (appt.startTime) {
             const reminderPayload = {
               id: apptId,
-              appointmentDate: new Date(appt.appointmentDate),
+              appointmentDate: parseLocalDate(appt.appointmentDate),
               patientId,
               doctorId: appt.doctor,
               clinicId,
@@ -1784,12 +1785,15 @@ const NewPatientPage: React.FC = () => {
             age: profile.age,
             doctorName,
             appointmentDate: appt.appointmentDate
-              ? new Date(appt.appointmentDate).toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })
+              ? parseLocalDate(appt.appointmentDate).toLocaleDateString(
+                  "en-US",
+                  {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  },
+                )
               : "",
             appointmentType: apptTypeName,
           });
@@ -2739,7 +2743,7 @@ const NewPatientPage: React.FC = () => {
                       Existing Appointments
                     </h3>
                     <p className="text-[11px] text-text-muted">
-                      {new Date(appt.appointmentDate).toLocaleDateString(
+                      {parseLocalDate(appt.appointmentDate).toLocaleDateString(
                         "en-US",
                         {
                           weekday: "long",

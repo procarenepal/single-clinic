@@ -241,10 +241,9 @@ export async function bsToADApi(
       progress: 100,
       message: "Retrieved from cache",
     });
-    // Create date using UTC to avoid timezone issues
-    const date = new Date(Date.UTC(cached.year, cached.month - 1, cached.day));
-
-    return date;
+    // Local midnight, the same instant the computed path below returns —
+    // the UTC form rendered as the previous day on any clock behind UTC.
+    return new Date(cached.year, cached.month - 1, cached.day);
   }
 
   // Start with progress

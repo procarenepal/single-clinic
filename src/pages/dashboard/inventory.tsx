@@ -65,6 +65,7 @@ import {
   matchesVendor,
   resolveDateRange,
 } from "@/utils/inventoryFilters";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 // Icons
 
@@ -163,7 +164,7 @@ export default function InventoryPage() {
 
   const [returnForm, setReturnForm] = useState({
     notes: "",
-    returnDate: new Date().toISOString().split("T")[0],
+    returnDate: formatLocalDate(),
     condition: "used" as "new" | "used" | "damaged",
     returnQuantity: 1,
   });
@@ -279,7 +280,7 @@ export default function InventoryPage() {
       if (date.toDate) {
         dateObj = date.toDate();
       } else {
-        dateObj = new Date(date);
+        dateObj = parseLocalDate(date);
       }
 
       if (isNaN(dateObj.getTime())) return "—";
@@ -439,7 +440,7 @@ export default function InventoryPage() {
         quantity: parseInt(itemForm.quantity.toString()),
         purchasePrice: parseFloat(itemForm.purchasePrice) || 0,
         salePrice: 0, // Assets aren't for sale, but the model requires this
-        purchaseDate: new Date(itemForm.purchaseDate),
+        purchaseDate: parseLocalDate(itemForm.purchaseDate),
         itemType: itemForm.itemType,
         clinicId: clinicId!,
         branchId: branchId!,
@@ -774,7 +775,7 @@ export default function InventoryPage() {
         quantity: newQty,
         unitPrice: newPrice,
         totalAmount: newQty * newPrice,
-        purchaseDate: new Date(refillForm.purchaseDate),
+        purchaseDate: parseLocalDate(refillForm.purchaseDate),
         invoiceNumber: refillForm.invoiceNumber,
         notes: refillForm.notes,
         clinicId,
@@ -846,7 +847,7 @@ export default function InventoryPage() {
           id: undefined, // Let Firestore generate new ID
           quantity: returnQty,
           status: "returned" as const,
-          returnDate: new Date(returnForm.returnDate),
+          returnDate: parseLocalDate(returnForm.returnDate),
           returnCondition: returnForm.condition,
           returnNotes: returnForm.notes,
         };
@@ -857,7 +858,7 @@ export default function InventoryPage() {
         // Full return - just update status
         const updateData = {
           status: "returned" as const,
-          returnDate: new Date(returnForm.returnDate),
+          returnDate: parseLocalDate(returnForm.returnDate),
           returnCondition: returnForm.condition,
           returnNotes: returnForm.notes,
           updatedAt: new Date(),
@@ -903,7 +904,7 @@ export default function InventoryPage() {
       loadInventoryData();
       setReturnForm({
         notes: "",
-        returnDate: new Date().toISOString().split("T")[0],
+        returnDate: formatLocalDate(),
         condition: "used",
         returnQuantity: 1,
       });
@@ -2557,16 +2558,14 @@ export default function InventoryPage() {
                         type="date"
                         value={
                           issueForm.expectedReturnDate
-                            ? issueForm.expectedReturnDate
-                                .toISOString()
-                                .split("T")[0]
+                            ? formatLocalDate(issueForm.expectedReturnDate)
                             : ""
                         }
                         onChange={(e) =>
                           setIssueForm({
                             ...issueForm,
                             expectedReturnDate: e.target.value
-                              ? new Date(e.target.value)
+                              ? parseLocalDate(e.target.value)
                               : null,
                           })
                         }

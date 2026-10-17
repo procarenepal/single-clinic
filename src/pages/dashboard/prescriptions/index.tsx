@@ -26,6 +26,7 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import { clinicService } from "@/services/clinicService";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { title } from "@/components/primitives";
@@ -337,7 +338,7 @@ export default function PrescriptionsPage() {
 
   const formatDate = (date: Date | string): string => {
     if (!date) return "N/A";
-    const d = new Date(date);
+    const d = parseLocalDate(date);
 
     if (isNaN(d.getTime())) return "N/A";
 
@@ -355,9 +356,13 @@ export default function PrescriptionsPage() {
       selectedDoctor === "all" || p.doctorId === selectedDoctor;
 
     const pDate = new Date(p.prescriptionDate);
+    // The end of the range is the whole of that day, not its first instant.
+    const endOfRange = dateRange.end ? parseLocalDate(dateRange.end) : null;
+
+    if (endOfRange) endOfRange.setHours(23, 59, 59, 999);
     const dateMatch =
-      (!dateRange.start || pDate >= new Date(dateRange.start)) &&
-      (!dateRange.end || pDate <= new Date(dateRange.end));
+      (!dateRange.start || pDate >= parseLocalDate(dateRange.start)) &&
+      (!endOfRange || pDate <= endOfRange);
 
     return searchMatch && statusMatch && doctorMatch && dateMatch;
   });
@@ -421,7 +426,7 @@ export default function PrescriptionsPage() {
       const wb = XLSX.utils.book_new();
 
       XLSX.utils.book_append_sheet(wb, ws, "Prescriptions");
-      const filename = `prescriptions_export_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const filename = `prescriptions_export_${formatLocalDate()}.xlsx`;
 
       XLSX.writeFile(wb, filename);
       addToast({
@@ -456,7 +461,7 @@ export default function PrescriptionsPage() {
       const wb = XLSX.utils.book_new();
 
       XLSX.utils.book_append_sheet(wb, ws, "Prescriptions");
-      const filename = `prescriptions_export_${new Date().toISOString().split("T")[0]}.csv`;
+      const filename = `prescriptions_export_${formatLocalDate()}.csv`;
 
       XLSX.writeFile(wb, filename, { bookType: "csv" });
       addToast({

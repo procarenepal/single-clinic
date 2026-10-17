@@ -20,6 +20,7 @@ import { visitorService } from "@/services/visitorService";
 import { Visitor } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { title } from "@/components/primitives";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 export default function ManageVisitorsPage() {
   const { clinicId, userData, currentUser } = useAuthContext();
@@ -39,7 +40,7 @@ export default function ManageVisitorsPage() {
   const itemsPerPage = 10;
 
   // Current date for default values
-  const currentDate = new Date().toISOString().split("T")[0];
+  const currentDate = formatLocalDate();
 
   const [visitorForm, setVisitorForm] = useState({
     purpose: "",
@@ -101,7 +102,7 @@ export default function ManageVisitorsPage() {
 
       const visitorData = {
         ...visitorForm,
-        date: new Date(visitorForm.date),
+        date: parseLocalDate(visitorForm.date),
         branchId: branchId,
         createdBy: currentUser.uid,
       };
@@ -156,7 +157,7 @@ export default function ManageVisitorsPage() {
       purpose: visitor.purpose,
       name: visitor.name,
       phone: formattedPhone,
-      date: visitor.date.toISOString().split("T")[0],
+      date: formatLocalDate(visitor.date),
       notes: visitor.notes || "",
     });
     setIsOpen(true);
@@ -402,10 +403,10 @@ export default function ManageVisitorsPage() {
                           </span>
                         </td>
                         <td className="text-sm">
-                          {new Date(visitor.date)
-                            .toISOString()
-                            .split("T")[0]
-                            .replace(/-/g, "/")}
+                          {formatLocalDate(new Date(visitor.date)).replace(
+                            /-/g,
+                            "/",
+                          )}
                         </td>
                         <td className="max-w-xs">
                           <p className="text-sm text-[rgb(var(--color-text-muted))] truncate">

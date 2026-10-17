@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { addToast } from "@/components/ui/toast";
 import { retryIrdSync } from "@/services/irdCbmsService";
 import { AppointmentBilling, PathologyBilling, MedicinePurchase } from "@/types/models";
+import { parseLocalDate } from "@/utils/localDate";
 
 interface IrdAnnexureReportProps {
   billings: AppointmentBilling[];
@@ -41,7 +42,7 @@ export interface CombinedIrdRecord {
 
 const formatNepaliDate = (date: Date | string): string => {
   try {
-    const d = new Date(date);
+    const d = parseLocalDate(date);
     if (isNaN(d.getTime())) return "-";
     const nepali = new NepaliDate(d);
     return nepali.format("YYYY-MM-DD");

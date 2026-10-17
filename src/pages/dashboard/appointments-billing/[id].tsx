@@ -44,6 +44,7 @@ import { PrintLayoutConfig } from "@/types/printLayout";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { adToBS } from "@/utils/dateConverter";
+import { parseLocalDate } from "@/utils/localDate";
 import {
   getLastPaymentMethod,
   setLastPaymentMethod,
@@ -463,7 +464,7 @@ export default function InvoiceDetailPage() {
   };
 
   const formatDateWithBS = (date: Date | string) => {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    const dateObj = typeof date === "string" ? parseLocalDate(date) : date;
     const adDate = dateObj.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",

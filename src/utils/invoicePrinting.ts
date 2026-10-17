@@ -9,6 +9,7 @@ import { PathologyBilling, AppointmentBilling } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { numberToWords } from "./numberToWords";
 import { adToBS } from "./dateConverter";
+import { parseLocalDate, formatLocalDate } from "./localDate";
 
 export type PrintFormat =
   | "A4"
@@ -135,7 +136,7 @@ export const getIrdPaymentCategory = (
 };
 
 const formatDate = (date: Date | string) => {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = typeof date === "string" ? parseLocalDate(date) : date;
   return d.toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -145,7 +146,7 @@ const formatDate = (date: Date | string) => {
 
 // IRD's invoice date fields are expected in both AD and BS (Nepali calendar).
 const formatDateWithBS = (date: Date | string) => {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = typeof date === "string" ? parseLocalDate(date) : date;
   try {
     return `${formatDate(d)} (BS ${adToBS(d).formatted})`;
   } catch {
@@ -812,7 +813,7 @@ export const generatePatientSlipHTML = (
 
   // Helper for date formatting
   const formatDate = (date: Date | string) => {
-    const d = typeof date === "string" ? new Date(date) : date;
+    const d = typeof date === "string" ? parseLocalDate(date) : date;
 
     return d.toLocaleDateString("en-US", {
       year: "numeric",
@@ -823,7 +824,7 @@ export const generatePatientSlipHTML = (
 
   const calculateAge = (dob: Date | string): number => {
     const today = new Date();
-    const b = typeof dob === "string" ? new Date(dob) : dob;
+    const b = typeof dob === "string" ? parseLocalDate(dob) : dob;
     let a = today.getFullYear() - b.getFullYear();
 
     if (
@@ -846,7 +847,7 @@ export const generatePatientSlipHTML = (
     .filter(Boolean)
     .join(" / ");
 
-  const slipDate = new Date().toISOString().split("T")[0].replace(/-/g, "/");
+  const slipDate = formatLocalDate().replace(/-/g, "/");
 
   // Layout for A4/A5
   const standardLayout = `

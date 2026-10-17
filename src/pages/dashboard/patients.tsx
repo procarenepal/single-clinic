@@ -33,6 +33,7 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 // Custom UI
 import { title } from "@/components/primitives";
 import {
@@ -669,8 +670,8 @@ export default function PatientsPage() {
       if (ageMax && ageVal > parseInt(ageMax)) return false;
       const reg = new Date(p.createdAt);
 
-      if (regStart && reg < new Date(regStart)) return false;
-      if (regEnd && reg > new Date(regEnd)) return false;
+      if (regStart && reg < parseLocalDate(regStart)) return false;
+      if (regEnd && reg > parseLocalDate(regEnd)) return false;
 
       return true;
     })
@@ -889,7 +890,7 @@ export default function PatientsPage() {
       XLSX.utils.book_append_sheet(wb, ws, "Patients");
       XLSX.writeFile(
         wb,
-        `patients_${new Date().toISOString().split("T")[0]}.xlsx`,
+        `patients_${formatLocalDate()}.xlsx`,
       );
       addToast({ title: "Exported", color: "success" });
     } catch {
@@ -915,7 +916,7 @@ export default function PatientsPage() {
       XLSX.utils.book_append_sheet(wb, ws, "Patients");
       XLSX.writeFile(
         wb,
-        `patients_${new Date().toISOString().split("T")[0]}.csv`,
+        `patients_${formatLocalDate()}.csv`,
         { bookType: "csv" },
       );
       addToast({ title: "Exported as CSV", color: "success" });

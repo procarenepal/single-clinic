@@ -48,6 +48,7 @@ import {
   Patient,
   Doctor,
 } from "@/types/models";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 export default function BedManagementPage() {
   const navigate = useNavigate();
@@ -98,7 +99,7 @@ export default function BedManagementPage() {
     bedId: "",
     patientId: "",
     doctorId: "",
-    allotmentDate: new Date().toISOString().split("T")[0],
+    allotmentDate: formatLocalDate(),
     dischargeDate: "",
   });
 
@@ -357,7 +358,7 @@ export default function BedManagementPage() {
       bedId: "",
       patientId: "",
       doctorId: "",
-      allotmentDate: new Date().toISOString().split("T")[0],
+      allotmentDate: formatLocalDate(),
       dischargeDate: "",
     });
     setIsEditing(false);
@@ -404,8 +405,8 @@ export default function BedManagementPage() {
 
     // Validate discharge date if provided
     if (allotmentForm.dischargeDate) {
-      const allotmentDate = new Date(allotmentForm.allotmentDate);
-      const dischargeDate = new Date(allotmentForm.dischargeDate);
+      const allotmentDate = parseLocalDate(allotmentForm.allotmentDate);
+      const dischargeDate = parseLocalDate(allotmentForm.dischargeDate);
 
       if (dischargeDate < allotmentDate) {
         addToast({
@@ -436,9 +437,9 @@ export default function BedManagementPage() {
         patientName: selectedPatient?.name || "",
         doctorId: allotmentForm.doctorId || undefined,
         doctorName: selectedDoctor?.name || undefined,
-        allotmentDate: new Date(allotmentForm.allotmentDate),
+        allotmentDate: parseLocalDate(allotmentForm.allotmentDate),
         dischargeDate: allotmentForm.dischargeDate
-          ? new Date(allotmentForm.dischargeDate)
+          ? parseLocalDate(allotmentForm.dischargeDate)
           : undefined,
         status: allotmentForm.dischargeDate ? "discharged" : "active",
         clinicId: clinicId!,
@@ -461,7 +462,7 @@ export default function BedManagementPage() {
           // "occupied" forever.
           await bedService.dischargeAllotment(
             allotmentForm.id,
-            new Date(allotmentForm.dischargeDate!),
+            parseLocalDate(allotmentForm.dischargeDate!),
           );
           const { status, dischargeDate, ...otherFields } = allotmentData;
 
@@ -510,11 +511,9 @@ export default function BedManagementPage() {
       bedId: allotment.bedId,
       patientId: allotment.patientId,
       doctorId: allotment.doctorId || "",
-      allotmentDate: new Date(allotment.allotmentDate)
-        .toISOString()
-        .split("T")[0],
+      allotmentDate: formatLocalDate(new Date(allotment.allotmentDate)),
       dischargeDate: allotment.dischargeDate
-        ? new Date(allotment.dischargeDate).toISOString().split("T")[0]
+        ? formatLocalDate(new Date(allotment.dischargeDate))
         : "",
     });
     setIsEditing(true);

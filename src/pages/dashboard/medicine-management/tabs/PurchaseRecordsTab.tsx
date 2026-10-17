@@ -27,6 +27,7 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import { Supplier, SupplierPurchaseRecord } from "@/types/models";
 
 interface PurchaseRecordFormData {
@@ -136,7 +137,7 @@ export default function PurchaseRecordsTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState<PurchaseRecordFormData>({
     supplierId: "",
-    purchaseDate: new Date().toISOString().split("T")[0],
+    purchaseDate: formatLocalDate(),
     billNumber: "",
     totalAmount: "",
     paidAmount: "",
@@ -253,7 +254,7 @@ export default function PurchaseRecordsTab({
       > = {
         supplierId: formData.supplierId,
         supplierName: supplier.name,
-        purchaseDate: new Date(formData.purchaseDate),
+        purchaseDate: parseLocalDate(formData.purchaseDate),
         billNumber: formData.billNumber,
         totalAmount: totalAmount,
         paidAmount: paidAmount,
@@ -319,7 +320,7 @@ export default function PurchaseRecordsTab({
     setEditingRecord(record);
     setFormData({
       supplierId: record.supplierId,
-      purchaseDate: record.purchaseDate.toISOString().split("T")[0],
+      purchaseDate: formatLocalDate(record.purchaseDate),
       billNumber: record.billNumber,
       totalAmount: record.totalAmount.toString(),
       paidAmount: record.paidAmount.toString(),
@@ -519,7 +520,7 @@ export default function PurchaseRecordsTab({
     setEditingRecord(null);
     setFormData({
       supplierId: "",
-      purchaseDate: new Date().toISOString().split("T")[0],
+      purchaseDate: formatLocalDate(),
       billNumber: "",
       totalAmount: "",
       paidAmount: "",
@@ -599,7 +600,7 @@ export default function PurchaseRecordsTab({
             handleCloseModal();
             setFormData({
               supplierId: "",
-              purchaseDate: new Date().toISOString().split("T")[0],
+              purchaseDate: formatLocalDate(),
               billNumber: "",
               totalAmount: "",
               paidAmount: "",

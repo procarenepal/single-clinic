@@ -23,6 +23,7 @@ import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { medicineService } from "@/services/medicineService";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   Medicine,
   MedicineBrand,
@@ -408,7 +409,7 @@ export default function MedicinesTab({
             ? rawExp
             : typeof (rawExp as any)?.toDate === "function"
               ? (rawExp as any).toDate()
-              : new Date(rawExp)
+              : parseLocalDate(rawExp)
           : null;
 
         if (expiryDate) {
@@ -792,10 +793,10 @@ export default function MedicinesTab({
       if (!dateObj) return "";
       try {
         if (typeof dateObj.toDate === "function")
-          return dateObj.toDate().toISOString().split("T")[0];
-        if (dateObj instanceof Date) return dateObj.toISOString().split("T")[0];
+          return formatLocalDate(dateObj.toDate());
+        if (dateObj instanceof Date) return formatLocalDate(dateObj);
 
-        return new Date(dateObj).toISOString().split("T")[0];
+        return formatLocalDate(parseLocalDate(dateObj));
       } catch (e) {
         return "";
       }
@@ -1003,7 +1004,8 @@ export default function MedicinesTab({
           medicineData.description = row.description.trim();
         if (row.batchNumber.trim())
           medicineData.batchNumber = row.batchNumber.trim();
-        if (row.expiryDate) medicineData.expiryDate = new Date(row.expiryDate);
+        if (row.expiryDate)
+          medicineData.expiryDate = parseLocalDate(row.expiryDate);
         if (row.price) medicineData.price = parseFloat(row.price);
         if (row.costPrice) medicineData.costPrice = parseFloat(row.costPrice);
         if (row.barcode.trim()) medicineData.barcode = row.barcode.trim();
@@ -1054,7 +1056,7 @@ export default function MedicinesTab({
                 schemeQty: 0,
                 updatedBy: userData.id,
                 expiryDate: row.expiryDate
-                  ? new Date(row.expiryDate)
+                  ? parseLocalDate(row.expiryDate)
                   : undefined,
                 costPrice: row.costPrice
                   ? parseFloat(row.costPrice)
@@ -1252,7 +1254,7 @@ export default function MedicinesTab({
           schemeQty,
           updatedBy: userData.id,
           expiryDate: refillFormData.expiryDate
-            ? new Date(refillFormData.expiryDate)
+            ? parseLocalDate(refillFormData.expiryDate)
             : undefined,
           costPrice: num(refillFormData.regularCostPrice),
           salePrice: num(refillFormData.regularSalePrice),
@@ -1281,7 +1283,9 @@ export default function MedicinesTab({
           medicineUpdateData.batchNumber = refillFormData.batchNumber;
         }
         if (refillFormData.expiryDate) {
-          medicineUpdateData.expiryDate = new Date(refillFormData.expiryDate);
+          medicineUpdateData.expiryDate = parseLocalDate(
+            refillFormData.expiryDate,
+          );
         }
         if (refillFormData.supplierId) {
           medicineUpdateData.supplierId = refillFormData.supplierId;
@@ -1408,7 +1412,7 @@ export default function MedicinesTab({
         ? rawExp
         : typeof (rawExp as any)?.toDate === "function"
           ? (rawExp as any).toDate()
-          : new Date(rawExp);
+          : parseLocalDate(rawExp);
     const ninetyDays = new Date(
       new Date().getTime() + 90 * 24 * 60 * 60 * 1000,
     );
@@ -1425,7 +1429,7 @@ export default function MedicinesTab({
         ? rawExp
         : typeof (rawExp as any)?.toDate === "function"
           ? (rawExp as any).toDate()
-          : new Date(rawExp);
+          : parseLocalDate(rawExp);
 
     return expiryDate < new Date();
   };
@@ -1439,7 +1443,7 @@ export default function MedicinesTab({
         ? rawExp
         : typeof (rawExp as any)?.toDate === "function"
           ? (rawExp as any).toDate()
-          : new Date(rawExp);
+          : parseLocalDate(rawExp);
     const thirtyDays = new Date(
       new Date().getTime() + 30 * 24 * 60 * 60 * 1000,
     );
@@ -1456,7 +1460,7 @@ export default function MedicinesTab({
         ? rawExp
         : typeof (rawExp as any)?.toDate === "function"
           ? (rawExp as any).toDate()
-          : new Date(rawExp);
+          : parseLocalDate(rawExp);
     const thirtyDays = new Date(
       new Date().getTime() + 30 * 24 * 60 * 60 * 1000,
     );
@@ -1874,7 +1878,7 @@ export default function MedicinesTab({
                       ? rawExpiry
                       : typeof (rawExpiry as any)?.toDate === "function"
                         ? (rawExpiry as any).toDate()
-                        : new Date(rawExpiry)
+                        : parseLocalDate(rawExpiry)
                     : null;
                   const isExpired = expiryDate && expiryDate < new Date();
                   const isLowStock =
@@ -2107,11 +2111,9 @@ export default function MedicinesTab({
                                         : (
                                           latestTx.expiryDate as any
                                         ).toDate?.() ||
-                                        new Date(latestTx.expiryDate);
+                                        parseLocalDate(latestTx.expiryDate);
 
-                                    resolvedExpiryDate = date
-                                      .toISOString()
-                                      .split("T")[0];
+                                    resolvedExpiryDate = formatLocalDate(date);
                                   }
                                 }
 
@@ -2153,11 +2155,12 @@ export default function MedicinesTab({
                                         const date =
                                           latestStock.expiryDate instanceof Date
                                             ? latestStock.expiryDate
-                                            : new Date(latestStock.expiryDate);
+                                            : parseLocalDate(
+                                              latestStock.expiryDate,
+                                            );
 
-                                        resolvedExpiryDate = date
-                                          .toISOString()
-                                          .split("T")[0];
+                                        resolvedExpiryDate =
+                                          formatLocalDate(date);
                                       }
                                     }
                                   } catch (err) {
@@ -2181,11 +2184,9 @@ export default function MedicinesTab({
                                     rawExp instanceof Date
                                       ? rawExp
                                       : (rawExp as any).toDate?.() ||
-                                      new Date(rawExp);
+                                      parseLocalDate(rawExp);
 
-                                  resolvedExpiryDate = date
-                                    .toISOString()
-                                    .split("T")[0];
+                                  resolvedExpiryDate = formatLocalDate(date);
                                 }
                               } catch (e) {
                                 console.warn(

@@ -13,6 +13,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { StaffMember, StaffAttendance, ClinicHoliday } from "@/types/models";
+import { parseLocalDate } from "@/utils/localDate";
 import { resolveClinicId } from "./currentClinic";
 
 const STAFF_COLLECTION = "staff";
@@ -27,7 +28,7 @@ export const hrService = {
   ): Promise<string> {
     const docRef = await addDoc(collection(db, STAFF_COLLECTION), {
       ...staff,
-      joiningDate: Timestamp.fromDate(new Date(staff.joiningDate)),
+      joiningDate: Timestamp.fromDate(parseLocalDate(staff.joiningDate)),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -40,7 +41,7 @@ export const hrService = {
     const updateData: any = { ...staff, updatedAt: serverTimestamp() };
 
     if (staff.joiningDate) {
-      updateData.joiningDate = Timestamp.fromDate(new Date(staff.joiningDate));
+      updateData.joiningDate = Timestamp.fromDate(parseLocalDate(staff.joiningDate));
     }
 
     await updateDoc(docRef, updateData);
@@ -63,7 +64,7 @@ export const hrService = {
         id: doc.id,
         joiningDate: data.joiningDate?.toDate
           ? data.joiningDate.toDate()
-          : new Date(data.joiningDate),
+          : parseLocalDate(data.joiningDate),
         createdAt: data.createdAt?.toDate
           ? data.createdAt.toDate()
           : new Date(data.createdAt),
@@ -90,10 +91,10 @@ export const hrService = {
       where("clinicId", "==", resolveClinicId(attendance.clinicId)),
     );
 
-    const startOfDay = new Date(attendance.date);
+    const startOfDay = parseLocalDate(attendance.date);
 
     startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(attendance.date);
+    const endOfDay = parseLocalDate(attendance.date);
 
     endOfDay.setHours(23, 59, 59, 999);
 
@@ -101,7 +102,7 @@ export const hrService = {
     const existingDoc = querySnapshot.docs.find((doc) => {
       const date = doc.data().date?.toDate
         ? doc.data().date.toDate()
-        : new Date(doc.data().date);
+        : parseLocalDate(doc.data().date);
 
       return date >= startOfDay && date <= endOfDay;
     });
@@ -112,7 +113,7 @@ export const hrService = {
 
       await updateDoc(docRef, {
         ...attendance,
-        date: Timestamp.fromDate(new Date(attendance.date)),
+        date: Timestamp.fromDate(parseLocalDate(attendance.date)),
         checkIn: attendance.checkIn
           ? Timestamp.fromDate(new Date(attendance.checkIn))
           : null,
@@ -127,7 +128,7 @@ export const hrService = {
 
     const docRef = await addDoc(collection(db, ATTENDANCE_COLLECTION), {
       ...attendance,
-      date: Timestamp.fromDate(new Date(attendance.date)),
+      date: Timestamp.fromDate(parseLocalDate(attendance.date)),
       checkIn: attendance.checkIn
         ? Timestamp.fromDate(new Date(attendance.checkIn))
         : null,
@@ -173,7 +174,7 @@ export const hrService = {
       return {
         ...data,
         id: doc.id,
-        date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
+        date: data.date?.toDate ? data.date.toDate() : parseLocalDate(data.date),
         checkIn: data.checkIn?.toDate
           ? data.checkIn.toDate()
           : data.checkIn
@@ -205,7 +206,7 @@ export const hrService = {
     const updateData: any = { ...attendance, updatedAt: serverTimestamp() };
 
     if (attendance.date) {
-      updateData.date = Timestamp.fromDate(new Date(attendance.date));
+      updateData.date = Timestamp.fromDate(parseLocalDate(attendance.date));
     }
     if (attendance.checkIn) {
       updateData.checkIn = Timestamp.fromDate(new Date(attendance.checkIn));
@@ -269,7 +270,7 @@ export const hrService = {
         id: doc.id,
         clinicId: data.clinicId || clinicId,
         name: data.name,
-        date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
+        date: data.date?.toDate ? data.date.toDate() : parseLocalDate(data.date),
         type: data.type || "paid",
       };
     });

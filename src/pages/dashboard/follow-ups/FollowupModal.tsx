@@ -34,6 +34,7 @@ import { followupService } from "@/services/followupService";
 import { patientService } from "@/services/patientService";
 import { prescriptionService } from "@/services/prescriptionService";
 import { userService } from "@/services/userService";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 interface FollowupModalProps {
   isOpen: boolean;
@@ -151,7 +152,7 @@ export default function FollowupModal({
           patientMobile: followup.patientMobile || "",
           category: followup.category || "general",
           visitDate: followup.visitDate
-            ? new Date(followup.visitDate).toISOString().split("T")[0]
+            ? formatLocalDate(new Date(followup.visitDate))
             : "",
           session: followup.session || "",
           initStatus:
@@ -169,23 +170,19 @@ export default function FollowupModal({
             "",
           sessionStatuses: followup.sessionStatuses || {},
           firstDate: followup.followupDates?.first
-            ? new Date(followup.followupDates.first).toISOString().split("T")[0]
+            ? formatLocalDate(new Date(followup.followupDates.first))
             : "",
           secondDate: followup.followupDates?.second
-            ? new Date(followup.followupDates.second)
-              .toISOString()
-              .split("T")[0]
+            ? formatLocalDate(new Date(followup.followupDates.second))
             : "",
           thirdDate: followup.followupDates?.third
-            ? new Date(followup.followupDates.third).toISOString().split("T")[0]
+            ? formatLocalDate(new Date(followup.followupDates.third))
             : "",
           fourthDate: followup.followupDates?.fourth
-            ? new Date(followup.followupDates.fourth)
-              .toISOString()
-              .split("T")[0]
+            ? formatLocalDate(new Date(followup.followupDates.fourth))
             : "",
           fifthDate: followup.followupDates?.fifth
-            ? new Date(followup.followupDates.fifth).toISOString().split("T")[0]
+            ? formatLocalDate(new Date(followup.followupDates.fifth))
             : "",
           service: followup.service || "",
           product: followup.product || "",
@@ -193,7 +190,7 @@ export default function FollowupModal({
           overallStatus: followup.overallStatus || "pending",
           logs: followup.logs || [],
           nextFollowupDate: followup.nextFollowupDate
-            ? new Date(followup.nextFollowupDate).toISOString().split("T")[0]
+            ? formatLocalDate(new Date(followup.nextFollowupDate))
             : "",
           followedBy: followup.followedBy || loggedInClinicianName,
           followedByUserId: followup.followedByExpertId
@@ -210,7 +207,7 @@ export default function FollowupModal({
           patientName: "",
           patientMobile: "",
           category: (defaultCategory as any) || "general",
-          visitDate: new Date().toISOString().split("T")[0],
+          visitDate: formatLocalDate(),
           session: "1st",
           initStatus: "good",
           updatedStatus: "",
@@ -341,7 +338,7 @@ export default function FollowupModal({
     });
   };
 
-  const parseDate = (d: string) => (d ? new Date(d) : undefined);
+  const parseDate = (d: string) => (d ? parseLocalDate(d) : undefined);
 
   const handleSave = async () => {
     if (!formData.patientName) {
@@ -524,16 +521,14 @@ export default function FollowupModal({
                               if (existing) {
                                 setActiveFollowupId(existing.id);
                                 const safeDateStr = (d: any) =>
-                                  d
-                                    ? new Date(d).toISOString().split("T")[0]
-                                    : "";
+                                  d ? formatLocalDate(parseLocalDate(d)) : "";
 
                                 setFormData((prev) => ({
                                   ...prev,
                                   visitDate: existing.visitDate
-                                    ? new Date(existing.visitDate)
-                                      .toISOString()
-                                      .split("T")[0]
+                                    ? formatLocalDate(
+                                      new Date(existing.visitDate),
+                                    )
                                     : prev.visitDate,
                                   session: existing.session || prev.session,
                                   initStatus:

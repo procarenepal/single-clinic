@@ -38,6 +38,7 @@ import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { Doctor, Appointment, Patient, DoctorCommission } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { earnedAmount } from "@/services/core/commissionAggregatesCore";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
 function CustomInput({
@@ -637,10 +638,10 @@ export default function DoctorProfilePage() {
       if (c.status === "cancelled") return false;
       if (globalDateRange.start && globalDateRange.end) {
         const date = new Date(c.appointmentDate || c.createdAt);
-        const start = new Date(globalDateRange.start);
+        const start = parseLocalDate(globalDateRange.start);
 
         start.setHours(0, 0, 0, 0);
-        const end = new Date(globalDateRange.end);
+        const end = parseLocalDate(globalDateRange.end);
 
         end.setHours(23, 59, 59, 999);
 
@@ -664,10 +665,10 @@ export default function DoctorProfilePage() {
 
     if (startStr && endStr) {
       const date = new Date(c.appointmentDate || c.createdAt);
-      const start = new Date(startStr);
+      const start = parseLocalDate(startStr);
 
       start.setHours(0, 0, 0, 0);
-      const end = new Date(endStr);
+      const end = parseLocalDate(endStr);
 
       end.setHours(23, 59, 59, 999);
 
@@ -758,10 +759,10 @@ export default function DoctorProfilePage() {
   // Stats for cards (responsive to global date range filter)
   const getFilteredAppointmentsForStats = () => {
     if (!globalDateRange.start || !globalDateRange.end) return appointments;
-    const start = new Date(globalDateRange.start);
+    const start = parseLocalDate(globalDateRange.start);
 
     start.setHours(0, 0, 0, 0);
-    const end = new Date(globalDateRange.end);
+    const end = parseLocalDate(globalDateRange.end);
 
     end.setHours(23, 59, 59, 999);
 
@@ -774,10 +775,10 @@ export default function DoctorProfilePage() {
 
   const getFilteredPatientsForStats = () => {
     if (!globalDateRange.start || !globalDateRange.end) return patients;
-    const start = new Date(globalDateRange.start);
+    const start = parseLocalDate(globalDateRange.start);
 
     start.setHours(0, 0, 0, 0);
-    const end = new Date(globalDateRange.end);
+    const end = parseLocalDate(globalDateRange.end);
 
     end.setHours(23, 59, 59, 999);
 
@@ -820,10 +821,10 @@ export default function DoctorProfilePage() {
 
       if (startStr && endStr) {
         const aptDate = new Date(apt.appointmentDate);
-        const start = new Date(startStr);
+        const start = parseLocalDate(startStr);
 
         start.setHours(0, 0, 0, 0);
-        const end = new Date(endStr);
+        const end = parseLocalDate(endStr);
 
         end.setHours(23, 59, 59, 999);
         if (aptDate < start || aptDate > end) {
@@ -846,10 +847,10 @@ export default function DoctorProfilePage() {
 
       if (startStr && endStr) {
         const patDate = new Date(pat.createdAt);
-        const start = new Date(startStr);
+        const start = parseLocalDate(startStr);
 
         start.setHours(0, 0, 0, 0);
-        const end = new Date(endStr);
+        const end = parseLocalDate(endStr);
 
         end.setHours(23, 59, 59, 999);
         if (patDate < start || patDate > end) {
@@ -871,10 +872,10 @@ export default function DoctorProfilePage() {
 
       if (startStr && endStr) {
         const commDate = new Date(comm.createdAt);
-        const start = new Date(startStr);
+        const start = parseLocalDate(startStr);
 
         start.setHours(0, 0, 0, 0);
-        const end = new Date(endStr);
+        const end = parseLocalDate(endStr);
 
         end.setHours(23, 59, 59, 999);
         if (commDate < start || commDate > end) {
@@ -970,7 +971,7 @@ export default function DoctorProfilePage() {
                 label: "Today",
                 getRange: () => {
                   const d = new Date();
-                  const formatted = d.toISOString().split("T")[0];
+                  const formatted = formatLocalDate(d);
 
                   return { start: formatted, end: formatted };
                 },
@@ -979,12 +980,12 @@ export default function DoctorProfilePage() {
                 label: "This Month",
                 getRange: () => {
                   const now = new Date();
-                  const start = new Date(now.getFullYear(), now.getMonth(), 1)
-                    .toISOString()
-                    .split("T")[0];
-                  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-                    .toISOString()
-                    .split("T")[0];
+                  const start = formatLocalDate(
+                    new Date(now.getFullYear(), now.getMonth(), 1),
+                  );
+                  const end = formatLocalDate(
+                    new Date(now.getFullYear(), now.getMonth() + 1, 0),
+                  );
 
                   return { start, end };
                 },
@@ -998,8 +999,8 @@ export default function DoctorProfilePage() {
                   start.setDate(end.getDate() - 30);
 
                   return {
-                    start: start.toISOString().split("T")[0],
-                    end: end.toISOString().split("T")[0],
+                    start: formatLocalDate(start),
+                    end: formatLocalDate(end),
                   };
                 },
               },

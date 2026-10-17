@@ -40,3 +40,15 @@ export function formatLocalDate(date: Date = new Date()): string {
 
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * The local date and wall-clock time as `yyyy-mm-ddThh:mm` — the shape a
+ * `datetime-local` input takes. `toISOString().slice(0, 16)` gives UTC
+ * time instead, 5:45 early in Nepal.
+ */
+export function formatLocalDateTime(date: Date = new Date()): string {
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+
+  return `${formatLocalDate(date)}T${hours}:${minutes}`;
+}

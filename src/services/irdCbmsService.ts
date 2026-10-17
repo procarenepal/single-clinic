@@ -1,12 +1,13 @@
 import NepaliDate from "nepali-datetime";
 
 import { auth } from "../config/firebase";
+import { parseLocalDate } from "../utils/localDate";
 
 /**
  * Calculates the Nepali Fiscal Year (e.g., "2080.081") based on the provided date.
  */
 export const getNepaliFiscalYear = (date: Date | string): string => {
-  const dateObj = new Date(date);
+  const dateObj = parseLocalDate(date);
   const nepaliDate = new NepaliDate(dateObj);
   const bsYear = nepaliDate.getYear();
   const bsMonth = nepaliDate.getMonth() + 1; // 0-indexed

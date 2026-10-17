@@ -36,6 +36,7 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { parseLocalDate } from "@/utils/localDate";
 import { Patient } from "@/types/models";
 // ── Custom UI (zero HeroUI) ───────────────────────────────────────────────────
 import { Button } from "@/components/ui/button";
@@ -158,7 +159,7 @@ export default function PatientDetailPage() {
   // Calculate age from date of birth
   const calculateAge = (dob: Date | any): string => {
     if (!dob) return "";
-    const b = new Date(dob);
+    const b = parseLocalDate(dob);
 
     if (isNaN(b.getTime())) return "";
     const t = new Date();
@@ -187,7 +188,7 @@ export default function PatientDetailPage() {
 
   // Format date for display
   const formatDate = (date: Date | any): string => {
-    const d = new Date(date);
+    const d = parseLocalDate(date);
 
     if (isNaN(d.getTime())) return "Invalid Date";
 

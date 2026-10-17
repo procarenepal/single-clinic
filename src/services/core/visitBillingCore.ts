@@ -12,6 +12,7 @@
  */
 
 import { calculateTaxBreakdown } from "@/utils/taxEngine";
+import { formatLocalDate } from "@/utils/localDate";
 
 import { isLineCollectableAtCheckIn } from "./legacyVisitAdapters";
 
@@ -231,11 +232,7 @@ export function mergeVisitReferrals(
  * never appeared on the current day's board.
  */
 export function todayLocalDateString(now: Date = new Date()): string {
-  const year = now.getFullYear();
-  const month = `${now.getMonth() + 1}`.padStart(2, "0");
-  const day = `${now.getDate()}`.padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return formatLocalDate(now);
 }
 
 /**

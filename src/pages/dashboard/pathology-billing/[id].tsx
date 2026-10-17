@@ -30,6 +30,7 @@ import { clinicService } from "@/services/clinicService";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { adToBS } from "@/utils/dateConverter";
+import { parseLocalDate } from "@/utils/localDate";
 import { generateInvoiceHTML, PrintFormat } from "@/utils/invoicePrinting";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import {
@@ -291,7 +292,7 @@ export default function PathologyInvoiceDetailPage() {
   const formatCurrency = (amount: number) => `NPR ${Math.round(amount).toLocaleString()}`;
 
   const formatDateWithBS = (date: Date | string) => {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    const dateObj = typeof date === "string" ? parseLocalDate(date) : date;
     const adDate = dateObj.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",

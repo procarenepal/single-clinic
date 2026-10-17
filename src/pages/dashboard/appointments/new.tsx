@@ -31,6 +31,7 @@ import {
   validateADDate,
   debounce,
 } from "@/utils/dateConverterApi";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   Appointment,
   Patient,
@@ -293,7 +294,7 @@ export default function NewAppointmentPage() {
           };
 
           if (conversionType === "ad-to-bs") {
-            const selectedDate = new Date(value);
+            const selectedDate = parseLocalDate(value);
             const validation = validateADDate(selectedDate);
 
             if (!validation.isValid) {
@@ -392,7 +393,7 @@ export default function NewAppointmentPage() {
   const [loadingAppointments, setLoadingAppointments] = useState(false);
 
   const currentDate = new Date();
-  const formattedDate = currentDate.toISOString().split("T")[0];
+  const formattedDate = formatLocalDate(currentDate);
   const preSelectedPatientId = searchParams.get("patientId");
 
   const [appointmentInfo, setAppointmentInfo] = useState({
@@ -517,7 +518,7 @@ export default function NewAppointmentPage() {
       }
       try {
         setLoadingAppointments(true);
-        const selectedDate = new Date(appointmentInfo.appointmentDate);
+        const selectedDate = parseLocalDate(appointmentInfo.appointmentDate);
         const appointments = await appointmentService.getAppointmentsByDate(
           selectedDate,
           clinicId,
@@ -632,13 +633,13 @@ export default function NewAppointmentPage() {
             row.clinicianType === "doctor" ? row.clinicianId : "unassigned",
           assignedExpertId:
             row.clinicianType === "expert" ? row.clinicianId : undefined,
-          appointmentDate: new Date(appointmentInfo.appointmentDate),
+          appointmentDate: parseLocalDate(appointmentInfo.appointmentDate),
           appointmentBS: appointmentInfo.appointmentBS
-            ? new Date(appointmentInfo.appointmentBS)
+            ? parseLocalDate(appointmentInfo.appointmentBS)
             : undefined,
           appointmentTypeId: row.appointmentTypeId,
           status: "scheduled",
-          registrationDate: new Date(appointmentInfo.registrationDate),
+          registrationDate: parseLocalDate(appointmentInfo.registrationDate),
           createdBy: currentUser?.uid || "",
         };
 
@@ -1092,7 +1093,7 @@ export default function NewAppointmentPage() {
                 </h4>
                 <p className="text-[12.5px] font-medium text-text-muted mt-0.5">
                   Scheduled for{" "}
-                  {new Date(appointmentInfo.appointmentDate).toLocaleDateString(
+                  {parseLocalDate(appointmentInfo.appointmentDate).toLocaleDateString(
                     "en-US",
                     {
                       weekday: "long",

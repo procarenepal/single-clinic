@@ -25,6 +25,7 @@ import {
 } from "../types/models";
 import { calculateTaxInclusiveBreakdown } from "../utils/taxEngine";
 import { computeReturnTaxSplit } from "./core/pharmacyReturnTaxCore";
+import { formatLocalDate, parseLocalDate } from "../utils/localDate";
 import { planStockDeduction } from "./core/stockFefoCore";
 
 const MEDICINE_PURCHASES_COLLECTION = "medicinePurchases";
@@ -336,10 +337,13 @@ export const pharmacyService = {
                   const d =
                     typeof b.expiryDate.toDate === "function"
                       ? b.expiryDate.toDate()
-                      : new Date(b.expiryDate);
+                      : parseLocalDate(b.expiryDate);
 
+                  // A calendar date in and out: stock expiry is now stored
+                  // as local midnight, which the UTC date rendered as the
+                  // previous day.
                   if (d && !isNaN(d.getTime())) {
-                    expStr = d.toISOString().split("T")[0];
+                    expStr = formatLocalDate(d);
                   }
                 } catch (e) {
                   console.error("Error formatting expiry date:", e);
@@ -363,10 +367,10 @@ export const pharmacyService = {
               const d =
                 typeof batchesUsed[0].expiryDate.toDate === "function"
                   ? batchesUsed[0].expiryDate.toDate()
-                  : new Date(batchesUsed[0].expiryDate);
+                  : parseLocalDate(batchesUsed[0].expiryDate);
 
               if (d && !isNaN(d.getTime())) {
-                finalExpiryDate = d.toISOString().split("T")[0];
+                finalExpiryDate = formatLocalDate(d);
               }
             } catch (e) {
               console.error("Error parsing single batch expiry date:", e);

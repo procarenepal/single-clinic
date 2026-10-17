@@ -70,6 +70,7 @@ import {
   visitQueueCandidates,
 } from "@/services/core/visitLifecycleCore";
 import { withDoctorPrefix } from "@/utils/clinicianName";
+import { parseLocalDate } from "@/utils/localDate";
 import { patientPackageService } from "@/services/patientPackageService";
 import {
   Appointment,
@@ -4002,7 +4003,7 @@ export default function FrontOfficeDesk() {
         let appointmentDate = now;
 
         if (quickIntakeForm.appointmentDate) {
-          appointmentDate = new Date(quickIntakeForm.appointmentDate);
+          appointmentDate = parseLocalDate(quickIntakeForm.appointmentDate);
           if (appointmentDate.toDateString() === now.toDateString()) {
             appointmentDate = now;
           }

@@ -31,6 +31,7 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { parseLocalDate } from "@/utils/localDate";
 
 interface PrescriptionWithDetails extends Prescription {
   patientName?: string;
@@ -62,7 +63,7 @@ export default function PrescriptionDetailPage() {
 
   const formatDate = (date: Date | null | undefined | string) => {
     if (!date) return "N/A";
-    const d = new Date(date);
+    const d = parseLocalDate(date);
 
     if (isNaN(d.getTime())) return "N/A";
 

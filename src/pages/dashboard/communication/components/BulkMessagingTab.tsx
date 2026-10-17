@@ -22,6 +22,7 @@ import { clinicService } from "@/services/clinicService";
 import { addToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
 import { Patient, Doctor, Appointment } from "@/types/models";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 const BulkMessagingTab: React.FC = () => {
   const { clinicId, currentUser } = useAuthContext();
@@ -42,10 +43,10 @@ const BulkMessagingTab: React.FC = () => {
   >("all");
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    formatLocalDate(),
   );
   const [endDate, setEndDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    formatLocalDate(),
   );
 
   // Manual Selection State
@@ -126,8 +127,8 @@ const BulkMessagingTab: React.FC = () => {
           return d >= today && d <= sevenDaysAhead;
         });
       } else if (audienceType === "custom") {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
 
         end.setHours(23, 59, 59);
         filteredApps = appointments.filter((a) => {

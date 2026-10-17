@@ -33,6 +33,7 @@ import {
   StockTransaction,
   ClinicSettings,
 } from "@/types/models";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 interface StockTabProps {
   clinicSettings: ClinicSettings | null;
@@ -167,10 +168,10 @@ export default function StockTab({
             ? dateVal.toDate()
             : dateVal instanceof Date
               ? dateVal
-              : new Date(dateVal);
+              : parseLocalDate(dateVal);
 
         if (!isNaN(d.getTime())) {
-          expStr = d.toISOString().split("T")[0];
+          expStr = formatLocalDate(d);
         }
       }
 
@@ -263,7 +264,7 @@ export default function StockTab({
           ...settings,
           batchNumber,
           expiryDate: stockFormData.expiryDate
-            ? new Date(stockFormData.expiryDate)
+            ? parseLocalDate(stockFormData.expiryDate)
             : null,
           updatedBy: userData.id,
         } as Partial<MedicineStock>);
@@ -284,7 +285,7 @@ export default function StockTab({
           schemeQty: 0,
           updatedBy: userData.id,
           expiryDate: stockFormData.expiryDate
-            ? new Date(stockFormData.expiryDate)
+            ? parseLocalDate(stockFormData.expiryDate)
             : undefined,
           ...settings,
         });
@@ -340,7 +341,7 @@ export default function StockTab({
           : undefined,
         batchNumber: transactionFormData.batchNumber || undefined,
         expiryDate: transactionFormData.expiryDate
-          ? new Date(transactionFormData.expiryDate)
+          ? parseLocalDate(transactionFormData.expiryDate)
           : undefined,
         reason: transactionFormData.reason || undefined,
         invoiceNumber: transactionFormData.invoiceNumber || undefined,
@@ -590,7 +591,7 @@ export default function StockTab({
                                           ? dateVal.toDate()
                                           : dateVal instanceof Date
                                             ? dateVal
-                                            : new Date(dateVal);
+                                            : parseLocalDate(dateVal);
 
                                       return isNaN(d.getTime())
                                         ? "N/A"

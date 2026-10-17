@@ -29,6 +29,7 @@ import {
   type VisitGateScope,
   type VisitPricingContext,
 } from "@/services/core/visitBillingCore";
+import { parseLocalDate } from "@/utils/localDate";
 import { resolveClinicId } from "./currentClinic";
 
 type AppointmentSnapshotHandler = (appointments: Appointment[]) => void;
@@ -78,7 +79,7 @@ const mapAppointmentDoc = (
     if (!val) return undefined;
     if (typeof val.toDate === "function") return val.toDate();
     if (typeof val === "string" || typeof val === "number")
-      return new Date(val);
+      return parseLocalDate(val);
 
     return undefined;
   };

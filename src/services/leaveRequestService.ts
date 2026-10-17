@@ -14,6 +14,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { LeaveRequest, LeaveBalance } from "@/types/models";
+import { parseLocalDate } from "@/utils/localDate";
 
 const LEAVES_COLLECTION = "leaveRequests";
 const BALANCES_COLLECTION = "leaveBalances";
@@ -24,7 +25,7 @@ function toDate(val: any): Date {
   if (!val) return new Date();
   if (val?.toDate) return val.toDate();
 
-  return new Date(val);
+  return parseLocalDate(val);
 }
 
 function mapLeaveRequest(docId: string, data: any): LeaveRequest {

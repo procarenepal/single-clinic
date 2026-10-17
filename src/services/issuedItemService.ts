@@ -13,6 +13,7 @@ import {
 
 import { db } from "../config/firebase";
 import { IssuedItem } from "../types/models";
+import { parseLocalDate } from "../utils/localDate";
 
 const ISSUED_ITEMS_COLLECTION = "issuedItems";
 
@@ -143,7 +144,7 @@ export const issuedItemService = {
         if (!date) return null;
         if (date instanceof Timestamp) return date;
 
-        return Timestamp.fromDate(new Date(date));
+        return Timestamp.fromDate(parseLocalDate(date));
       };
 
       // Sanitize undefined fields
@@ -190,7 +191,7 @@ export const issuedItemService = {
         if (!date) return null;
         if (date instanceof Timestamp) return date;
 
-        return Timestamp.fromDate(new Date(date));
+        return Timestamp.fromDate(parseLocalDate(date));
       };
 
       // Sanitize undefined fields
@@ -262,7 +263,7 @@ export const issuedItemService = {
         if (!date) return null;
         if (date instanceof Timestamp) return date;
 
-        return Timestamp.fromDate(new Date(date));
+        return Timestamp.fromDate(parseLocalDate(date));
       };
 
       // Sanitize undefined fields

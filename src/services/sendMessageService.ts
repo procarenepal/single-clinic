@@ -17,6 +17,7 @@ import {
 
 import { db } from "../config/firebase";
 import { resolveClinicId } from "./currentClinic";
+import { formatLocalDate, parseLocalDate } from "../utils/localDate";
 
 // Collection names following the established project patterns
 const SMS_LOGS_COLLECTION = "smsLogs";
@@ -1019,11 +1020,11 @@ export const smsService = {
       const logs = logsSnapshot.docs.map((doc) => doc.data());
       const templates = templatesSnapshot.docs.map((doc) => doc.data());
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = formatLocalDate();
       const todayLogs = logs.filter((log) => {
-        const logDate =
-          log.createdAt?.toDate?.()?.toISOString().split("T")[0] ||
-          new Date(log.createdAt).toISOString().split("T")[0];
+        const logDate = formatLocalDate(
+          log.createdAt?.toDate?.() || new Date(log.createdAt),
+        );
 
         return logDate === today;
       });
@@ -1924,7 +1925,7 @@ export const smsService = {
       let dateStr = "your scheduled time";
       if (appointment.appointmentDate) {
         try {
-          const d = appointment.appointmentDate.toDate ? appointment.appointmentDate.toDate() : new Date(appointment.appointmentDate);
+          const d = appointment.appointmentDate.toDate ? appointment.appointmentDate.toDate() : parseLocalDate(appointment.appointmentDate);
           dateStr = d.toLocaleDateString();
         } catch (e) {
           console.warn("Date parse error", e);

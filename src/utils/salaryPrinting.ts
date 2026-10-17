@@ -9,6 +9,7 @@ import {
 import { StaffMember, AccountBill, Clinic } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { printHtmlViaIframe } from "./printHtmlViaIframe";
+import { parseLocalDate } from "./localDate";
 
 /**
  * Generates and prints a professional, high-density salary slip for a staff member.
@@ -34,7 +35,7 @@ export const printSalarySlip = (
     if (typeof dateVal?.seconds === "number") {
       return new Date(dateVal.seconds * 1000);
     }
-    const parsed = new Date(dateVal);
+    const parsed = parseLocalDate(dateVal);
 
     if (!isNaN(parsed.getTime())) return parsed;
 

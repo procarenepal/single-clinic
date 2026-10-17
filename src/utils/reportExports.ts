@@ -12,12 +12,13 @@ import {
 } from "@/types/models";
 import { DailyReportData } from "@/services/dailyReportService";
 import { addToast } from "@/components/ui/toast";
+import { parseLocalDate } from "@/utils/localDate";
 
 /**
  * Format date for display
  */
 const formatDate = (date: Date | string): string => {
-  const d = new Date(date);
+  const d = parseLocalDate(date);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -55,7 +56,7 @@ const formatCurrency = (amount: number): string => {
  * document silently disagrees with what's on screen for the same date.
  */
 const isCreatedOnDate = (billingDate: Date | string, reportDate: Date): boolean => {
-  const d = new Date(billingDate);
+  const d = parseLocalDate(billingDate);
 
   return (
     d.getFullYear() === reportDate.getFullYear() &&

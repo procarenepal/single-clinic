@@ -29,6 +29,7 @@ import {
   validateBSDateFormat,
   debounce,
 } from "@/utils/dateConverterApi";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
 function CustomInput({
@@ -436,7 +437,7 @@ export default function PatientEditPage() {
 
       const dobStr =
         patientData.dob instanceof Date && !isNaN(patientData.dob.getTime())
-          ? patientData.dob.toISOString().split("T")[0]
+          ? formatLocalDate(patientData.dob)
           : "";
 
       let bsDateStr = "";
@@ -448,16 +449,13 @@ export default function PatientEditPage() {
           patientData.bsDate instanceof Date &&
           !isNaN(patientData.bsDate.getTime())
         ) {
-          bsDateStr = patientData.bsDate
-            .toISOString()
-            .split("T")[0]
-            .replace(/-/g, "/");
+          bsDateStr = formatLocalDate(patientData.bsDate).replace(/-/g, "/");
         } else if (typeof (patientData.bsDate as any).toDate === "function") {
           // Handle Firestore Timestamp
           const d = (patientData.bsDate as any).toDate();
 
           if (!isNaN(d.getTime())) {
-            bsDateStr = d.toISOString().split("T")[0].replace(/-/g, "/");
+            bsDateStr = formatLocalDate(d).replace(/-/g, "/");
           }
         }
       }
@@ -583,7 +581,7 @@ export default function PatientEditPage() {
 
   const calculateAge = (dateOfBirth: string): string => {
     if (!dateOfBirth) return "";
-    const b = new Date(dateOfBirth);
+    const b = parseLocalDate(dateOfBirth);
     const t = new Date();
 
     let years = t.getFullYear() - b.getFullYear();
@@ -619,7 +617,7 @@ export default function PatientEditPage() {
         setConvertingDate(true);
         try {
           if (type === "ad-to-bs") {
-            const d = new Date(value);
+            const d = parseLocalDate(value);
             const v = validateADDate(d);
 
             if (!v.isValid) return;
@@ -631,7 +629,7 @@ export default function PatientEditPage() {
 
             if (!v.isValid) return;
             const res = await bsToADApi(value);
-            const dobStr = res.toISOString().split("T")[0];
+            const dobStr = formatLocalDate(res);
 
             setFormData((prev) => ({
               ...prev,
@@ -813,7 +811,7 @@ export default function PatientEditPage() {
       if (formData.gender) updatedPatientData.gender = formData.gender;
       if (formData.bloodGroup)
         updatedPatientData.bloodGroup = formData.bloodGroup;
-      if (formData.dob) updatedPatientData.dob = new Date(formData.dob);
+      if (formData.dob) updatedPatientData.dob = parseLocalDate(formData.dob);
       if (formData.bsDate) updatedPatientData.bsDate = formData.bsDate; // Store as string
       if (formData.dob && formData.age) updatedPatientData.age = formData.age;
 

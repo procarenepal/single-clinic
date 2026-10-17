@@ -5,6 +5,7 @@ import { IoDownloadOutline, IoPrintOutline, IoWarningOutline } from "react-icons
 import { Button } from "@/components/ui/button";
 import { AppointmentBilling, PathologyBilling, MedicinePurchase } from "@/types/models";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { parseLocalDate } from "@/utils/localDate";
 
 interface CorrectedRecordsReportProps {
   billings: AppointmentBilling[];
@@ -25,7 +26,7 @@ interface CorrectionRecord {
 
 const formatNepaliDate = (date: Date | string): string => {
   try {
-    const d = new Date(date);
+    const d = parseLocalDate(date);
     if (isNaN(d.getTime())) return "-";
     return new NepaliDate(d).format("YYYY-MM-DD");
   } catch {

@@ -67,6 +67,7 @@ import {
 
 import { printAccountBill } from "@/utils/accountPrinting";
 import { toCsv } from "@/utils/csv";
+import { parseLocalDate } from "@/utils/localDate";
 import { clinicService } from "@/services/clinicService";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
@@ -338,7 +339,7 @@ export default function AccountsPage() {
         paidAmount: paid,
         dueAmount: due,
         paymentStatus: status,
-        billDate: new Date(billForm.billDate),
+        billDate: parseLocalDate(billForm.billDate),
       };
 
       if (correctingBill) {
@@ -658,10 +659,10 @@ export default function AccountsPage() {
 
     if (dateRange.start && dateRange.end) {
       const billDate = new Date(bill.billDate);
-      const start = new Date(dateRange.start);
+      const start = parseLocalDate(dateRange.start);
 
       start.setHours(0, 0, 0, 0);
-      const end = new Date(dateRange.end);
+      const end = parseLocalDate(dateRange.end);
 
       end.setHours(23, 59, 59, 999);
       matchesDate = billDate >= start && billDate <= end;

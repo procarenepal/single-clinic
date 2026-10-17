@@ -45,6 +45,7 @@ import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { pathologyService } from "@/services/pathologyService";
 import { medicineService } from "@/services/medicineService";
 import { suggestedDispenseQuantity } from "@/services/core/prescriptionDoseCore";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   AppointmentBilling,
   AppointmentBillingItem,
@@ -117,9 +118,7 @@ export default function BillingCounterPage() {
   // Schedule 5 wants the buyer's PAN on the invoice, and a bill may be raised
   // for a visit that happened earlier, so neither can be implied.
   const [customerPan, setCustomerPan] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(
-    () => new Date().toISOString().split("T")[0],
-  );
+  const [invoiceDate, setInvoiceDate] = useState(() => formatLocalDate());
   const [notes, setNotes] = useState("");
   // Whoever referred the patient and earns a cut. appointmentBilling already
   // carries this as `referrals` and recordPayment already pays them out on
@@ -616,7 +615,7 @@ export default function BillingCounterPage() {
             }))
           : undefined,
         notes: notes.trim() || undefined,
-        invoiceDate: new Date(invoiceDate),
+        invoiceDate: parseLocalDate(invoiceDate),
         subtotal: totals.subtotal,
         discountType,
         discountValue,

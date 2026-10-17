@@ -36,6 +36,7 @@ import {
 } from "react-icons/io5";
 
 import { calculateTaxInclusiveBreakdown } from "@/utils/taxEngine";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   billingLineRate,
   creditNotesAsReturns,
@@ -580,11 +581,11 @@ const toISODateString = (date: any): string => {
   }
 
   // Handle other types
-  const d = date instanceof Date ? date : new Date(date);
+  const d = date instanceof Date ? date : parseLocalDate(date);
 
   if (isNaN(d.getTime())) return "";
 
-  return d.toISOString().split("T")[0];
+  return formatLocalDate(d);
 };
 
 export default function PharmacyPage() {
@@ -670,7 +671,7 @@ export default function PharmacyPage() {
   const [dailyReportDate, setDailyReportDate] = useState<string>(() => {
     const today = new Date();
 
-    return today.toISOString().split("T")[0];
+    return formatLocalDate(today);
   });
   const [isExportingDailyReport, setIsExportingDailyReport] = useState(false);
 
@@ -679,7 +680,7 @@ export default function PharmacyPage() {
     useState<string>(() => {
       const today = new Date();
 
-      return today.toISOString().split("T")[0];
+      return formatLocalDate(today);
     });
   const [isExportingDailyPurchasesReport, setIsExportingDailyPurchasesReport] =
     useState(false);
@@ -832,14 +833,14 @@ export default function PharmacyPage() {
   const [supplierPaymentForm, setSupplierPaymentForm] = useState({
     supplierId: "",
     amount: "",
-    date: new Date().toISOString().split("T")[0],
+    date: formatLocalDate(),
     type: "payment" as "payment" | "refund",
     referenceNumber: "",
     note: "",
   });
   const [purchaseEntryForm, setPurchaseEntryForm] = useState({
     billNumber: "",
-    purchaseDate: new Date().toISOString().split("T")[0],
+    purchaseDate: formatLocalDate(),
     debitAmount: "",
     notes: "",
   });
@@ -894,7 +895,7 @@ export default function PharmacyPage() {
         supplierId: selectedSupplierForTransactions.id,
         supplierName: selectedSupplierForTransactions.name,
         billNumber: purchaseEntryForm.billNumber.trim(),
-        transactionDate: new Date(purchaseEntryForm.purchaseDate),
+        transactionDate: parseLocalDate(purchaseEntryForm.purchaseDate),
         debitAmount: debitAmountValue,
         creditAmount: 0,
         type: "purchase",
@@ -911,7 +912,7 @@ export default function PharmacyPage() {
       await loadSupplierLedgerBalances(effectiveBranchId);
       setPurchaseEntryForm({
         billNumber: "",
-        purchaseDate: new Date().toISOString().split("T")[0],
+        purchaseDate: formatLocalDate(),
         debitAmount: "",
         notes: "",
       });
@@ -971,7 +972,7 @@ export default function PharmacyPage() {
         await medicineService.updateSupplierPayment(editingSupplierPayment.id, {
           amount: amountValue,
           type: supplierPaymentForm.type,
-          date: new Date(supplierPaymentForm.date),
+          date: parseLocalDate(supplierPaymentForm.date),
           referenceNumber:
             supplierPaymentForm.referenceNumber?.trim() || undefined,
           notes: supplierPaymentForm.note?.trim() || undefined,
@@ -984,7 +985,7 @@ export default function PharmacyPage() {
           branchId: effectiveBranchId || userData?.branchId || "",
           amount: amountValue,
           type: supplierPaymentForm.type,
-          date: new Date(supplierPaymentForm.date),
+          date: parseLocalDate(supplierPaymentForm.date),
           referenceNumber:
             supplierPaymentForm.referenceNumber?.trim() || undefined,
           notes: supplierPaymentForm.note?.trim() || undefined,
@@ -1032,7 +1033,7 @@ export default function PharmacyPage() {
     useState<SupplierLedgerEntry | null>(null);
   const [editLedgerEntryForm, setEditLedgerEntryForm] = useState({
     billNumber: "",
-    transactionDate: new Date().toISOString().split("T")[0],
+    transactionDate: formatLocalDate(),
     debitAmount: "",
     creditAmount: "",
     notes: "",
@@ -1650,7 +1651,7 @@ export default function PharmacyPage() {
   const getDailyReportPurchases = () => {
     if (!dailyReportDate) return [];
 
-    const selectedDate = new Date(dailyReportDate);
+    const selectedDate = parseLocalDate(dailyReportDate);
 
     selectedDate.setHours(0, 0, 0, 0);
 
@@ -1713,7 +1714,7 @@ export default function PharmacyPage() {
   // Fetch total stock when daily report date changes
   useEffect(() => {
     if (clinicId && dailyReportDate) {
-      const selectedDate = new Date(dailyReportDate);
+      const selectedDate = parseLocalDate(dailyReportDate);
 
       calculateTotalStockForDate(selectedDate);
     } else {
@@ -1732,7 +1733,7 @@ export default function PharmacyPage() {
 
       setIsLoadingRefillTransactions(true);
       try {
-        const selectedDate = new Date(dailyPurchasesReportDate);
+        const selectedDate = parseLocalDate(dailyPurchasesReportDate);
         const startOfDay = new Date(selectedDate);
 
         startOfDay.setHours(0, 0, 0, 0);
@@ -1822,7 +1823,7 @@ export default function PharmacyPage() {
   const getDailyPurchasesReport = () => {
     if (!dailyPurchasesReportDate) return [];
 
-    const selectedDate = new Date(dailyPurchasesReportDate);
+    const selectedDate = parseLocalDate(dailyPurchasesReportDate);
 
     selectedDate.setHours(0, 0, 0, 0);
 
@@ -1889,7 +1890,7 @@ export default function PharmacyPage() {
             ? pDate.toDate()
             : purchase.purchaseDate instanceof Date
               ? purchase.purchaseDate
-              : new Date(purchase.purchaseDate as string | number | Date);
+              : parseLocalDate(purchase.purchaseDate as string | number | Date);
 
         const validatedDate = isNaN(purchaseDate.getTime())
           ? new Date()
@@ -1959,7 +1960,7 @@ export default function PharmacyPage() {
       if (d instanceof Date && !isNaN(d.getTime())) return d;
       try {
         const parsed =
-          d && typeof d.toDate === "function" ? d.toDate() : new Date(d);
+          d && typeof d.toDate === "function" ? d.toDate() : parseLocalDate(d);
 
         return isNaN(parsed.getTime()) ? new Date() : parsed;
       } catch {
@@ -3257,7 +3258,7 @@ export default function PharmacyPage() {
     setSupplierPaymentForm({
       supplierId: "",
       amount: "",
-      date: new Date().toISOString().split("T")[0],
+      date: formatLocalDate(),
       type: "payment",
       referenceNumber: "",
       note: "",
@@ -3286,7 +3287,7 @@ export default function PharmacyPage() {
       setSupplierPaymentForm({
         supplierId: supplier.id,
         amount: "",
-        date: new Date().toISOString().split("T")[0],
+        date: formatLocalDate(),
         type: "payment",
         referenceNumber: "",
         note: "",
@@ -3366,7 +3367,7 @@ export default function PharmacyPage() {
       setIsSavingLedgerEntry(true);
 
       const updateData: Partial<SupplierLedgerEntry> = {
-        transactionDate: new Date(editLedgerEntryForm.transactionDate),
+        transactionDate: parseLocalDate(editLedgerEntryForm.transactionDate),
         debitAmount: debitAmountValue,
         creditAmount: creditAmountValue,
       };
@@ -3395,7 +3396,7 @@ export default function PharmacyPage() {
       setEditingLedgerEntry(null);
       setEditLedgerEntryForm({
         billNumber: "",
-        transactionDate: new Date().toISOString().split("T")[0],
+        transactionDate: formatLocalDate(),
         debitAmount: "",
         creditAmount: "",
         notes: "",
@@ -4625,9 +4626,7 @@ export default function PharmacyPage() {
                           onPress={() => {
                             setPurchaseEntryForm({
                               billNumber: "",
-                              purchaseDate: new Date()
-                                .toISOString()
-                                .split("T")[0],
+                              purchaseDate: formatLocalDate(),
                               debitAmount: "",
                               notes: "",
                             });
@@ -4803,9 +4802,7 @@ export default function PharmacyPage() {
                                                 supplierId: entry.supplierId,
                                                 amount:
                                                   entry.balanceAmount.toString(),
-                                                date: new Date()
-                                                  .toISOString()
-                                                  .split("T")[0],
+                                                date: formatLocalDate(),
                                                 type: "payment",
                                                 referenceNumber:
                                                   entry.billNumber || entry.id,
@@ -6181,7 +6178,7 @@ export default function PharmacyPage() {
                           const { exportPharmacyDailyReportToExcel } =
                             await import("@/utils/reportExports");
                           const dailyPurchases = getDailyReportPurchases();
-                          const selectedDate = new Date(dailyReportDate);
+                          const selectedDate = parseLocalDate(dailyReportDate);
 
                           exportPharmacyDailyReportToExcel(
                             dailyPurchases,
@@ -6215,7 +6212,7 @@ export default function PharmacyPage() {
                           const { exportPharmacyDailyReportToPDF } =
                             await import("@/utils/reportExports");
                           const dailyPurchases = getDailyReportPurchases();
-                          const selectedDate = new Date(dailyReportDate);
+                          const selectedDate = parseLocalDate(dailyReportDate);
 
                           exportPharmacyDailyReportToPDF(
                             dailyPurchases,
@@ -6343,7 +6340,7 @@ export default function PharmacyPage() {
                                 )}
                                 <p className="text-xs text-default-400 mt-1">
                                   {totalStock !== null
-                                    ? `End of day ${format(new Date(dailyReportDate), "MMM dd, yyyy")}`
+                                    ? `End of day ${format(parseLocalDate(dailyReportDate), "MMM dd, yyyy")}`
                                     : `Sold Today: ${summary.totalItems}`}
                                 </p>
                               </div>
@@ -6373,7 +6370,7 @@ export default function PharmacyPage() {
                               <p className="text-default-500">
                                 No purchases found for{" "}
                                 {format(
-                                  new Date(dailyReportDate),
+                                  parseLocalDate(dailyReportDate),
                                   "MMMM dd, yyyy",
                                 )}
                                 .
@@ -6556,7 +6553,7 @@ export default function PharmacyPage() {
                         try {
                           const { exportDailyPurchasesReportToExcel } =
                             await import("@/utils/reportExports");
-                          const selectedDate = new Date(
+                          const selectedDate = parseLocalDate(
                             dailyPurchasesReportDate,
                           );
 
@@ -6593,7 +6590,7 @@ export default function PharmacyPage() {
                         try {
                           const { exportDailyPurchasesReportToPDF } =
                             await import("@/utils/reportExports");
-                          const selectedDate = new Date(
+                          const selectedDate = parseLocalDate(
                             dailyPurchasesReportDate,
                           );
 
@@ -6727,7 +6724,7 @@ export default function PharmacyPage() {
                               <p className="text-default-500">
                                 No purchases found for{" "}
                                 {format(
-                                  new Date(dailyPurchasesReportDate),
+                                  parseLocalDate(dailyPurchasesReportDate),
                                   "MMMM dd, yyyy",
                                 )}
                                 .
@@ -8159,7 +8156,7 @@ export default function PharmacyPage() {
           addPurchaseEntryModalState.forceClose();
           setPurchaseEntryForm({
             billNumber: "",
-            purchaseDate: new Date().toISOString().split("T")[0],
+            purchaseDate: formatLocalDate(),
             debitAmount: "",
             notes: "",
           });
@@ -8241,7 +8238,7 @@ export default function PharmacyPage() {
                 addPurchaseEntryModalState.forceClose();
                 setPurchaseEntryForm({
                   billNumber: "",
-                  purchaseDate: new Date().toISOString().split("T")[0],
+                  purchaseDate: formatLocalDate(),
                   debitAmount: "",
                   notes: "",
                 });
@@ -8271,7 +8268,7 @@ export default function PharmacyPage() {
           setEditingLedgerEntry(null);
           setEditLedgerEntryForm({
             billNumber: "",
-            transactionDate: new Date().toISOString().split("T")[0],
+            transactionDate: formatLocalDate(),
             debitAmount: "",
             creditAmount: "",
             notes: "",
@@ -8405,7 +8402,7 @@ export default function PharmacyPage() {
                 setEditingLedgerEntry(null);
                 setEditLedgerEntryForm({
                   billNumber: "",
-                  transactionDate: new Date().toISOString().split("T")[0],
+                  transactionDate: formatLocalDate(),
                   debitAmount: "",
                   creditAmount: "",
                   notes: "",

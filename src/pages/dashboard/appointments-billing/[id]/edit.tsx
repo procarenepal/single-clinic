@@ -32,6 +32,7 @@ import {
   Doctor,
   AppointmentType,
 } from "@/types/models";
+import { parseLocalDate, formatLocalDate } from "@/utils/localDate";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface InvoiceFormData {
@@ -335,7 +336,7 @@ export default function EditInvoicePage() {
     doctorId: "",
     doctorName: "",
     doctorType: "regular",
-    invoiceDate: new Date().toISOString().split("T")[0],
+    invoiceDate: formatLocalDate(),
     items: [],
     discountType: "percent",
     discountValue: 0,
@@ -431,7 +432,7 @@ export default function EditInvoicePage() {
         doctorId: invoiceData.doctorId,
         doctorName: invoiceData.doctorName,
         doctorType: invoiceData.doctorType,
-        invoiceDate: invoiceDate.toISOString().split("T")[0],
+        invoiceDate: formatLocalDate(invoiceDate),
         items: invoiceData.items.map((item) => ({
           ...item,
           id: item.id || `item_${Date.now()}_${Math.random()}`,
@@ -656,7 +657,7 @@ export default function EditInvoicePage() {
         doctorId: rootDoctorId,
         doctorName: rootDoctorName,
         doctorType: rootDoctorType,
-        invoiceDate: new Date(formData.invoiceDate),
+        invoiceDate: parseLocalDate(formData.invoiceDate),
         items: formData.items,
         subtotal: calculations.subtotal,
         discountType: formData.discountType,

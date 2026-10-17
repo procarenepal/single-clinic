@@ -21,6 +21,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
+import { parseLocalDate } from "@/utils/localDate";
 import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION = "patientFollowups";
@@ -47,7 +48,7 @@ function toDate(val: any): Date | undefined {
   if (val instanceof Date) return val;
   if (val?.seconds) return new Date(val.seconds * 1000);
 
-  return new Date(val);
+  return parseLocalDate(val);
 }
 
 function mapDoc(id: string, data: any): PatientFollowup {

@@ -8,6 +8,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { PathologyBilling } from "@/types/models";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 /**
  * One row of pathology activity for the day — either a billed invoice item
@@ -78,7 +79,7 @@ export default function PathologyDailyReportTab({
           <Button
             className="h-[32px]"
             variant="flat"
-            onClick={() => onDateChange(new Date().toISOString().split("T")[0])}
+            onClick={() => onDateChange(formatLocalDate())}
           >
             Today
           </Button>
@@ -254,7 +255,7 @@ export default function PathologyDailyReportTab({
                         )}
                       </td>
                       <td className="px-4 py-2 text-[13px] text-text-main">
-                        {new Date(test.createdAt).toLocaleTimeString()}
+                        {parseLocalDate(test.createdAt).toLocaleTimeString()}
                       </td>
                     </tr>
                   ))}

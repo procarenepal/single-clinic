@@ -25,6 +25,7 @@ import {
   SupplierPayment,
   SupplierPurchaseRecord,
 } from "../types/models";
+import { parseLocalDate } from "../utils/localDate";
 import { resolveClinicId } from "./currentClinic";
 
 const MEDICINES_COLLECTION = "medicines";
@@ -530,12 +531,12 @@ export const medicineService = {
           expiryDate: data.expiryDate?.toDate
             ? data.expiryDate.toDate()
             : data.expiryDate
-              ? new Date(data.expiryDate)
+              ? parseLocalDate(data.expiryDate)
               : undefined,
           manufactureDate: data.manufactureDate?.toDate
             ? data.manufactureDate.toDate()
             : data.manufactureDate
-              ? new Date(data.manufactureDate)
+              ? parseLocalDate(data.manufactureDate)
               : undefined,
           lastRestocked: data.lastRestocked?.toDate
             ? data.lastRestocked.toDate()
@@ -604,12 +605,12 @@ export const medicineService = {
           expiryDate: data.expiryDate?.toDate
             ? data.expiryDate.toDate()
             : data.expiryDate
-              ? new Date(data.expiryDate)
+              ? parseLocalDate(data.expiryDate)
               : undefined,
           manufactureDate: data.manufactureDate?.toDate
             ? data.manufactureDate.toDate()
             : data.manufactureDate
-              ? new Date(data.manufactureDate)
+              ? parseLocalDate(data.manufactureDate)
               : undefined,
           lastRestocked: data.lastRestocked?.toDate
             ? data.lastRestocked.toDate()
@@ -1562,7 +1563,7 @@ export const medicineService = {
           transactionDate:
             recordData.purchaseDate instanceof Date
               ? recordData.purchaseDate
-              : new Date(recordData.purchaseDate),
+              : parseLocalDate(recordData.purchaseDate),
           debitAmount: recordData.totalAmount,
           creditAmount: 0,
           type: "purchase",
@@ -1779,7 +1780,7 @@ export const medicineService = {
         date:
           paymentData.date instanceof Date
             ? paymentData.date
-            : new Date(paymentData.date),
+            : parseLocalDate(paymentData.date),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -2058,7 +2059,7 @@ export const medicineService = {
         transactionDate:
           entryData.transactionDate instanceof Date
             ? entryData.transactionDate
-            : new Date(entryData.transactionDate),
+            : parseLocalDate(entryData.transactionDate),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -2146,7 +2147,7 @@ export const medicineService = {
           payload.transactionDate =
             payload.transactionDate instanceof Date
               ? payload.transactionDate
-              : new Date(payload.transactionDate);
+              : parseLocalDate(payload.transactionDate);
         }
 
         await updateDoc(docRef, payload);

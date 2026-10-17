@@ -104,6 +104,7 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { parseLocalDate } from "@/utils/localDate";
 import { clinicService } from "@/services/clinicService";
 import { leaveRequestService } from "@/services/leaveRequestService";
 import { leaveTypeService } from "@/services/leaveTypeService";
@@ -381,10 +382,10 @@ export default function HRPage() {
   }, [bills]);
 
   const staffPayrollSummary = useMemo(() => {
-    const startDate = new Date(reportDateRange.start);
+    const startDate = parseLocalDate(reportDateRange.start);
 
     startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(reportDateRange.end);
+    const endDate = parseLocalDate(reportDateRange.end);
 
     endDate.setHours(23, 59, 59, 999);
 
@@ -434,8 +435,8 @@ export default function HRPage() {
 
       return;
     }
-    const startDateVal = new Date(reportDateRange.start);
-    const endDateVal = new Date(reportDateRange.end);
+    const startDateVal = parseLocalDate(reportDateRange.start);
+    const endDateVal = parseLocalDate(reportDateRange.end);
 
     if (isNaN(startDateVal.getTime()) || isNaN(endDateVal.getTime())) {
       addToast({
@@ -636,7 +637,7 @@ export default function HRPage() {
             <div class="info-grid">
               <div class="info-item">
                 <span class="info-label">Report Period</span>
-                <span class="info-value">${format(new Date(reportDateRange.start), "MMM dd, yyyy")} - ${format(new Date(reportDateRange.end), "MMM dd, yyyy")}</span>
+                <span class="info-value">${format(parseLocalDate(reportDateRange.start), "MMM dd, yyyy")} - ${format(parseLocalDate(reportDateRange.end), "MMM dd, yyyy")}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Staff Filter</span>
@@ -738,8 +739,8 @@ export default function HRPage() {
 
       return;
     }
-    const start = new Date(leaveForm.startDate);
-    const end = new Date(leaveForm.endDate);
+    const start = parseLocalDate(leaveForm.startDate);
+    const end = parseLocalDate(leaveForm.endDate);
 
     if (end < start) {
       addToast({
@@ -898,7 +899,7 @@ export default function HRPage() {
         ...staffForm,
         age: parseInt(staffForm.age) || 0,
         salary: parseFloat(staffForm.salary),
-        joiningDate: new Date(staffForm.joiningDate),
+        joiningDate: parseLocalDate(staffForm.joiningDate),
         taskCompletionScore: parseInt(staffForm.taskCompletionScore) || 85,
         performanceNotes: staffForm.performanceNotes,
         shiftStartTime: staffForm.shiftStartTime,
@@ -3133,8 +3134,8 @@ export default function HRPage() {
                           </span>
                           <span className="font-semibold text-primary">
                             {Math.round(
-                              (new Date(leaveForm.endDate).getTime() -
-                                new Date(leaveForm.startDate).getTime()) /
+                              (parseLocalDate(leaveForm.endDate).getTime() -
+                                parseLocalDate(leaveForm.startDate).getTime()) /
                                 86400000,
                             ) + 1}{" "}
                             Day(s)
@@ -3161,7 +3162,7 @@ export default function HRPage() {
                               );
                             }
 
-                            const currentYear = new Date(
+                            const currentYear = parseLocalDate(
                               leaveForm.startDate,
                             ).getFullYear();
                             const balance = leaveBalances.find(
@@ -5728,7 +5729,7 @@ export default function HRPage() {
                       await hrService.addHoliday(
                         clinicId,
                         newHoliday.name,
-                        new Date(newHoliday.date),
+                        parseLocalDate(newHoliday.date),
                         newHoliday.type,
                       );
                       setNewHoliday({

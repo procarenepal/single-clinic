@@ -1,3 +1,5 @@
+import { parseLocalDate } from "@/utils/localDate";
+
 /**
  * Small "N days overdue" pill shown inline on billing list rows for unpaid
  * records — surfaces staleness where staff already are, instead of only in
@@ -5,7 +7,7 @@
  * that report's AgingBucket scheme (0-30/31-60/61-90/90+) for consistency.
  */
 export function AgingTag({ date }: { date: Date | string }) {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = typeof date === "string" ? parseLocalDate(date) : date;
   const daysOverdue = Math.floor(
     (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24),
   );

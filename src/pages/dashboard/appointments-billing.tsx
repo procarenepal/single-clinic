@@ -42,6 +42,7 @@ import { AgingTag } from "@/components/billing/AgingTag";
 // Services
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { getPatientOutstandingSummary } from "@/utils/patientOutstanding";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   DateRangeFilter,
   DATE_RANGE_OPTIONS,
@@ -479,7 +480,7 @@ export default function AppointmentBillingPage() {
     doctorId: "",
     doctorName: "",
     doctorType: "regular",
-    invoiceDate: new Date().toISOString().split("T")[0],
+    invoiceDate: formatLocalDate(),
     items: [],
     discountType: "percent",
     discountValue: 0,
@@ -597,7 +598,7 @@ export default function AppointmentBillingPage() {
       let filtered = bData || [];
 
       if (filterDate) {
-        const d = new Date(filterDate);
+        const d = parseLocalDate(filterDate);
         const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
         const end = new Date(
           d.getFullYear(),
@@ -1115,7 +1116,7 @@ export default function AppointmentBillingPage() {
         doctorName: rootDoctorName,
         doctorType: rootDoctorType,
         items: cleanItems,
-        invoiceDate: new Date(formData.invoiceDate),
+        invoiceDate: parseLocalDate(formData.invoiceDate),
         subtotal: calculations.subtotal,
         discountAmount: calculations.totalDiscount,
         itemDiscountAmount: calculations.itemDiscountAmount,
@@ -1224,7 +1225,7 @@ export default function AppointmentBillingPage() {
   // ── Manage Invoices Logic ──────────────────────────────────────────────────
   const fmtCur = (n: number) => `NPR ${n.toLocaleString()}`;
   const fmtDate = (d: string | Date) =>
-    new Date(d).toLocaleDateString("en-US", {
+    parseLocalDate(d).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",

@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 
-import { formatLocalDate, parseLocalDate } from "../localDate";
+import {
+  formatLocalDate,
+  formatLocalDateTime,
+  parseLocalDate,
+} from "../localDate";
 
 describe("parseLocalDate", () => {
   it("reads a yyyy-mm-dd string as local midnight, whatever the timezone", () => {
@@ -44,5 +48,16 @@ describe("formatLocalDate", () => {
     const now = new Date();
 
     expect(formatLocalDate()).toBe(formatLocalDate(now));
+  });
+});
+
+describe("formatLocalDateTime", () => {
+  it("formats local wall-clock time in the datetime-local shape", () => {
+    expect(formatLocalDateTime(new Date(2026, 9, 17, 9, 5))).toBe(
+      "2026-10-17T09:05",
+    );
+    expect(formatLocalDateTime(new Date(2026, 0, 1, 0, 0))).toBe(
+      "2026-01-01T00:00",
+    );
   });
 });

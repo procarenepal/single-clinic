@@ -19,6 +19,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { callLogService } from "@/services/callLogService";
 import { CallLog } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
+import { formatLocalDate, formatLocalDateTime } from "@/utils/localDate";
 
 const callTypeOptions = [
   { key: "incoming", label: "Incoming" },
@@ -44,8 +45,8 @@ export default function ManageCallLogsPage() {
   const itemsPerPage = 10;
 
   // Current date for default values
-  const currentDate = new Date().toISOString().split("T")[0];
-  const currentDateTime = new Date().toISOString().slice(0, 16);
+  const currentDate = formatLocalDate();
+  const currentDateTime = formatLocalDateTime();
 
   const [callLogForm, setCallLogForm] = useState({
     name: "",
@@ -162,7 +163,7 @@ export default function ManageCallLogsPage() {
     setCallLogForm({
       name: callLog.name,
       phone: formattedPhone,
-      receivedOn: callLog.receivedOn.toISOString().slice(0, 16),
+      receivedOn: formatLocalDateTime(callLog.receivedOn),
       callType: callLog.callType,
       notes: callLog.notes || "",
     });
@@ -457,10 +458,9 @@ export default function ManageCallLogsPage() {
                         </td>
                         <td className="text-sm">
                           <div>
-                            {new Date(callLog.receivedOn)
-                              .toISOString()
-                              .split("T")[0]
-                              .replace(/-/g, "/")}
+                            {formatLocalDate(
+                              new Date(callLog.receivedOn),
+                            ).replace(/-/g, "/")}
                           </div>
                           <div className="text-xs text-[rgb(var(--color-text-muted))]">
                             {new Date(callLog.receivedOn).toLocaleTimeString(

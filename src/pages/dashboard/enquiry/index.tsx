@@ -23,6 +23,7 @@ import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { title } from "@/components/primitives";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 type DatePreset = "all" | "today" | "yesterday" | "tomorrow" | "custom";
 
@@ -127,10 +128,10 @@ export default function EnquiriesPage() {
       let end: Date | undefined;
 
       if (rangeStart) {
-        start = startOfDay(new Date(rangeStart));
+        start = startOfDay(parseLocalDate(rangeStart));
       }
       if (rangeEnd) {
-        end = startOfDay(new Date(rangeEnd));
+        end = startOfDay(parseLocalDate(rangeEnd));
       }
 
       if (start && end && end < start) {
@@ -245,15 +246,15 @@ export default function EnquiriesPage() {
           phone: form.phone.trim(),
           reasonForVisit: form.reasonForVisit.trim() || undefined,
           appointmentDate: form.appointmentDate
-            ? new Date(form.appointmentDate)
+            ? parseLocalDate(form.appointmentDate)
             : undefined,
           source: form.source.trim() || undefined,
           note: form.note.trim() || undefined,
           lastContactedAt: form.lastContactedAt
-            ? new Date(form.lastContactedAt)
+            ? parseLocalDate(form.lastContactedAt)
             : undefined,
           nextContactAt: form.nextContactAt
-            ? new Date(form.nextContactAt)
+            ? parseLocalDate(form.nextContactAt)
             : undefined,
           action: form.action || undefined,
           status: form.status,
@@ -271,15 +272,15 @@ export default function EnquiriesPage() {
           phone: form.phone.trim(),
           reasonForVisit: form.reasonForVisit.trim() || undefined,
           appointmentDate: form.appointmentDate
-            ? new Date(form.appointmentDate)
+            ? parseLocalDate(form.appointmentDate)
             : undefined,
           source: form.source.trim() || undefined,
           note: form.note.trim() || undefined,
           lastContactedAt: form.lastContactedAt
-            ? new Date(form.lastContactedAt)
+            ? parseLocalDate(form.lastContactedAt)
             : undefined,
           nextContactAt: form.nextContactAt
-            ? new Date(form.nextContactAt)
+            ? parseLocalDate(form.nextContactAt)
             : undefined,
           action: form.action || undefined,
           status: form.status,
@@ -409,7 +410,7 @@ export default function EnquiriesPage() {
 
       XLSX.utils.book_append_sheet(wb, ws, "Enquiries");
 
-      const currentDate = new Date().toISOString().split("T")[0];
+      const currentDate = formatLocalDate();
       const filename = `enquiries_export_${currentDate}.xlsx`;
 
       XLSX.writeFile(wb, filename);

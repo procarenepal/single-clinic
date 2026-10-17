@@ -38,6 +38,7 @@ import {
   getLastPaymentMethod,
   setLastPaymentMethod,
 } from "@/utils/lastUsedPreferences";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   AppointmentBilling,
   AppointmentBillingSettings,
@@ -420,7 +421,7 @@ export default function PatientBillingTab({
     doctorId: "",
     doctorName: "",
     doctorType: "regular",
-    invoiceDate: new Date().toISOString().split("T")[0],
+    invoiceDate: formatLocalDate(),
     items: [],
     discountType: "percent",
     discountValue: 0,
@@ -755,7 +756,7 @@ export default function PatientBillingTab({
         doctorId: rootDoctorId,
         doctorName: rootDoctorName,
         doctorType: rootDoctorType,
-        invoiceDate: new Date(formData.invoiceDate),
+        invoiceDate: parseLocalDate(formData.invoiceDate),
         items: formData.items,
         subtotal: calculations.subtotal,
         discountType: formData.discountType,

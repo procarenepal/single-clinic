@@ -1,3 +1,5 @@
+import { parseLocalDate } from "./localDate";
+
 /**
  * Shared date-range quick-filter predicate for the 3 billing list pages
  * (appointment/pathology/pharmacy) — kept in one place so "Today"/"This
@@ -18,7 +20,7 @@ export function isWithinDateRange(
 ): boolean {
   if (filter === "all") return true;
 
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = typeof date === "string" ? parseLocalDate(date) : date;
   const now = new Date();
 
   if (filter === "today") {

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui";
 import { generatePatientSlipHTML, PrintFormat } from "@/utils/invoicePrinting";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { formatLocalDate } from "@/utils/localDate";
 import {
   getPrintBrandingCSS,
   getPrintHeaderHTML,
@@ -280,7 +281,7 @@ export default function PatientOverviewTab({
       .join(" / ");
     const table = `<table class="pt"><tbody>
       ${row("Reg#:", patient.regNumber || "", "Name:", patient.name)}
-      ${row("Age/Gender:", ageGender, "Date:", new Date().toISOString().split("T")[0].replace(/-/g, "/"))}
+      ${row("Age/Gender:", ageGender, "Date:", formatLocalDate().replace(/-/g, "/"))}
       ${row("Contact:", patient.mobile, "Address:", patient.address || "")}
       ${row("Ref By:", patient.referredBy || "", "", "")}
     </tbody></table>`;

@@ -3,6 +3,8 @@
  * Uses verified calendar data for the range 1978 BS to 2099 BS.
  */
 
+import { parseLocalDate } from "./localDate";
+
 // Verified BS year data: [Baisakh, Jestha, Ashadh, Shrawan, Bhadra, Ashwin, Kartik, Mangsir, Poush, Magh, Falgun, Chaitra]
 const bsData: { [year: number]: number[] } = {
   1978: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
@@ -143,7 +145,7 @@ export function adToBS(adDate: Date): {
   day: number;
   formatted: string;
 } {
-  const startAd = new Date(START_ENGLISH_DATE);
+  const startAd = parseLocalDate(START_ENGLISH_DATE);
   let diff = Math.floor(
     (adDate.getTime() - startAd.getTime()) / (1000 * 60 * 60 * 24),
   );
@@ -207,7 +209,7 @@ export function bsToAD(bsDateString: string): Date {
 
   totalDays += bsDay - 1;
 
-  const startAd = new Date(START_ENGLISH_DATE);
+  const startAd = parseLocalDate(START_ENGLISH_DATE);
 
   return new Date(startAd.getTime() + totalDays * 24 * 60 * 60 * 1000);
 }
@@ -226,7 +228,9 @@ export function isValidBSDate(
 
 export function calculateAgeFromDOB(dateOfBirth: Date | string): number {
   const birthDate =
-    typeof dateOfBirth === "string" ? new Date(dateOfBirth) : dateOfBirth;
+    typeof dateOfBirth === "string"
+      ? parseLocalDate(dateOfBirth)
+      : dateOfBirth;
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const m = today.getMonth() - birthDate.getMonth();
@@ -240,7 +244,9 @@ export function calculateAgeFromDOB(dateOfBirth: Date | string): number {
 
 export function getDetailedAge(dateOfBirth: Date | string): string {
   const birthDate =
-    typeof dateOfBirth === "string" ? new Date(dateOfBirth) : dateOfBirth;
+    typeof dateOfBirth === "string"
+      ? parseLocalDate(dateOfBirth)
+      : dateOfBirth;
   const today = new Date();
   let years = today.getFullYear() - birthDate.getFullYear();
   let months = today.getMonth() - birthDate.getMonth();

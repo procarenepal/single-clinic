@@ -35,6 +35,7 @@ import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { Patient, Doctor, AppointmentType } from "@/types/models";
 import { todayLocalDateString } from "@/services/core/visitBillingCore";
+import { parseLocalDate } from "@/utils/localDate";
 
 /**
  * What each revenue card should count, by what was actually sold.
@@ -74,7 +75,7 @@ const sumByKind = (
 
 // Helper function to format date
 const formatDate = (date: Date | string): string => {
-  const d = new Date(date);
+  const d = parseLocalDate(date);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -194,7 +195,7 @@ export default function DailyReportPage() {
 
       setLoading(true);
       try {
-        const date = new Date(selectedDate);
+        const date = parseLocalDate(selectedDate);
         const data = await dailyReportService.getDailyReportData(
           clinicId,
           date,
@@ -256,7 +257,7 @@ export default function DailyReportPage() {
 
   // Helper to check if an invoice was created on the selected date
   const isCreatedOnSelectedDate = (dateObj: Date | string) => {
-    const d = new Date(dateObj);
+    const d = parseLocalDate(dateObj);
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
@@ -351,7 +352,7 @@ export default function DailyReportPage() {
   const handleExportExcel = () => {
     setIsExporting(true);
     try {
-      const date = new Date(selectedDate);
+      const date = parseLocalDate(selectedDate);
 
       exportDailyReportToExcel(
         reportData,
@@ -372,7 +373,7 @@ export default function DailyReportPage() {
   const handleExportPDF = () => {
     setIsExporting(true);
     try {
-      const date = new Date(selectedDate);
+      const date = parseLocalDate(selectedDate);
 
       exportDailyReportToPDF(
         reportData,

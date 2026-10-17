@@ -15,6 +15,8 @@
  * unit-testable without mocking a transaction.
  */
 
+import { parseLocalDate } from "../../utils/localDate";
+
 /** A medicineStock document, as far as batch selection is concerned. */
 export interface StockBatchData {
   currentStock?: number;
@@ -73,7 +75,7 @@ export function toMillis(value: any, fallback: number): number {
   if (value == null) return fallback;
   if (typeof value?.toDate === "function") return value.toDate().getTime();
 
-  const parsed = new Date(value).getTime();
+  const parsed = parseLocalDate(value).getTime();
 
   return Number.isNaN(parsed) ? fallback : parsed;
 }

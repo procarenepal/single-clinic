@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui";
 import { Checkbox } from "@/components/ui/checkbox";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 // Services
 import { appointmentService } from "@/services/appointmentService";
@@ -101,7 +102,7 @@ interface ReportData {
 
 // Helper function to format date in yyyy/mm/dd format
 const formatDate = (date: Date | string) => {
-  const d = new Date(date);
+  const d = parseLocalDate(date);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -166,10 +167,10 @@ export default function ReportsPage() {
   });
   const [selectedTab, setSelectedTab] = useState("overview");
   const [dateRange, setDateRange] = useState({
-    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      .toISOString()
-      .split("T")[0],
-    end: new Date().toISOString().split("T")[0],
+    start: formatLocalDate(
+      new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    ),
+    end: formatLocalDate(),
   });
   const [selectedDoctor, setSelectedDoctor] = useState("all");
   const [selectedAppointmentType, setSelectedAppointmentType] = useState("all");
@@ -370,10 +371,10 @@ export default function ReportsPage() {
   const getFilteredAppointments = () => {
     return reportData.appointments.filter((appointment) => {
       const appointmentDate = new Date(appointment.appointmentDate);
-      const startDate = new Date(dateRange.start);
+      const startDate = parseLocalDate(dateRange.start);
 
       startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(dateRange.end);
+      const endDate = parseLocalDate(dateRange.end);
 
       endDate.setHours(23, 59, 59, 999);
 
@@ -394,10 +395,10 @@ export default function ReportsPage() {
 
   // Filter patients by date range (createdAt), selected doctor, and selected appointment type
   const getFilteredPatients = () => {
-    const startDate = new Date(dateRange.start);
+    const startDate = parseLocalDate(dateRange.start);
 
     startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(dateRange.end);
+    const endDate = parseLocalDate(dateRange.end);
 
     endDate.setHours(23, 59, 59, 999);
 
@@ -488,10 +489,10 @@ export default function ReportsPage() {
   const filteredPharmacyPurchases = useMemo(() => {
     if (allDates || !dateRange.start || !dateRange.end)
       return reportData.medicinePurchases;
-    const start = new Date(dateRange.start);
+    const start = parseLocalDate(dateRange.start);
 
     start.setHours(0, 0, 0, 0);
-    const end = new Date(dateRange.end);
+    const end = parseLocalDate(dateRange.end);
 
     end.setHours(23, 59, 59, 999);
 
@@ -511,10 +512,10 @@ export default function ReportsPage() {
   const filteredPharmacyUsage = useMemo(() => {
     if (allDates || !dateRange.start || !dateRange.end)
       return reportData.medicineUsage;
-    const start = new Date(dateRange.start);
+    const start = parseLocalDate(dateRange.start);
 
     start.setHours(0, 0, 0, 0);
-    const end = new Date(dateRange.end);
+    const end = parseLocalDate(dateRange.end);
 
     end.setHours(23, 59, 59, 999);
 
@@ -541,10 +542,10 @@ export default function ReportsPage() {
 
     // Apply date range filter if not showing all dates
     if (!allDates && dateRange.start && dateRange.end) {
-      const start = new Date(dateRange.start);
+      const start = parseLocalDate(dateRange.start);
 
       start.setHours(0, 0, 0, 0);
-      const end = new Date(dateRange.end);
+      const end = parseLocalDate(dateRange.end);
 
       end.setHours(23, 59, 59, 999);
 
@@ -606,10 +607,10 @@ export default function ReportsPage() {
 
     // Apply date range filter if not showing all dates
     if (!allDates && dateRange.start && dateRange.end) {
-      const start = new Date(dateRange.start);
+      const start = parseLocalDate(dateRange.start);
 
       start.setHours(0, 0, 0, 0);
-      const end = new Date(dateRange.end);
+      const end = parseLocalDate(dateRange.end);
 
       end.setHours(23, 59, 59, 999);
 
@@ -694,7 +695,7 @@ export default function ReportsPage() {
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
       XLSX.writeFile(
         wb,
-        `${filename}_${new Date().toISOString().split("T")[0]}.xlsx`,
+        `${filename}_${formatLocalDate()}.xlsx`,
       );
 
       addToast({
@@ -949,8 +950,11 @@ export default function ReportsPage() {
         if (!issuedItem.issuedDate) return false;
 
         const issuedDate = new Date(issuedItem.issuedDate);
-        const startDate = new Date(dateRange.start);
-        const endDate = new Date(dateRange.end);
+        const startDate = parseLocalDate(dateRange.start);
+        const endDate = parseLocalDate(dateRange.end);
+
+        // Include the whole end day, like every other range in this file.
+        endDate.setHours(23, 59, 59, 999);
 
         return issuedDate >= startDate && issuedDate <= endDate;
       })
@@ -1006,7 +1010,7 @@ export default function ReportsPage() {
     });
 
     // Save file
-    const fileName = `inventory-report-${new Date().toISOString().split("T")[0]}.xlsx`;
+    const fileName = `inventory-report-${formatLocalDate()}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
   };

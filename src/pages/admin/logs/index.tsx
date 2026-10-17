@@ -34,6 +34,7 @@ import { clinicService } from "@/services/clinicService";
 import { Clinic } from "@/types/models";
 import { useAuthContext } from "@/context/AuthContext";
 import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
+import { parseLocalDate } from "@/utils/localDate";
 
 const EVENT_TYPE_OPTIONS = [
   { key: "all", label: "All Events" },
@@ -140,11 +141,11 @@ export default function AdminLogsPage() {
         }
 
         if (startDate) {
-          filters.startDate = new Date(startDate);
+          filters.startDate = parseLocalDate(startDate);
         }
 
         if (endDate) {
-          const end = new Date(endDate);
+          const end = parseLocalDate(endDate);
 
           end.setHours(23, 59, 59, 999); // End of day
           filters.endDate = end;

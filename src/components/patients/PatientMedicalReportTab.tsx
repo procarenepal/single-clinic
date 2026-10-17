@@ -21,6 +21,7 @@ import { MedicalReportResponseService } from "@/services/medicalReportResponseSe
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
 import { useAuthContext } from "@/context/AuthContext";
+import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
 interface PatientMedicalReportTabProps {
   patientId: string;
@@ -113,7 +114,7 @@ function formatAnswer(field: MedicalReportField, value: any): string {
   if (field.fieldType === "yes-no")
     return String(value).replace(/^./, (c) => c.toUpperCase());
   if (field.fieldType === "date") {
-    const d = new Date(value);
+    const d = parseLocalDate(value);
 
     return isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
   }
@@ -369,11 +370,13 @@ export const PatientMedicalReportTab: React.FC<
             className={INPUT_CLS}
             disabled={dis}
             type="date"
-            value={val ? new Date(val).toISOString().split("T")[0] : ""}
+            value={val ? formatLocalDate(parseLocalDate(val)) : ""}
             onChange={(e) =>
               handleChange(
                 field.fieldKey,
-                e.target.value ? new Date(e.target.value).toISOString() : "",
+                e.target.value
+                  ? parseLocalDate(e.target.value).toISOString()
+                  : "",
               )
             }
           />

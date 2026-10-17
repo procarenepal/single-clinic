@@ -19,6 +19,7 @@ import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { adToBS, bsToAD } from "@/utils/dateConverter";
+import { parseLocalDate } from "@/utils/localDate";
 import {
   Appointment,
   Patient,
@@ -323,7 +324,7 @@ export default function EditAppointmentPage() {
 
     setConvertingDate(true);
     try {
-      const dateObj = new Date(adDate);
+      const dateObj = parseLocalDate(adDate);
       const bsDate = adToBS(dateObj);
 
       setFormData((prev) => ({ ...prev, appointmentBS: bsDate.formatted }));
@@ -405,11 +406,11 @@ export default function EditAppointmentPage() {
             ? formData.doctorId
             : (null as any),
         appointmentTypeId: formData.appointmentTypeId,
-        appointmentDate: new Date(formData.appointmentDate),
+        appointmentDate: parseLocalDate(formData.appointmentDate),
         appointmentBS: formData.appointmentBS
-          ? new Date(formData.appointmentBS)
+          ? parseLocalDate(formData.appointmentBS)
           : undefined,
-        registrationDate: new Date(formData.registrationDate),
+        registrationDate: parseLocalDate(formData.registrationDate),
         startTime: formData.startTime || undefined,
         endTime: formData.endTime || undefined,
         status: formData.status,

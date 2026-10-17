@@ -86,6 +86,7 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { patientService } from "@/services/patientService";
 import { Patient } from "@/types/models";
 import { calculateTaxBreakdown } from "@/utils/taxEngine";
+import { parseLocalDate, formatLocalDate } from "@/utils/localDate";
 
 // ── Flat inline patient search (mirrors SearchSelect in appointments-billing) ─
 function PatientSearchBox({
@@ -422,17 +423,15 @@ export default function PathologyBillingTab({
     patientAddress: "",
     patientAge: "",
     patientGender: "",
-    invoiceDate: new Date().toISOString().split("T")[0],
+    invoiceDate: formatLocalDate(),
     items: [],
     discountType: "percent",
     discountValue: 0,
     referringDoctors: [],
     notes: "",
     labReferenceNo: "",
-    sampleCollectionDate: new Date().toISOString().split("T")[0],
-    expectedReportDate: new Date(Date.now() + 86400000)
-      .toISOString()
-      .split("T")[0], // Tomorrow
+    sampleCollectionDate: formatLocalDate(),
+    expectedReportDate: formatLocalDate(new Date(Date.now() + 86400000)), // Tomorrow
     reportStatus: "pending_collection",
     applyTax: false,
   });
@@ -1065,7 +1064,7 @@ export default function PathologyBillingTab({
         patientAddress: formData.patientAddress.trim() || null,
         patientAge: formData.patientAge ? parseInt(formData.patientAge) : null,
         patientGender: formData.patientGender.trim() || null,
-        invoiceDate: new Date(formData.invoiceDate),
+        invoiceDate: parseLocalDate(formData.invoiceDate),
         items: formData.items,
         subtotal: calculations.subtotal,
         discountType: formData.discountType,
@@ -1083,8 +1082,8 @@ export default function PathologyBillingTab({
         referringDoctors: formData.referringDoctors,
         notes: formData.notes?.trim() || null,
         labReferenceNo: formData.labReferenceNo?.trim() || null,
-        sampleCollectionDate: new Date(formData.sampleCollectionDate),
-        expectedReportDate: new Date(formData.expectedReportDate),
+        sampleCollectionDate: parseLocalDate(formData.sampleCollectionDate),
+        expectedReportDate: parseLocalDate(formData.expectedReportDate),
         reportStatus: formData.reportStatus,
       };
 
@@ -1189,17 +1188,15 @@ export default function PathologyBillingTab({
         patientAddress: "",
         patientAge: "",
         patientGender: "",
-        invoiceDate: new Date().toISOString().split("T")[0],
+        invoiceDate: formatLocalDate(),
         items: [],
         discountType: billingSettings?.defaultDiscountType || "percent",
         discountValue: billingSettings?.defaultDiscountValue || 0,
         referringDoctors: [],
         notes: "",
         labReferenceNo: "",
-        sampleCollectionDate: new Date().toISOString().split("T")[0],
-        expectedReportDate: new Date(Date.now() + 86400000)
-          .toISOString()
-          .split("T")[0],
+        sampleCollectionDate: formatLocalDate(),
+        expectedReportDate: formatLocalDate(new Date(Date.now() + 86400000)),
         reportStatus: "pending_collection",
         applyTax: false,
       });
@@ -1237,15 +1234,15 @@ export default function PathologyBillingTab({
 
     // Format dates to YYYY-MM-DD for inputs
     const formatDateForInput = (dateValue: any) => {
-      if (!dateValue) return new Date().toISOString().split("T")[0];
+      if (!dateValue) return formatLocalDate();
       const d =
         dateValue instanceof Date
           ? dateValue
           : dateValue.toDate
             ? dateValue.toDate()
-            : new Date(dateValue);
+            : parseLocalDate(dateValue);
 
-      return d.toISOString().split("T")[0];
+      return formatLocalDate(d);
     };
 
     setFormData({
@@ -1359,17 +1356,15 @@ export default function PathologyBillingTab({
       patientAddress: "",
       patientAge: "",
       patientGender: "",
-      invoiceDate: new Date().toISOString().split("T")[0],
+      invoiceDate: formatLocalDate(),
       items: [],
       discountType: billingSettings?.defaultDiscountType || "percent",
       discountValue: billingSettings?.defaultDiscountValue || 0,
       referringDoctors: [],
       notes: "",
       labReferenceNo: "",
-      sampleCollectionDate: new Date().toISOString().split("T")[0],
-      expectedReportDate: new Date(Date.now() + 86400000)
-        .toISOString()
-        .split("T")[0],
+      sampleCollectionDate: formatLocalDate(),
+      expectedReportDate: formatLocalDate(new Date(Date.now() + 86400000)),
       reportStatus: "pending_collection",
       applyTax: false,
     });
@@ -1408,17 +1403,15 @@ export default function PathologyBillingTab({
       patientAddress: pat?.address || "",
       patientAge: pat?.age?.toString() || "",
       patientGender: pat?.gender || "",
-      invoiceDate: new Date().toISOString().split("T")[0],
+      invoiceDate: formatLocalDate(),
       items,
       discountType: billingSettings?.defaultDiscountType || "percent",
       discountValue: billingSettings?.defaultDiscountValue || 0,
       referringDoctors: [],
       notes: "Prescribed via Clinical Consultation",
       labReferenceNo: "",
-      sampleCollectionDate: new Date().toISOString().split("T")[0],
-      expectedReportDate: new Date(Date.now() + 86400000)
-        .toISOString()
-        .split("T")[0],
+      sampleCollectionDate: formatLocalDate(),
+      expectedReportDate: formatLocalDate(new Date(Date.now() + 86400000)),
       reportStatus: "pending_collection",
       applyTax: false,
     });
