@@ -13,6 +13,11 @@ import {
 
 import { useAuthContext } from "@/context/AuthContext";
 import { appointmentService } from "@/services/appointmentService";
+import { patientPackageService } from "@/services/patientPackageService";
+import {
+  reverseVisitPlan,
+  canCompleteCheckout,
+} from "@/services/core/visitLifecycleCore";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { sendCheckInSMS } from "@/services/sendMessageService";
@@ -114,7 +119,7 @@ function StatusDropdown({
 export default function PatientAppointmentsTab({
   patientId,
 }: PatientAppointmentsTabProps) {
-  const { clinicId } = useAuthContext();
+  const { clinicId, currentUser } = useAuthContext();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
@@ -187,25 +192,97 @@ export default function PatientAppointmentsTab({
     }
   };
 
+  /**
+   * Same fix and reasoning as the main Appointments page: this dropdown
+   * used to write any status with no gate at all. Cancel/no-show now go
+   * through reverseVisitPlan (refuses once an invoice is filed, clears
+   * the visit's pending charges/deposit instead of stranding them, and
+   * releases a reserved package session); completing goes through the
+   * same canCompleteCheckout balance/clinical gate the front desk's
+   * checkout button enforces.
+   */
   const handleStatusChange = async (
     appointmentId: string,
     newStatus: StatusKey,
   ) => {
+    const appt = appointments.find((x) => x.id === appointmentId);
+
+    if (!appt) return;
+
     setUpdatingStatus(appointmentId);
     try {
-      await appointmentService.updateAppointmentStatus(
-        appointmentId,
-        newStatus,
-      );
+      if (newStatus === "cancelled" || newStatus === "no-show") {
+        const plan = reverseVisitPlan(
+          newStatus === "cancelled" ? "cancel" : "no-show",
+          appt as any,
+          { by: currentUser?.uid || "system", now: new Date() },
+        );
+
+        if (!plan.allowed) {
+          addToast({
+            title: "Cannot Change Status",
+            description:
+              plan.reason || "This status change is not allowed right now.",
+            color: "danger",
+            duration: 10000,
+          });
+
+          return;
+        }
+
+        const priorNotes = appt.notes || "";
+
+        await appointmentService.updateAppointment(appointmentId, {
+          ...plan.patch,
+          ...(plan.note
+            ? {
+                notes: priorNotes
+                  ? `${priorNotes}\n${plan.note}`
+                  : plan.note,
+              }
+            : {}),
+          updatedAt: new Date(),
+        } as any);
+
+        if (plan.releasesSession && appt.patientPackageId) {
+          await patientPackageService
+            .releaseSession(appt.patientPackageId, appointmentId)
+            .catch((err) =>
+              console.error(
+                "Failed to release the visit's package session:",
+                err,
+              ),
+            );
+        }
+      } else {
+        if (newStatus === "completed") {
+          const eligibility = canCompleteCheckout(appt as any, {});
+
+          if (!eligibility.allowed) {
+            addToast({
+              title: "Cannot Change Status",
+              description: eligibility.reason,
+              color: "danger",
+              duration: 10000,
+            });
+
+            return;
+          }
+        }
+
+        await appointmentService.updateAppointmentStatus(
+          appointmentId,
+          newStatus,
+        );
+      }
+
       setAppointments((prev) =>
         prev.map((a) =>
           a.id === appointmentId ? { ...a, status: newStatus } : a,
         ),
       );
 
-      const appt = appointments.find((x) => x.id === appointmentId);
-
-      if (appt && newStatus === "confirmed") {
+      if (newStatus === "confirmed") {
         sendCheckInSMS(
           appt.patientId,
           appt.clinicId || clinicId || "standalone",

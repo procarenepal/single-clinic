@@ -220,6 +220,46 @@ export const patientPackageService = {
   },
 
   /**
+   * Undo startSession: give back a session ticket reserved ("in-progress")
+   * for a visit that is being cancelled/no-showed before the session was
+   * ever actually consumed (consumeSession deducts the wallet and
+   * increments usedSessions — if that already ran, there is nothing to
+   * release here; the ticket stays "completed" and the package was
+   * genuinely used). Matches visitLifecycleCore.reverseVisitPlan's
+   * releasesSession flag.
+   */
+  async releaseSession(id: string, appointmentId: string): Promise<void> {
+    try {
+      const docRef = doc(db, PATIENT_PACKAGES_COLLECTION, id);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) return;
+
+      const data = docSnap.data() as PatientPackage;
+      const sessions = data.sessions || [];
+      const idx = sessions.findIndex(
+        (s) => s.appointmentId === appointmentId && s.status === "in-progress",
+      );
+
+      if (idx === -1) return;
+
+      sessions[idx] = {
+        ...sessions[idx],
+        status: "pending",
+        appointmentId: undefined,
+      };
+
+      await updateDoc(docRef, {
+        sessions,
+        updatedAt: Timestamp.now(),
+      });
+    } catch (error) {
+      console.error("Error releasing session:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Consume a session (increment usedSessions)
    */
   async consumeSession(

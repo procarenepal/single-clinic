@@ -208,6 +208,25 @@ describe("hasLiveInvoice", () => {
   it("assumes live when the invoice cannot be loaded, rather than inviting a second filing", () => {
     expect(hasLiveInvoice({ billingId: "i1" }, null)).toBe(true);
   });
+
+  it("treats a pre-redesign consultationBillingId as a live invoice", () => {
+    // Check-in itself trusts this field and appends no line/money for such
+    // a visit (visitLineService's "invoiced" branch); if deriveVisitStage
+    // disagreed, the visit would resolve to "billing" and Settle would
+    // file a SECOND invoice for the same booked service.
+    expect(
+      hasLiveInvoice({ billingId: null, consultationBillingId: "legacy-1" }),
+    ).toBe(true);
+  });
+
+  it("prefers the real billingId once one exists, over a stale consultationBillingId", () => {
+    expect(
+      hasLiveInvoice(
+        { billingId: "i1", consultationBillingId: "legacy-1" },
+        { status: "cancelled" },
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("canCompleteCheckout", () => {

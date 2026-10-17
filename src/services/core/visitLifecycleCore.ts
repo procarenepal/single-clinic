@@ -51,6 +51,15 @@ export interface VisitLifecycleInput {
   doctorId?: string | null;
   assignedExpertId?: string | null;
   billingId?: string | null;
+  /**
+   * The pre-redesign model's invoice pointer. A visit checked in before
+   * Stage 2 could carry this with no billingId at all — check-in itself
+   * skips appending any line/money for such a visit (it trusts this
+   * invoice already covers it), so hasLiveInvoice must agree or the
+   * board sends it through billing again and Settle files a SECOND
+   * invoice for the same booked service.
+   */
+  consultationBillingId?: string | null;
   billingStatus?: string | null;
   paymentStatus?: string | null;
   /** Set only by the checkout path, only after canCompleteCheckout passes. */
@@ -144,6 +153,12 @@ export function hasLiveInvoice(
   visit: VisitLifecycleInput,
   invoice?: VisitInvoiceState | null,
 ): boolean {
+  // A legacy visit's consultationBillingId is never voided/reissued by
+  // anything in this module (that machinery exists only for billingId),
+  // so there is no cancelled-status check to run against it — its mere
+  // presence is the only signal available, and it is enough: check-in
+  // already trusted it as "this visit is covered" and appended nothing.
+  if (visit.consultationBillingId && !visit.billingId) return true;
   if (!visit.billingId) return false;
   if (isVoidedInvoice(visit)) return false;
   // billingId points somewhere but the invoice couldn't be loaded — treat

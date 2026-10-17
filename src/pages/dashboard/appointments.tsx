@@ -41,6 +41,11 @@ import {
 import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
 import { appointmentService } from "@/services/appointmentService";
+import { patientPackageService } from "@/services/patientPackageService";
+import {
+  reverseVisitPlan,
+  canCompleteCheckout,
+} from "@/services/core/visitLifecycleCore";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
@@ -422,22 +427,103 @@ export default function AppointmentsPage() {
     return { date, time };
   };
 
+  /**
+   * Every status change here used to be a bare field write with no gate
+   * at all — any status could be set on any visit, regardless of whether
+   * an invoice was already filed or money already collected. Cancel and
+   * no-show now go through reverseVisitPlan, the single definition of
+   * "may this visit go backwards" the front desk's own cancel/no-show
+   * actions use: it refuses once an invoice is filed, clears the visit's
+   * pending charges/deposit correctly (rather than leaving them
+   * stranded as untouchable "ghost" money), and releases a reserved
+   * package session ticket. Completing now goes through the same
+   * canCompleteCheckout balance/clinical gate the front desk's checkout
+   * button enforces, so this page can no longer close a visit that
+   * still owes money or has an undecided recommended procedure.
+   * Forward/lateral moves (scheduled, confirmed, in-progress) are left
+   * as plain writes — there is no teardown to get wrong there.
+   */
+  const applyStatusChange = async (
+    appt: Appointment,
+    newStatus: string,
+    reason?: string,
+  ): Promise<{ ok: boolean; reason?: string }> => {
+    if (newStatus === "cancelled" || newStatus === "no-show") {
+      const plan = reverseVisitPlan(
+        newStatus === "cancelled" ? "cancel" : "no-show",
+        appt as any,
+        { by: currentUser?.uid || "system", now: new Date(), reason },
+      );
+
+      if (!plan.allowed) return { ok: false, reason: plan.reason };
+
+      const priorNotes = appt.notes || "";
+
+      await appointmentService.updateAppointment(appt.id, {
+        ...plan.patch,
+        ...(plan.note
+          ? { notes: priorNotes ? `${priorNotes}\n${plan.note}` : plan.note }
+          : {}),
+        updatedAt: new Date(),
+      } as any);
+
+      if (plan.releasesSession && appt.patientPackageId) {
+        await patientPackageService
+          .releaseSession(appt.patientPackageId, appt.id)
+          .catch((err) =>
+            console.error(
+              "Failed to release the visit's package session:",
+              err,
+            ),
+          );
+      }
+
+      return { ok: true };
+    }
+
+    if (newStatus === "completed") {
+      const eligibility = canCompleteCheckout(appt as any, {});
+
+      if (!eligibility.allowed) {
+        return { ok: false, reason: eligibility.reason };
+      }
+    }
+
+    await appointmentService.updateAppointmentStatus(
+      appt.id,
+      newStatus as any,
+    );
+
+    return { ok: true };
+  };
+
   const handleStatusChange = async (appointmentId: string, newStatus: any) => {
+    const appt = appointments.find((a) => a.id === appointmentId);
+
+    if (!appt) return;
+
     setUpdatingStatus(appointmentId);
     try {
-      await appointmentService.updateAppointmentStatus(
-        appointmentId,
-        newStatus,
-      );
+      const result = await applyStatusChange(appt, newStatus);
+
+      if (!result.ok) {
+        addToast({
+          title: "Cannot Change Status",
+          description:
+            result.reason || "This status change is not allowed right now.",
+          color: "danger",
+          duration: 10000,
+        });
+
+        return;
+      }
       setAppointments((prev) =>
-        prev.map((appt) =>
-          appt.id === appointmentId ? { ...appt, status: newStatus } : appt,
+        prev.map((a) =>
+          a.id === appointmentId ? { ...a, status: newStatus } : a,
         ),
       );
 
-      const appt = appointments.find((a) => a.id === appointmentId);
-
-      if (appt && newStatus === "confirmed") {
+      if (newStatus === "confirmed") {
         sendConfirmedSMS(
           appt.patientId,
           appt.clinicId || clinicId || "standalone",
@@ -538,10 +624,19 @@ export default function AppointmentsPage() {
     if (!selectedAppointment) return;
     setIsCancelling(true);
     try {
-      await appointmentService.updateAppointmentStatus(
-        selectedAppointment.id,
-        "cancelled",
-      );
+      const result = await applyStatusChange(selectedAppointment, "cancelled");
+
+      if (!result.ok) {
+        addToast({
+          title: "Cannot Cancel",
+          description:
+            result.reason || "This visit cannot be cancelled right now.",
+          color: "danger",
+          duration: 10000,
+        });
+
+        return;
+      }
       setAppointments((prev) =>
         prev.map((appt) =>
           appt.id === selectedAppointment.id
