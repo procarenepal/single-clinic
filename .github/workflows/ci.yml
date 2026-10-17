@@ -24,19 +24,21 @@ jobs:
 
       - run: npm ci
 
+      # The real .env is gitignored. src/config/firebase.ts throws at import
+      # when the Firebase keys are absent, and several service tests import
+      # it, so the example's placeholders stand in — nothing here connects
+      # to Firebase, the values only need to exist.
+      - name: Provide placeholder env
+        run: cp .env.example .env
+
       - name: Type-check
         run: npx tsc --noEmit
 
       - name: Unit tests
         run: npx vitest run
 
-      # The real .env is gitignored; the example carries every key the build
-      # needs to resolve, which is enough to prove the production bundle
-      # compiles. Values are irrelevant to the build itself.
       - name: Production build
-        run: |
-          cp .env.example .env
-          npx vite build --mode production
+        run: npx vite build --mode production
 
   backend:
     name: Billing backend (tests)
