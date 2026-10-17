@@ -44,16 +44,14 @@ exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-super-admin');
 }
 
-// Check if the system is uninitialized
-function isSystemUninitialized() {
-return !exists(/databases/$(database)/documents/system_config/system_status) ||
-!get(/databases/$(database)/documents/system_config/system_status).data.initialized ;
-}
-
-// Allow initial system setup without authentication
+// System configuration is written by administrators only. The former
+// "uninitialized system" bypass (no system_status document => anyone,
+// signed in or not, may write here and create users and roles) was still
+// open in production, because nothing ever wrote that document. First-run
+// seeding is done with the Admin SDK, which is not subject to these rules.
 match /system_config/{document} {
-allow read: if true                                       ;
-allow write: if isSystemUninitialized() || isSuperAdmin() ;
+allow read: if true          ;
+allow write: if isSuperAdmin();
 }
 
 // Users collection rules
@@ -76,20 +74,38 @@ function belongsToSameClinic(targetUserClinicId) {
 // Anyone authenticated can read user data (for staff management, patient assignments, etc.)
 allow read: if isAuthenticated();
 
-// Allow new users to create their own document, super admins to create any user,
-// or clinic admins/super admins to create users for their clinic
-allow create: if isSystemUninitialized() ||
-              isSuperAdmin() ||
-              (request.auth.uid == userId) ||
-              (isClinicAdminOrSuperAdmin() &&
-               request.resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId);
+// A person accepting an invitation creates their own document, but only
+// with exactly the role and clinic the invitation granted. The former
+// unconditional "own uid" branch let any self-signed-up account write
+// itself in as an administrator.
+function acceptsPendingInvitation() {
+  let data = request.resource.data;
+  let invitation = get(/databases/$(database)/documents/invitations/$(data.invitationId)).data;
+  return request.auth.uid == userId &&
+         data.keys().hasAll(['invitationId', 'role', 'clinicId']) &&
+         invitation.status == 'pending' &&
+         invitation.email.lower() == request.auth.token.email.lower() &&
+         invitation.role == data.role &&
+         invitation.clinicId == data.clinicId;
+}
 
-// Users can update their own data, super admins can update any user,
-// or clinic admins can update users in their clinic (for role management, activation/deactivation)
+// Administrators create staff; an invitee creates only what was granted.
+allow create: if isSuperAdmin() ||
+              (isClinicAdminOrSuperAdmin() &&
+               request.resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId) ||
+              (isAuthenticated() && acceptsPendingInvitation());
+
+// Anyone may update their own profile but never their own role, clinic,
+// identity or active flag — administrators included, since isSuperAdmin()
+// counts a clinic admin and would otherwise let one promote themselves.
+// Those fields are changed by another administrator.
 allow update: if isAuthenticated() && (
-              request.auth.uid == userId || 
-              isSuperAdmin() ||
-              isClinicAdminForSameClinic(resource.data.clinicId)
+              (request.auth.uid == userId &&
+               !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['role', 'clinicId', 'isActive', 'email', 'id'])) ||
+              (request.auth.uid != userId &&
+               (isSuperAdmin() ||
+                isClinicAdminForSameClinic(resource.data.clinicId)))
               );
 
 // Only super admins can delete users (clinic admins should deactivate instead)
@@ -139,19 +155,17 @@ function isClinicAdminForRoleClinic() {
 allow read: if isAuthenticated() && 
             (resource.data.clinicId == null || belongsToRoleClinic() || isSuperAdmin()) || (isAuthenticated() && resource == null);
 
-// Allow writes during initialization, by super admin, or by clinic admin/super admin for their clinic's roles
-allow create: if isSystemUninitialized() || 
-              isSuperAdmin() || 
+// Roles define RBAC permissions: written by super admins, or by a clinic
+// admin for their own clinic's roles. No initialization bypass.
+allow create: if isSuperAdmin() ||
               (isClinicAdminOrSuperAdmin() &&
                request.resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId &&
                request.resource.data.createdBy == request.auth.uid);
 
-allow update: if isSystemUninitialized() || 
-              isSuperAdmin() || 
+allow update: if isSuperAdmin() ||
               isClinicAdminForRoleClinic();
 
-allow delete: if isSystemUninitialized() || 
-              isSuperAdmin() || 
+allow delete: if isSuperAdmin() ||
               isClinicAdminForRoleClinic();
 }
 
@@ -1077,20 +1091,28 @@ match /invitations/{invitationId} {
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == resource.data.clinicId;
   }
 
-  // Allow clinic members to read invitations for their clinic, super admins can read all
-  allow read: if isAuthenticated() && 
+  // The invitation link is opened before the person has an account, so a
+  // single invitation is readable by its id (a random, unguessable token —
+  // the usual invite-link model). Listing stays restricted to the clinic.
+  allow get: if true;
+  allow list: if isAuthenticated() &&
               (isSuperAdmin() || belongsToInvitationClinic());
 
   // Allow clinic admins/super admins to create invitations for their clinic, super admins can create any
-  allow create: if isAuthenticated() && 
-                (isSuperAdmin() || 
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
                  (isClinicAdminOrSuperAdmin() &&
                   request.resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId &&
                   request.resource.data.invitedBy == request.auth.uid));
 
-  // Allow clinic admins/super admins to update (cancel) invitations for their clinic, super admins can update any
-  allow update: if isAuthenticated() && 
-                (isSuperAdmin() || isClinicAdminForInvitationClinic());
+  // Administrators manage invitations; the invited person may only mark
+  // their own pending invitation accepted.
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() || isClinicAdminForInvitationClinic() ||
+                 (resource.data.status == 'pending' &&
+                  resource.data.email.lower() == request.auth.token.email.lower() &&
+                  request.resource.data.status == 'accepted' &&
+                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt'])));
 
   // Allow clinic admins/super admins to delete invitations for their clinic, super admins can delete any
   allow delete: if isAuthenticated() && 

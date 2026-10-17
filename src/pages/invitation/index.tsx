@@ -7,13 +7,13 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
 } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { addToast } from "@heroui/toast";
 
 import { title } from "@/components/primitives";
 import { invitationService } from "@/services/invitationService";
 import { clinicService } from "@/services/clinicService";
-import { userService } from "@/services/userService";
-import { auth } from "@/config/firebase";
+import { auth, db } from "@/config/firebase";
 import { Invitation, UserRole } from "@/types/models";
 import DefaultLayout from "@/layouts/default";
 
@@ -73,13 +73,19 @@ export default function InvitationPage() {
 
         setInvitation(invitationData);
 
-        // Fetch clinic information
-        const clinicData = await clinicService.getClinicById(
-          invitationData.clinicId,
-        );
+        // The clinic's name is a nicety on this page. The visitor has no
+        // account yet, and clinic documents are readable only when signed
+        // in, so a failure here must not block the invitation itself.
+        try {
+          const clinicData = await clinicService.getClinicById(
+            invitationData.clinicId,
+          );
 
-        if (clinicData) {
-          setClinic(clinicData);
+          if (clinicData) {
+            setClinic(clinicData);
+          }
+        } catch (clinicError) {
+          console.warn("Clinic details unavailable before sign-up:", clinicError);
         }
       } catch (error) {
         console.error("Error fetching invitation:", error);
@@ -135,16 +141,22 @@ export default function InvitationPage() {
         password,
       );
 
-      // Create user document in Firestore
-      const userData = {
+      // Create the user document. It carries the invitation id because the
+      // security rules only let a person create their own record when it
+      // matches a pending invitation's role and clinic. (The previous
+      // updateUser() call failed outright here: there was no document to
+      // update yet.)
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        id: userCredential.user.uid,
         displayName: name,
         email: invitation.email,
         clinicId: invitation.clinicId,
         role: invitation.role as UserRole,
         isActive: true,
-      };
-
-      await userService.updateUser(userCredential.user.uid, userData);
+        invitationId: invitation.id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
       // Mark invitation as accepted
       await invitationService.acceptInvitation(invitation.id);
@@ -184,7 +196,7 @@ export default function InvitationPage() {
   }
 
   // Error state
-  if (error || !invitation || !clinic) {
+  if (error || !invitation) {
     return (
       <DefaultLayout>
         <div className="max-w-xl mx-auto mt-12">
@@ -231,7 +243,9 @@ export default function InvitationPage() {
       <div className="max-w-2xl mx-auto mt-12">
         <Card className="shadow-md">
           <CardHeader>
-            <h1 className={title({ size: "sm" })}>Join {clinic.name}</h1>
+            <h1 className={title({ size: "sm" })}>
+              Join {clinic?.name || "the clinic"}
+            </h1>
             <p className="text-default-600 mt-2">
               You've been invited to join as a{" "}
               {invitation.role.replace("-", " ")}

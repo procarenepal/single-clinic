@@ -83,6 +83,9 @@ export interface User {
   branchId?: string;
   role: UserRole;
   isActive: boolean;
+  /** Set when the account was created by accepting an invitation; the
+   * security rules verify the granted role and clinic against it. */
+  invitationId?: string;
   createdAt: Date;
   updatedAt: Date;
   lastLogin?: Date;

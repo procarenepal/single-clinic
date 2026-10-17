@@ -10,17 +10,20 @@ import {
   serverTimestamp,
   limit,
 } from "firebase/firestore";
+import { getApps, initializeApp } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
+  getAuth,
   sendPasswordResetEmail,
-  signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
 
-import { db, auth } from "../config/firebase";
+import { app, db, auth } from "../config/firebase";
 import { User } from "../types/models";
 
 const USERS_COLLECTION = "users";
+// Name of the secondary Firebase app used only to create staff accounts.
+const STAFF_CREATION_APP = "staff-creation";
 
 /**
  * Service for managing user data in Firestore
@@ -38,44 +41,40 @@ export const userService = {
     email: string,
     password: string,
     userData: Partial<User>,
-    adminPassword?: string,
+    _adminPassword?: string,
   ): Promise<string> {
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user found");
+    }
+
     try {
-      // Store current admin information
-      const currentUser = auth.currentUser;
-      const adminEmail = currentUser?.email;
+      // The account is created on a second Firebase app instance, so the
+      // signed-in administrator keeps their session and is the one who
+      // writes the user record. Creating it on the main instance signed
+      // the administrator out in favour of the new account, and the record
+      // was then written AS that new account — a self-created document
+      // with an arbitrary role, which the security rules no longer permit.
+      const secondary =
+        getApps().find((a) => a.name === STAFF_CREATION_APP) ??
+        initializeApp(app.options, STAFF_CREATION_APP);
+      const secondaryAuth = getAuth(secondary);
+      let uid: string;
 
-      if (!adminEmail) {
-        throw new Error("No authenticated user found");
-      }
-
-      // If no admin password is provided, we're using the old behavior
-      if (!adminPassword) {
-        // For backward compatibility
-        return this.createUserLegacy(email, password, userData);
-      }
-
-      // Create Firebase auth user (this automatically signs in as the new user)
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password,
-      );
-      const uid = userCredential.user.uid;
-
-      // Immediately sign out the newly created user
-      await signOut(auth);
-
-      // Sign back in as the admin
       try {
-        await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
-      } catch (error) {
-        throw new Error(
-          "Failed to re-authenticate admin user. Please check your password.",
+        const credential = await createUserWithEmailAndPassword(
+          secondaryAuth,
+          email,
+          password,
         );
+
+        uid = credential.user.uid;
+        // The person sets their own password from the email; the one
+        // typed by the administrator is never the lasting one.
+        await sendPasswordResetEmail(secondaryAuth, email);
+      } finally {
+        await signOut(secondaryAuth).catch(() => undefined);
       }
 
-      // Now create user document in Firestore with admin privileges restored
       await setDoc(doc(db, USERS_COLLECTION, uid), {
         ...userData,
         email,
@@ -85,10 +84,6 @@ export const userService = {
         isActive: true,
       });
 
-      // Send password reset email so user sets their own password
-      await sendPasswordResetEmail(auth, email);
-
-      // Log user creation event
       try {
         const { auditLogService } = await import("./auditLogService");
 
@@ -121,73 +116,6 @@ export const userService = {
 
       console.error("Error creating user:", error);
 
-      // Extra debug logging to investigate email conflicts / collection state
-      try {
-        console.group(
-          "[userService.createUser] Debug - Email conflict investigation",
-        );
-        console.log("Requested email:", email);
-        console.log("User data passed:", userData);
-        console.log("Firebase error code:", error?.code);
-
-        // Inspect users collection for this email
-        try {
-          const usersRef = collection(db, USERS_COLLECTION);
-          const qy = query(usersRef, where("email", "==", email));
-          const snap = await getDocs(qy);
-
-          console.log("[users collection] matching docs count:", snap.size);
-          snap.docs.forEach((d) => {
-            console.log("[users collection] doc id:", d.id, "data:", d.data());
-          });
-        } catch (usersDebugError) {
-          console.warn(
-            "[userService.createUser] Failed to inspect users collection for email:",
-            usersDebugError,
-          );
-        }
-
-        // Inspect doctors collection for this email (doctor-role users often mirror doctor emails)
-        try {
-          const {
-            collection: dCollection,
-            getDocs: dGetDocs,
-            query: dQuery,
-            where: dWhere,
-          } = await import("firebase/firestore");
-          const { db: dbInstance } = await import("../config/firebase");
-          const doctorsRef = dCollection(dbInstance, "doctors");
-          const dq = dQuery(
-            doctorsRef,
-            dWhere("email", "==", email.toLowerCase()),
-          );
-          const dSnap = await dGetDocs(dq);
-
-          console.log("[doctors collection] matching docs count:", dSnap.size);
-          dSnap.docs.forEach((d) => {
-            console.log(
-              "[doctors collection] doc id:",
-              d.id,
-              "data:",
-              d.data(),
-            );
-          });
-        } catch (doctorsDebugError) {
-          console.warn(
-            "[userService.createUser] Failed to inspect doctors collection for email:",
-            doctorsDebugError,
-          );
-        }
-
-        console.groupEnd();
-      } catch (debugError) {
-        console.warn(
-          "[userService.createUser] Debug logging failed:",
-          debugError,
-        );
-      }
-
-      // Log user creation failure
       try {
         const { auditLogService } = await import("./auditLogService");
 
@@ -209,49 +137,6 @@ export const userService = {
       } catch (logError) {
         console.error("Failed to log user creation failure:", logError);
       }
-
-      throw error;
-    }
-  },
-
-  /**
-   * Legacy method for creating a user without maintaining admin session
-   * @param {string} email - User email
-   * @param {string} password - Initial password
-   * @param {Partial<User>} userData - Additional user data
-   * @returns {Promise<string>} - ID of the created user
-   * @private
-   */
-  async createUserLegacy(
-    email: string,
-    password: string,
-    userData: Partial<User>,
-  ): Promise<string> {
-    try {
-      // Create Firebase auth user
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password,
-      );
-      const uid = userCredential.user.uid;
-
-      // Create user document in Firestore
-      await setDoc(doc(db, USERS_COLLECTION, uid), {
-        ...userData,
-        email,
-        id: uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        isActive: true,
-      });
-
-      // Send password reset email so user sets their own password
-      await sendPasswordResetEmail(auth, email);
-
-      return uid;
-    } catch (error) {
-      console.error("Error creating user:", error);
       throw error;
     }
   },
