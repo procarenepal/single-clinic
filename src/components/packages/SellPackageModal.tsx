@@ -268,6 +268,12 @@ export default function SellPackageModal({
           paymentMethod,
           `Package Credit: ${pkg.name}`,
           currentUser.uid,
+          // Tagged to the sale's own invoice — see the identical fix and
+          // reasoning in front-office-desk.tsx's Quick Intake package sale.
+          // Without this the Daily Report counted this money twice: once
+          // as the invoice's own payment, once as this "deposit".
+          billingId,
+          "package",
         );
       }
 

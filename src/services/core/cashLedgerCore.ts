@@ -26,6 +26,15 @@ export interface WalletDepositEvent {
   /** How the money physically arrived: cash, card, mobile banking… */
   paymentMethod?: string | null;
   patientId?: string;
+  /**
+   * "package" marks a package SALE's wallet-credit grant, not a real
+   * deposit of new cash — that money is already recognised once, as the
+   * sale's own direct invoice payment. Unlike a real visit deposit, it is
+   * never later spent via a "wallet"-method invoice payment this module
+   * would net back out, so counting it here has nothing to offset it
+   * against and double-counts every package sale.
+   */
+  referenceType?: string | null;
 }
 
 export interface InvoicePaymentEvent {
@@ -69,6 +78,7 @@ export function summariseCashCollections(input: {
     const amount = deposit.amount || 0;
 
     if (amount <= 0) continue;
+    if (deposit.referenceType === "package") continue;
 
     depositsCollected += amount;
     addTo(byMethod, (deposit.paymentMethod || "unknown").toLowerCase(), amount);

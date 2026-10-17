@@ -4042,6 +4042,14 @@ export default function FrontOfficeDesk() {
               quickIntakeForm.paymentMethod,
               `Package Credit: ${pkg.name}`,
               currentUser?.uid || "system",
+              // Tagged to the sale's own invoice, not left untagged like a
+              // manual top-up — the Daily Report relies on this to exclude
+              // it from "cash collected today": the invoice's own payment
+              // (just above) already counts that money once; without this
+              // tag the wallet-credit side of the SAME sale counted it a
+              // second time.
+              billingId,
+              "package",
             );
           } catch (creditErr) {
             console.error("Error granting package wallet credit:", creditErr);

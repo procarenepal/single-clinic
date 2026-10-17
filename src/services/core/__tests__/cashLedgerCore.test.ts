@@ -354,6 +354,39 @@ describe("summariseCashCollections", () => {
     expect(summary.byMethod).toEqual({ cash: 15 });
     expect(summary.walletApplied).toBe(50);
   });
+
+  it("does NOT double-count a package sale's wallet-credit grant", () => {
+    // A package sells for 10,000 cash: the invoice is paid 10,000 cash
+    // AND the same 10,000 is granted into the wallet as package credit —
+    // two writes for one physical collection. Unlike a real visit deposit,
+    // that credit is never later spent via a "wallet"-method invoice
+    // payment this module would net back out, so it must be excluded at
+    // the source instead, or it inflates the day's cash by exactly the
+    // price of every package sold.
+    const summary = summariseCashCollections({
+      walletDeposits: [
+        { amount: 10000, paymentMethod: "cash", referenceType: "package" },
+      ],
+      invoicePayments: [{ amount: 10000, method: "cash" }],
+    });
+
+    expect(summary.totalCollected).toBe(10000);
+    expect(summary.depositsCollected).toBe(0);
+    expect(summary.directInvoicePayments).toBe(10000);
+  });
+
+  it("still counts a real visit deposit alongside an unrelated package credit the same day", () => {
+    const summary = summariseCashCollections({
+      walletDeposits: [
+        { amount: 500, paymentMethod: "cash", referenceType: "appointment" },
+        { amount: 10000, paymentMethod: "cash", referenceType: "package" },
+      ],
+      invoicePayments: [{ amount: 10000, method: "cash" }],
+    });
+
+    expect(summary.depositsCollected).toBe(500);
+    expect(summary.totalCollected).toBe(10500);
+  });
 });
 
 describe("computeUnappliedDeposits", () => {

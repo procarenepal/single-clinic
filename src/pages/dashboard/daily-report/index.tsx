@@ -209,12 +209,14 @@ export default function DailyReportPage() {
           data.patients = data.patients.filter(
             (p) => p.doctorId === currentDoctorId,
           );
-          // Only show appointment billing for this doctor
+          // Only show appointment billing for this doctor. Matched by
+          // doctorId directly — matching by name failed whenever a
+          // billing record's stored doctorName lacked the "Dr. " prefix
+          // (front office settle adds it; the billing counter's own
+          // line-level doctorName never does), silently hiding a doctor's
+          // own invoices and reporting their revenue/collected as zero.
           data.billing = data.billing.filter(
-            (b) =>
-              b.type === "appointment" &&
-              doctors.find((d) => d.name === b.doctorName)?.id ===
-              currentDoctorId,
+            (b) => b.type === "appointment" && b.doctorId === currentDoctorId,
           );
         }
 
@@ -826,16 +828,31 @@ export default function DailyReportPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <p className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 mb-1">
-                      Cash Collection
+                      {!isClinicAdmin && currentDoctorId
+                        ? "Collected (Your Invoices)"
+                        : "Cash Collection"}
                     </p>
                     {/* Money that physically arrived today. Summing invoice
                         payments alone missed front-desk cash taken for a
                         visit that checks out later (or never), and counted
                         a wallet-funded payment as a fresh collection on the
                         day it was applied rather than the day it was
-                        taken. See cashLedgerCore. */}
+                        taken. See cashLedgerCore.
+
+                        For a doctor login this is scoped to their OWN
+                        invoices instead — reportData.cash is clinic-wide
+                        (every doctor's visits, plus pharmacy and lab), and
+                        every other card on this page is already scoped to
+                        this doctor. */}
                     <p className="text-[16px] font-bold text-emerald-900 leading-none">
-                      {formatCurrency(reportData.cash.totalCollected)}
+                      {formatCurrency(
+                        !isClinicAdmin && currentDoctorId
+                          ? reportData.billing.reduce(
+                              (sum, b) => sum + (b.paidAmount || 0),
+                              0,
+                            )
+                          : reportData.cash.totalCollected,
+                      )}
                     </p>
                   </div>
                   <div className="bg-emerald-100 p-1.5 rounded flex items-center justify-center">
@@ -846,17 +863,27 @@ export default function DailyReportPage() {
                   <span className="inline-flex items-center text-[9px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded uppercase tracking-widest">
                     Actual Received
                   </span>
-                  {reportData.cash.depositsCollected > 0 && (
+                  {!isClinicAdmin && currentDoctorId ? (
                     <p className="text-[10px] text-emerald-800">
-                      incl. {formatCurrency(reportData.cash.depositsCollected)}{" "}
-                      taken as visit deposits
+                      Paid against your invoices today — visit deposits and
+                      clinic-wide totals are on the full Cash Collection
+                      report.
                     </p>
-                  )}
-                  {reportData.cash.walletApplied > 0 && (
-                    <p className="text-[10px] text-emerald-700/80">
-                      {formatCurrency(reportData.cash.walletApplied)} applied
-                      from wallet (counted when deposited, not today)
-                    </p>
+                  ) : (
+                    <>
+                      {reportData.cash.depositsCollected > 0 && (
+                        <p className="text-[10px] text-emerald-800">
+                          incl. {formatCurrency(reportData.cash.depositsCollected)}{" "}
+                          taken as visit deposits
+                        </p>
+                      )}
+                      {reportData.cash.walletApplied > 0 && (
+                        <p className="text-[10px] text-emerald-700/80">
+                          {formatCurrency(reportData.cash.walletApplied)} applied
+                          from wallet (counted when deposited, not today)
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

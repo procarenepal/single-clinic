@@ -412,13 +412,16 @@ export const dailyReportService = {
       // taken today for a visit that checks out later (or never). Deposits
       // are recognised on the day they arrive; invoice payments funded FROM
       // wallet are treated as internal transfers so nothing is counted
-      // twice. See cashLedgerCore for the rule and its tests.
+      // twice. See cashLedgerCore for the rule and its tests — including
+      // why a package sale's wallet-credit grant (referenceType "package")
+      // must not be counted here even though it is also a "deposit" row.
       const deposits = walletTransactions
         .filter((t) => t.type === "deposit")
         .map((t) => ({
           amount: t.amount,
           paymentMethod: t.paymentMethod,
           patientId: t.patientId,
+          referenceType: t.referenceType,
         }));
 
       const cash = summariseCashCollections({
