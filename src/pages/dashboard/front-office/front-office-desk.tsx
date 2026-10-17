@@ -362,11 +362,20 @@ export default function FrontOfficeDesk() {
         assignedExpertId: "unassigned",
         doctorConsultationCompleted: false,
         cabinName: "",
+        // Both branches claim triage/routing state is cleared (the toast
+        // below says so explicitly) — but the stage a "confirmed" status
+        // resolves to is driven entirely by triageCompletedAt, so leaving
+        // it set sent a "sent back to Lobby" patient straight back to
+        // "Triage Finished" instead, and the same stale flag later put a
+        // fully re-checked-in patient at "Triage Finished" with nobody
+        // having recorded a single vital for the new visit.
+        triageCompletedAt: null,
+        triageRecordedBy: null,
         notes: isUndoingCheckIn
           ? `[Check-In Undone] ${reason}`
           : `[Sent Back to Lobby] ${reason}`,
         updatedAt: new Date(),
-      });
+      } as any);
       addToast({
         title: isUndoingCheckIn ? "Check-In Undone" : "Patient Sent Back to Lobby",
         description: isUndoingCheckIn
@@ -2035,6 +2044,34 @@ export default function FrontOfficeDesk() {
               },
             ],
           );
+        } else if (fee.status === "already" && fee.existingLineId) {
+          // The fee is already on the visit, but possibly attributed to a
+          // DIFFERENT clinician — e.g. this visit was Sent Back/Undone
+          // after Dr A's consultation fee was collected, and is now being
+          // routed to Dr B instead. Re-point that line so the invoice and
+          // commission land on whoever is actually seeing the patient,
+          // rather than silently staying with Dr A.
+          const newClinicianId =
+            routingTarget === "doctor" ? routingDoctorId : routingExpertId;
+          const newClinician =
+            routingTarget === "doctor"
+              ? doctors.find((d) => d.id === newClinicianId)
+              : experts.find((e) => e.id === newClinicianId);
+
+          if (newClinician) {
+            await appointmentService
+              .reattributeVisitLine(routingAppointment.id, fee.existingLineId, {
+                id: newClinician.id,
+                name: newClinician.name,
+                kind: routingTarget === "doctor" ? "doctor" : "expert",
+              })
+              .catch((err) =>
+                console.error(
+                  "Failed to re-attribute the visit's existing booked line:",
+                  err,
+                ),
+              );
+          }
         }
 
         addToast({
@@ -2149,15 +2186,6 @@ export default function FrontOfficeDesk() {
     const type = appointmentTypes.find((t) => t.id === typeId);
 
     if (!type) return;
-    if (
-      findBookedLine(
-        (appt as any).pendingVisitItems,
-        type.id,
-        appt.appointmentTypeId,
-      )
-    ) {
-      return;
-    }
     const isExpert =
       completingAsExpert &&
       !!(appt.assignedExpertId && appt.assignedExpertId !== "unassigned");
@@ -2168,6 +2196,38 @@ export default function FrontOfficeDesk() {
     );
 
     if (!clinician) return;
+    const existingBookedLine = findBookedLine(
+      pending,
+      type.id,
+      appt.appointmentTypeId,
+    );
+
+    if (existingBookedLine) {
+      // Same re-attribution as handleConfirmRoute: the fee is already on
+      // the visit but may be attributed to whoever had it before Undo
+      // Check-In / Send Back cleared the clinician off this visit. Correct
+      // it to whoever is actually completing now, rather than leaving the
+      // invoice and commission with someone who never saw the patient.
+      if (
+        existingBookedLine.doctorId !== clinician.id ||
+        existingBookedLine.performerKind !== clinician.kind
+      ) {
+        await appointmentService
+          .reattributeVisitLine(appt.id, existingBookedLine.id, {
+            id: clinician.id,
+            name: clinician.name,
+            kind: clinician.kind,
+          })
+          .catch((err) =>
+            console.error(
+              "Failed to re-attribute the visit's existing booked line:",
+              err,
+            ),
+          );
+      }
+
+      return;
+    }
     // Not this clinician's service (an expert closing a doctor-only visit):
     // the doctor's own line is already on the visit or never will be.
     const allowed = typePerformerKind(type);
@@ -3349,6 +3409,7 @@ export default function FrontOfficeDesk() {
         status: "already",
         serviceName: type.name,
         performerName: existing.doctorName,
+        existingLineId: existing.id,
       };
     }
     // The booked service belongs to the other kind of clinician (a doctor
@@ -3998,9 +4059,16 @@ export default function FrontOfficeDesk() {
             clinicId: clinicId!,
             branchId: branchId || clinicId!,
             createdBy: currentUser?.uid || "system",
-            billingId: billingId,
-            billingStatus: "paid",
-            paymentStatus: "paid",
+            // Neither billingId (that would be the PACKAGE SALE's invoice,
+            // not this visit's) nor a "paid" stamp belongs here: this visit
+            // is pre-paid via the package, not already settled. Stamping
+            // it "paid" at creation made deriveVisitStage treat the visit
+            // as closed the moment the clinician finished — before the
+            // session's commission-only line (appended just below via
+            // appendCheckInLines) was ever filed on a real invoice, so the
+            // performing clinician's commission was silently never
+            // generated. The zero-total path through Settle is what
+            // actually creates it (see handleSettleBilling).
           } as any);
 
           if (patientPkgId) {
@@ -4045,10 +4113,22 @@ export default function FrontOfficeDesk() {
                   })),
               ]);
             } catch (billErr) {
+              // The sale and the session visit both already exist — only
+              // the commission-generating line failed to attach. Silence
+              // here (unlike the toast below) left staff with no sign that
+              // the clinician's commission for this session needs manual
+              // attention.
               console.error(
                 "Error recording the first package session:",
                 billErr,
               );
+              addToast({
+                title: "Session Started, but Not Logged for Commission",
+                description:
+                  "The package session visit was created, but its commission line could not be recorded — add it from the queue before Settle.",
+                color: "warning",
+                duration: 15000,
+              });
             }
           }
         }
@@ -4114,10 +4194,13 @@ export default function FrontOfficeDesk() {
           clinicId: clinicId || "standalone",
           branchId: branchId || clinicId || "standalone",
           createdBy: currentUser?.uid || "",
-          ...(quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") && {
-            billingStatus: "paid" as const,
-            paymentStatus: "paid" as const,
-          }),
+          // No "paid" stamp here either, and for the same reason as the
+          // sell-package-and-start-session branch above: this visit's
+          // session line (appended below via appendCheckInLines) still has
+          // to reach a real, filed invoice through Settle for the
+          // performing clinician's commission to be generated — stamping
+          // the visit "paid" at creation let it close before that ever
+          // happened.
           // Consolidated doctor+expert visit: this one appointment carries
           // both clinicians, sequenced the same way mid-visit routing
           // already does (see handleConfirmRoute) — doctorConsultationCompleted

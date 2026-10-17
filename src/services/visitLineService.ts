@@ -38,6 +38,7 @@ import {
   type VisitLine,
   type VisitLineOrigin,
 } from "./core/visitChargeCore";
+import { findBookedLine } from "./core/legacyVisitAdapters";
 
 export interface VisitLineContext {
   clinicId: string;
@@ -367,6 +368,18 @@ export async function appendBookedLines(input: {
 }): Promise<string[]> {
   if (input.appointment.billedOnAppointmentId) return [];
   const refusals: string[] = [];
+  // A visit that was sent back/undone after its booked fee was already
+  // collected, then re-checked-in or re-routed to a DIFFERENT clinician,
+  // must not be charged for the same service twice — mergeVisitLines keys
+  // a booked line by (type, doctor), so without this check it would see a
+  // new doctor as a genuinely new line and add a second charge for the
+  // same consultation. findBookedLine's "whoever performs it" rule is what
+  // every other screen already uses to decide a service is already on the
+  // visit; re-attributing the existing line (rather than skipping it bare)
+  // is what keeps the invoice and commission with whoever is actually
+  // seeing the patient.
+  let liveLines: AppointmentBillingItem[] | null = null;
+  let liveApptTypeId: string | null | undefined = null;
 
   for (const row of input.rows) {
     if (!row.clinicianId || row.clinicianId === "unassigned") continue;
@@ -403,6 +416,42 @@ export async function appendBookedLines(input: {
       );
       continue;
     }
+
+    if (liveLines === null) {
+      const live = await appointmentService.getAppointmentById(
+        input.appointment.id,
+      );
+
+      liveLines = ((live as any)?.pendingVisitItems || []) as AppointmentBillingItem[];
+      liveApptTypeId = live?.appointmentTypeId ?? null;
+    }
+    const existing = findBookedLine(liveLines, type.id, liveApptTypeId);
+
+    if (existing) {
+      if (
+        existing.doctorId !== clinician.id ||
+        existing.performerKind !== clinician.kind
+      ) {
+        await appointmentService
+          .reattributeVisitLine(input.appointment.id, existing.id, {
+            id: clinician.id,
+            name: clinician.name,
+            kind: clinician.kind,
+          })
+          .catch((err) =>
+            console.error(
+              "Failed to re-attribute the visit's existing booked line at check-in:",
+              err,
+            ),
+          );
+        // Reflect the patch locally in case a later row in this same call
+        // matches the same line again.
+        existing.doctorId = clinician.id;
+        existing.doctorName = clinician.name;
+        existing.performerKind = clinician.kind;
+      }
+      continue;
+    }
     const result = await ensureVisitLine({
       appointment: { id: input.appointment.id },
       type,
@@ -412,6 +461,7 @@ export async function appendBookedLines(input: {
     });
 
     if (result.ok === false) refusals.push(refusalMessage(result));
+    else if (result.added) liveLines.push(result.line as AppointmentBillingItem);
   }
 
   return refusals;

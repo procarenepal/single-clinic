@@ -34,6 +34,14 @@ export interface RoutingFeeLine {
   vat?: number;
   performerName?: string;
   reason?: string;
+  /**
+   * Set when status is "already": the id of the pending line that already
+   * covers this service, whoever it is currently attributed to. Lets the
+   * confirm handler re-point that line at the clinician actually being
+   * routed to, instead of leaving it billed to whoever was on the visit
+   * before Undo Check-In / Send Back cleared them off it.
+   */
+  existingLineId?: string;
 }
 
 interface RoutingModalProps {

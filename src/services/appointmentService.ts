@@ -737,6 +737,61 @@ export const appointmentService = {
   },
 
   /**
+   * Re-point an already-on-the-visit booked line at a DIFFERENT clinician —
+   * for when the visit's doctor/expert was cleared and reassigned (Undo
+   * Check-In, Send Back to Lobby) after the fee was already collected.
+   *
+   * findBookedLine deliberately matches a booked line by service type
+   * alone, "whoever performs it" — so once a visit's consultation fee is
+   * collected, routing it to a second clinician correctly does not charge
+   * it again. But nothing re-aims the EXISTING line at the new clinician
+   * either, so the original clinician who never saw the patient stayed the
+   * one invoiced and commissioned. This patches doctorId/doctorName/
+   * performerKind on that one line in place — never appends or removes a
+   * line, so it can't create or lose a charge, only correct who it is
+   * attributed to.
+   */
+  async reattributeVisitLine(
+    appointmentId: string,
+    lineId: string,
+    clinician: { id: string; name: string; kind: "doctor" | "expert" },
+  ): Promise<void> {
+    const appointmentRef = doc(db, "appointments", appointmentId);
+
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(appointmentRef);
+
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      const lines = (data.pendingVisitItems || []) as AppointmentBillingItem[];
+      const idx = lines.findIndex((l) => l.id === lineId);
+
+      if (idx === -1) return;
+      if (
+        lines[idx].doctorId === clinician.id &&
+        lines[idx].performerKind === clinician.kind
+      ) {
+        return;
+      }
+
+      const next = lines.slice();
+
+      next[idx] = {
+        ...next[idx],
+        doctorId: clinician.id,
+        doctorName: clinician.name,
+        performerKind: clinician.kind,
+      };
+
+      transaction.update(appointmentRef, {
+        pendingVisitItems: next,
+        updatedAt: Timestamp.now(),
+      });
+    });
+  },
+
+  /**
    * Give back a previously claimed deposit amount when the money move that
    * followed it failed, so the visit doesn't look paid for when nothing was
    * collected. Uses an atomic decrement rather than a recomputed write so a
