@@ -16,16 +16,21 @@ const {
   Timestamp,
   FieldValue,
 } = require("firebase-admin/firestore");
-initializeApp({
-  credential: cert(
-    require(
-      resolve(
-        import.meta.dirname,
-        "../billing-backend/secrets/serviceAccountKey.json",
-      ),
-    ),
-  ),
-});
+// Which Firebase project this touches is decided by the service-account
+// key. Default to the DEV key when it exists so a fixture run never lands
+// in production by accident; FIREBASE_SERVICE_ACCOUNT_PATH overrides.
+const keyPath =
+  process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+  [
+    "../billing-backend/secrets/serviceAccountKey.dev.json",
+    "../billing-backend/secrets/serviceAccountKey.json",
+  ]
+    .map((p) => resolve(import.meta.dirname, p))
+    .find((p) => require("node:fs").existsSync(p));
+const serviceAccount = require(keyPath);
+
+initializeApp({ credential: cert(serviceAccount) });
+console.log(`[stage3-fixture] project: ${serviceAccount.project_id}`);
 const db = getFirestore();
 const [mode, patientNameArg] = [process.argv[2], process.argv[3]];
 const TAG = "stage3-fixture";
