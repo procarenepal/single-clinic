@@ -27,6 +27,39 @@ import { legacyLineOrigin } from "./legacyVisitAdapters";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const EPSILON = 0.005;
 
+export interface DepositApplication {
+  /** Taken out of the wallet at check-in as standing credit — applied to the invoice without deducting again. */
+  creditPart: number;
+  /** Cash/card paid in at check-in and still held in the wallet — applied by deducting it now. */
+  walletPart: number;
+  /** Credit taken at check-in that the invoice does not need — must go back to the wallet. */
+  creditExcess: number;
+}
+
+/**
+ * How a visit's deposit pays its invoice. The two shares sit in different
+ * places: the credit share already left the wallet at check-in, the cash
+ * share is still in it. Treating the whole deposit as wallet-held money
+ * deducted the credit share a second time, so a patient whose consultation
+ * was covered by NPR 500 of credit ended up NPR 1,000 poorer.
+ */
+export function splitDepositApplication(input: {
+  depositedAmount: number;
+  depositFromCredit: number;
+  total: number;
+}): DepositApplication {
+  const deposited = round2(Math.max(0, input.depositedAmount || 0));
+  const fromCredit = round2(
+    Math.min(deposited, Math.max(0, input.depositFromCredit || 0)),
+  );
+  const held = round2(deposited - fromCredit);
+  const total = round2(Math.max(0, input.total || 0));
+  const creditPart = round2(Math.min(fromCredit, total));
+  const walletPart = round2(Math.min(held, Math.max(0, total - creditPart)));
+
+  return { creditPart, walletPart, creditExcess: round2(fromCredit - creditPart) };
+}
+
 export interface SettleLine {
   id?: string;
   appointmentTypeId?: string;

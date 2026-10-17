@@ -59,6 +59,7 @@ import { hrService } from "@/services/hrService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { packageService } from "@/services/packageService";
 import { walletService } from "@/services/walletService";
+import { splitDepositApplication } from "@/services/core/visitSettleCore";
 import {
   getVisitPaymentGate,
   mergeVisitReferrals,
@@ -468,7 +469,27 @@ export default function FrontOfficeDesk() {
         // wallet balance itself is deliberately left alone and stays as
         // usable patient credit (same as unused credit everywhere else —
         // there is no cash-refund flow in this app to route it to).
-        const strandedDeposit = (appt as any).depositedAmount || 0;
+        const liveVisit = await appointmentService.getAppointmentById(appt.id);
+        const strandedDeposit =
+          liveVisit?.depositedAmount ?? ((appt as any).depositedAmount || 0);
+        // The cash share of the deposit is already sitting in the wallet.
+        // The credit share was taken OUT of the wallet at check-in, so it
+        // has to be put back — otherwise it simply vanished.
+        const creditTaken = Math.min(
+          strandedDeposit,
+          liveVisit?.depositFromCredit ?? 0,
+        );
+
+        if (creditTaken > 0 && clinicId) {
+          await walletService.refundFunds(
+            appt.patientId,
+            clinicId,
+            creditTaken,
+            appt.id,
+            "Visit credit returned — marked no-show",
+            currentUser?.uid || "system",
+          );
+        }
 
         await appointmentService.updateAppointmentStatus(appt.id, "no-show");
         await appointmentService.updateAppointment(appt.id, {
@@ -478,6 +499,7 @@ export default function FrontOfficeDesk() {
           pendingVisitDiscountType: null,
           pendingVisitDiscountValue: 0,
           depositedAmount: 0,
+          depositFromCredit: 0,
           updatedAt: new Date(),
         } as any);
         addToast({
@@ -1484,7 +1506,13 @@ export default function FrontOfficeDesk() {
           },
           deposits: deposits.map((d) => ({
             amount: d.amount,
-            method: paymentMethodLabel(billingSettings, d.paymentMethod || "cash"),
+            // A credit claim (type "deduction") has no paymentMethod — it
+            // left the wallet, not the till — and must never print as
+            // "Cash": the clinic did not receive cash for that share.
+            method:
+              (d as any).type === "deduction"
+                ? "Wallet Credit"
+                : paymentMethodLabel(billingSettings, d.paymentMethod || "cash"),
             reference: d.paymentReference,
             at: d.createdAt,
           })),
@@ -4627,11 +4655,28 @@ export default function FrontOfficeDesk() {
       try {
         if (!clinicId) return;
 
+        // Read the visit fresh: a deposit may have been collected or
+        // retried, or a line appended (a mid-visit procedure, a booked
+        // consultation fee), from another desk or the expert's screen
+        // after this screen loaded. Settling from a stale local snapshot
+        // either lost such a collection outright or filed an invoice
+        // missing a line that was already delivered and never billed.
+        const liveVisit = await appointmentService.getAppointmentById(appt.id);
         const existingPendingItems: any[] =
-          (appt as any).pendingVisitItems || [];
+          (liveVisit as any)?.pendingVisitItems ??
+          (appt as any).pendingVisitItems ??
+          [];
         const existingPendingReferrals: any[] =
-          (appt as any).pendingVisitReferrals || [];
-        const depositedAmount = (appt as any).depositedAmount || 0;
+          (liveVisit as any)?.pendingVisitReferrals ??
+          (appt as any).pendingVisitReferrals ??
+          [];
+        const depositedAmount =
+          liveVisit?.depositedAmount ?? ((appt as any).depositedAmount || 0);
+        const depositFromCredit = Math.min(
+          depositedAmount,
+          liveVisit?.depositFromCredit ??
+            ((appt as any).depositFromCredit || 0),
+        );
         // Whatever discount staff entered during the visit (check-in or
         // Finalise Procedure) — checkout has no discount UI of its own, so
         // this is the only place that decision can still take effect.
@@ -4875,7 +4920,10 @@ export default function FrontOfficeDesk() {
           pendingVisitReferrals: [],
           pendingVisitDiscountType: null,
           pendingVisitDiscountValue: 0,
-          depositedAmount: 0,
+          // depositedAmount is NOT cleared here. It is released below, only
+          // for the money that actually lands on the invoice — zeroing it
+          // first meant a wallet spent since check-in left the invoice
+          // unpaid and the visit's only record of the deposit gone.
           // Deliberately NOT setting checkoutCompleted here. Filing the
           // invoice and closing the visit are two different facts, and
           // conflating them let this path mark a visit done without the
@@ -4887,40 +4935,116 @@ export default function FrontOfficeDesk() {
           updatedAt: new Date(),
         } as any);
 
-        // Apply the deposit collected over the course of the visit (capped
-        // at the invoice total — any excess stays as wallet credit, same as
-        // any other unused wallet balance in this app). Any shortfall is
-        // collected normally on the invoice page, same as any other
-        // partially-paid invoice. This also sets the appointment's own
-        // billingStatus/paymentStatus to match (recordPayment's own
-        // appointment-linking logic, now correctly scoped — see above).
-        const depositToApply = Math.min(
-          depositedAmount,
-          settleTotals.totalAmount,
-        );
+        // Apply what the visit already holds, in the order the money sits:
+        // the share taken OUT of the wallet as standing credit at check-in
+        // is applied without deducting the wallet again (it used to be
+        // deducted a second time here, so the patient paid twice for it);
+        // then the cash/card share still held in the wallet is deducted.
+        // Any shortfall — a wallet spent at the pharmacy since check-in —
+        // stays on the invoice as due, with the deposit record intact for
+        // whatever did not land. Any excess stays as wallet credit, and
+        // excess CREDIT goes back to the wallet it was taken from.
+        const { creditPart, walletPart, creditExcess } =
+          splitDepositApplication({
+            depositedAmount,
+            depositFromCredit,
+            total: settleTotals.totalAmount,
+          });
+        let creditApplied = 0;
+        let walletApplied = 0;
+        const depositNotApplied = (payErr: unknown) => {
+          console.error("Error applying visit deposit at checkout:", payErr);
+          addToast({
+            title: "Deposit Not Applied",
+            description:
+              "The invoice was created, but part of the collected deposit could not be applied — it stays recorded on the visit; apply it from the invoice page.",
+            color: "warning",
+          });
+        };
 
-        if (depositToApply > 0) {
+        if (creditPart > 0) {
           try {
             await appointmentBillingService.recordPayment(
               newBillingId,
-              depositToApply,
+              creditPart,
+              "wallet",
+              undefined,
+              "Visit deposit (wallet credit taken at check-in) applied at checkout",
+              0,
+              { walletAlreadyDeducted: true },
+            );
+            creditApplied = creditPart;
+          } catch (payErr) {
+            depositNotApplied(payErr);
+          }
+        }
+
+        if (walletPart > 0) {
+          try {
+            await appointmentBillingService.recordPayment(
+              newBillingId,
+              walletPart,
               "wallet",
               undefined,
               "Visit deposit applied at checkout",
             );
+            walletApplied = walletPart;
           } catch (payErr) {
-            console.error(
-              "Error applying visit deposit at checkout:",
-              payErr,
+            depositNotApplied(payErr);
+          }
+        }
+
+        const depositToApply = creditApplied + walletApplied;
+        // Release only what landed; the held cash share beyond the invoice
+        // total simply stays as wallet credit once the cash share applied.
+        const heldExcess =
+          walletApplied === walletPart
+            ? Math.max(
+                0,
+                depositedAmount - depositFromCredit - walletApplied,
+              )
+            : 0;
+
+        if (depositToApply + heldExcess > 0) {
+          await appointmentService
+            .releaseVisitDeposit(appt.id, depositToApply + heldExcess)
+            .catch((releaseErr) =>
+              console.error("Failed to release the applied deposit:", releaseErr),
             );
+        }
+        if (creditApplied > 0) {
+          await appointmentService
+            .markVisitDepositFromCredit(appt.id, -creditApplied)
+            .catch((markErr) =>
+              console.error("Failed to release the credit share:", markErr),
+            );
+        }
+        if (creditExcess > 0) {
+          try {
+            await walletService.refundFunds(
+              appt.patientId,
+              clinicId,
+              creditExcess,
+              appt.id,
+              "Unused visit credit returned at checkout",
+              currentUser?.uid || "system",
+            );
+            await appointmentService.releaseVisitDeposit(appt.id, creditExcess);
+            await appointmentService.markVisitDepositFromCredit(
+              appt.id,
+              -creditExcess,
+            );
+          } catch (refundErr) {
+            console.error("Error returning unused visit credit:", refundErr);
             addToast({
-              title: "Deposit Not Applied",
-              description:
-                "The invoice was created, but the collected deposit could not be applied — apply it manually from the invoice page.",
+              title: "Credit Not Returned",
+              description: `NPR ${creditExcess.toFixed(2)} of wallet credit taken at check-in was not needed but could not be returned automatically — add it back from the patient's wallet.`,
               color: "warning",
             });
           }
-        } else if (settleTotals.totalAmount <= 0) {
+        }
+
+        if (depositToApply === 0 && settleTotals.totalAmount <= 0) {
           // A zero-total visit — a package session, whose line is
           // commission-only (price 0, already paid for at package
           // purchase). Nothing is owed, but commission and the patient
@@ -4950,7 +5074,7 @@ export default function FrontOfficeDesk() {
               color: "warning",
             });
           }
-        } else {
+        } else if (depositToApply === 0) {
           // Nothing collected yet on a chargeable invoice — recordPayment
           // (which would otherwise set these) never runs, so set them
           // directly.

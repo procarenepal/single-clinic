@@ -625,19 +625,65 @@ export const appointmentService = {
     return result;
   },
 
-  /** Record the ledger row behind a collected deposit; a success clears any failure marker. */
+  /**
+   * Record the ledger row behind a collected deposit, and — only when the
+   * money came from standing credit — that it must not be deducted from
+   * the wallet again at checkout. One write for both: the deduction has
+   * already happened in the wallet by the time this runs, so this is the
+   * only record of which share of the deposit that was; splitting it into
+   * two separate best-effort writes doubled the chance of the second one
+   * being lost while the first silently succeeded. A success also clears
+   * any earlier "deposit failed" marker.
+   */
   async attachVisitDepositTxn(
     appointmentId: string,
     txnId: string,
+    fromCredit: number = 0,
   ): Promise<void> {
-    await updateDoc(doc(db, "appointments", appointmentId), {
+    const data: Record<string, unknown> = {
       depositTxnIds: arrayUnion(txnId),
       checkInDepositFailedAt: null,
+      updatedAt: Timestamp.now(),
+    };
+    if (fromCredit > 0) data.depositFromCredit = increment(fromCredit);
+
+    // This is the only record of which share of an already-collected
+    // deposit was credit vs. cash — losing it re-opens the double-charge
+    // this exists to prevent, so a transient failure is worth retrying
+    // a few times rather than logging and moving on.
+    const ref = doc(db, "appointments", appointmentId);
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await updateDoc(ref, data);
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        }
+      }
+    }
+    throw lastErr;
+  },
+
+  /**
+   * Moves the credit-funded share of the visit's deposit by `delta` —
+   * negative when checkout applies it or a no-show returns it. (The
+   * positive case, at check-in, goes through attachVisitDepositTxn above
+   * in the same write as the ledger-row id.)
+   */
+  async markVisitDepositFromCredit(
+    appointmentId: string,
+    delta: number,
+  ): Promise<void> {
+    if (!delta) return;
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      depositFromCredit: increment(delta),
       updatedAt: Timestamp.now(),
     });
   },
 
-  /** Mark (or clear) a failed deposit so every desk shows "Retry fee". */
   async markCheckInDepositFailed(
     appointmentId: string,
     failed: boolean,

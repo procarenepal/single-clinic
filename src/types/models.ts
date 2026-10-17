@@ -486,6 +486,14 @@ export interface Appointment {
   depositedAmount?: number;
   /** The wallet ledger rows behind depositedAmount. Invariant: their amounts sum to it. */
   depositTxnIds?: string[];
+  /**
+   * The share of depositedAmount that was taken OUT of the wallet as standing
+   * credit at check-in (the rest is cash/card paid in and still held in the
+   * wallet). Checkout applies this share without deducting the wallet again;
+   * a no-show returns it. Deriving it from depositedAmount alone charged the
+   * credit twice.
+   */
+  depositFromCredit?: number;
   /** Set when the last check-in deposit attempt failed after the fee was put on the visit; cleared when one succeeds. */
   checkInDepositFailedAt?: Date | null;
   checkoutCompleted?: boolean;

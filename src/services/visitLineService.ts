@@ -261,14 +261,19 @@ export async function collectCheckInDue(
           );
         throw err;
       }
-      // Same reasoning as the cash path below: the ledger row is already
-      // written, so recording its id is bookkeeping that must not undo a
-      // collection that already happened.
+      // The ledger row is already written and the wallet already debited,
+      // so this is bookkeeping that must not undo a collection that
+      // already happened — but losing the fromCredit marker specifically
+      // would make checkout deduct this same money from the wallet AGAIN,
+      // so it is retried a few times (inside attachVisitDepositTxn) rather
+      // than only logged. This share of the deposit has already LEFT the
+      // wallet; checkout applies it without deducting again and a no-show
+      // returns it — the cash path below, by contrast, pays INTO the wallet.
       await appointmentService
-        .attachVisitDepositTxn(visit.id, creditTxnId)
+        .attachVisitDepositTxn(visit.id, creditTxnId, creditClaim)
         .catch((attachErr) =>
           console.error(
-            "Failed to record the credit deduction's ledger row:",
+            "Failed to record the credit deduction's ledger row and credit share (retries exhausted):",
             attachErr,
           ),
         );

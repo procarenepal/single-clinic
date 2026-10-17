@@ -29,6 +29,8 @@ export interface CheckInFacts {
   patientPackageId?: string | null;
   appointmentTypeId?: string | null;
   depositedAmount?: number | null;
+  /** The share of depositedAmount taken from standing credit, not cash. */
+  depositFromCredit?: number | null;
 }
 
 export type CheckInPlan =
@@ -62,17 +64,24 @@ export type CheckInPlan =
 
 /**
  * Wallet money not earmarked for any open visit: the balance less every
- * open visit's deposit (this one's included — the gate subtracts that
- * separately). Never below zero.
+ * open visit's CASH-held deposit (this one's included — the gate subtracts
+ * that separately). Never below zero.
+ *
+ * Only the cash/card share of a deposit still sits inside walletBalance —
+ * it was added there at check-in and merely earmarked. The credit share
+ * already LEFT walletBalance when it was claimed (deductFunds), so
+ * subtracting it again here would double-count it and understate how
+ * much standing credit remains for the patient's other open visits.
  */
 export function standingWalletCredit(
   walletBalance: number | null | undefined,
-  openVisits: Array<{ depositedAmount?: number | null }>,
+  openVisits: Array<{ depositedAmount?: number | null; depositFromCredit?: number | null }>,
 ): number {
-  const earmarked = openVisits.reduce(
-    (sum, v) => sum + Math.max(0, v.depositedAmount || 0),
-    0,
-  );
+  const earmarked = openVisits.reduce((sum, v) => {
+    const deposited = Math.max(0, v.depositedAmount || 0);
+    const fromCredit = Math.min(deposited, Math.max(0, v.depositFromCredit || 0));
+    return sum + (deposited - fromCredit);
+  }, 0);
 
   return round2(Math.max(0, (walletBalance || 0) - earmarked));
 }

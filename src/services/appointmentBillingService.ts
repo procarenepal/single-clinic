@@ -1291,6 +1291,14 @@ export const appointmentBillingService = {
     paymentReference?: string,
     paymentNotes?: string,
     discountAmount: number = 0,
+    options: {
+      /**
+       * The wallet money behind this payment was already deducted when it
+       * was earmarked to the visit at check-in (standing credit), so the
+       * payment is recorded as wallet-funded without deducting again.
+       */
+      walletAlreadyDeducted?: boolean;
+    } = {},
   ): Promise<void> {
     try {
       const billing = await this.getBillingById(id);
@@ -1349,7 +1357,7 @@ export const appointmentBillingService = {
           trackMainDiscount: true,
         });
 
-        if (isWallet && patientSnap) {
+        if (isWallet && patientSnap && !options.walletAlreadyDeducted) {
           walletService.deductFundsInTransaction(transaction, patientSnap, {
             patientId: billing.patientId,
             clinicId: billing.clinicId,

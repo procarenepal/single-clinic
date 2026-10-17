@@ -167,6 +167,23 @@ describe("standingWalletCredit", () => {
     expect(standingWalletCredit(undefined, [])).toBe(0);
     expect(standingWalletCredit(300.005, [])).toBe(300.01);
   });
+
+  it("does not re-subtract a deposit's credit share, since claiming it already left the balance", () => {
+    // Balance 500 is what remains AFTER 500 of credit was already claimed
+    // (deductFunds) for this visit's deposit. Treating the whole deposit as
+    // still-earmarked cash would wrongly report 0 standing credit left.
+    expect(
+      standingWalletCredit(500, [{ depositedAmount: 500, depositFromCredit: 500 }]),
+    ).toBe(500);
+  });
+
+  it("still earmarks the cash share of a mixed deposit, only skipping the credit share", () => {
+    // 300 credit (already left the balance) + 400 cash (added to the
+    // balance and earmarked) deposited; balance now 1100 (800 prior + 400 cash in).
+    expect(
+      standingWalletCredit(1100, [{ depositedAmount: 700, depositFromCredit: 300 }]),
+    ).toBe(700);
+  });
 });
 
 describe("wait clock", () => {

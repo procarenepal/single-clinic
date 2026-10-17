@@ -360,7 +360,9 @@ export const walletService = {
       collection(db, WALLET_TRANSACTIONS_COLLECTION),
       where("referenceId", "==", appointmentId),
       where("referenceType", "==", "appointment"),
-      where("type", "==", "deposit"),
+      // A deposit covered by standing credit is recorded as a deduction
+      // (the money left the wallet), so the receipt must include both.
+      where("type", "in", ["deposit", "deduction"]),
     );
     const snapshot = await getDocs(q);
 

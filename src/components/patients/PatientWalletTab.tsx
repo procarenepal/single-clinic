@@ -636,6 +636,12 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                           // invoice to link to (no charge was made), so
                           // don't render a broken "Used on Invoice" link.
                           "Package session used"
+                        ) : t.referenceType === "appointment" ? (
+                          // Standing credit claimed at check-in references
+                          // the appointment it was earmarked to, not an
+                          // invoice yet — the visit isn't billed until
+                          // checkout, so there's no invoice to link to.
+                          "Used as visit deposit"
                         ) : (
                           <div className="flex items-center gap-1 flex-wrap">
                             Used on Invoice
