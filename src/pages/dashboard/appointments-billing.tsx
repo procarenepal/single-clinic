@@ -1568,6 +1568,14 @@ export default function AppointmentBillingPage() {
               label: "Settings",
               icon: <IoSettings className="w-4 h-4" />,
             },
+            // NOT gated on isClinicAdmin: checked against live production
+            // data before adding that gate — the custom RBAC role
+            // "Accountant" (a second, separate permission system this
+            // page's own isClinicAdmin check has no visibility into) is
+            // explicitly granted this page for exactly this purpose
+            // ("Billing oversight"), and does not carry users.role ==
+            // "clinic-admin". Gating on it would have broken that real,
+            // assigned role's actual job.
           ].map((t) => (
             <button
               key={t.id}
@@ -2800,78 +2808,27 @@ export default function AppointmentBillingPage() {
           </div>
         )}
 
-        {/* TEMPORARY WIPE BUTTON */}
-        {activeTab === "settings" && (
-          <div className="mt-8 mx-5 mb-5 p-6 border-2 border-red-500/20 bg-red-500/5 rounded-lg flex flex-col items-center">
-            <h3 className="text-red-500 font-bold mb-2">
-              Danger Zone (Temporary)
-            </h3>
-            <p className="text-[13px] text-text-muted mb-4 text-center max-w-md">
-              Click below to wipe all invoices, commissions, and appointments
-              for this clinic. This will reset doctor stats.
-            </p>
-            <Button
-              color="danger"
-              onClick={async () => {
-                if (
-                  confirm(
-                    "Are you SURE you want to wipe all billing and appointment data for this clinic?",
-                  )
-                ) {
-                  try {
-                    addToast({
-                      title: "Wiping Data...",
-                      description: "Please wait.",
-                      color: "warning",
-                    });
-                    const { collection, getDocs, deleteDoc, query, where } =
-                      await import("firebase/firestore");
-                    const { db } = await import("@/config/firebase");
-
-                    const collections = [
-                      "appointmentBilling",
-                      "pathologyBilling",
-                      "doctorCommissions",
-                      "expertCommissions",
-                      "referralCommissions",
-                      "staffCommissions",
-                      "appointments",
-                    ];
-
-                    for (const col of collections) {
-                      const snapshot = await getDocs(
-                        query(
-                          collection(db, col),
-                          where("clinicId", "==", clinicId),
-                        ),
-                      );
-
-                      for (const d of snapshot.docs) {
-                        await deleteDoc(d.ref);
-                      }
-                    }
-
-                    addToast({
-                      title: "Success",
-                      description:
-                        "All data wiped successfully. Please refresh the page.",
-                      color: "success",
-                    });
-                  } catch (e) {
-                    console.error(e);
-                    addToast({
-                      title: "Error",
-                      description: "Failed to wipe data.",
-                      color: "danger",
-                    });
-                  }
-                }
-              }}
-            >
-              WIPE ALL BILLING & APPOINTMENT DATA
-            </Button>
-          </div>
-        )}
+        {/*
+         * A one-click "WIPE ALL BILLING & APPOINTMENT DATA" tool used to
+         * live here, reachable by any signed-in clinic member regardless
+         * of role — client-side deleteDoc calls against appointmentBilling,
+         * pathologyBilling, doctorCommissions, expertCommissions,
+         * referralCommissions, staffCommissions and appointments for the
+         * clinic, behind nothing but a browser confirm() dialog. No
+         * application code anywhere else deletes a commission record (a
+         * reversal is a negative clawback record, not a delete), and three
+         * of those collections' delete rules were plain clinic membership
+         * with no role check at all — so any logged-in staff member could
+         * permanently erase every doctor's, expert's, referral partner's
+         * and staff member's entire commission history, and the clinic's
+         * whole appointment record, in one click. Removed outright rather
+         * than gated: there is no legitimate production use for a tool
+         * that destroys the financial and clinical history it is
+         * triggered against. The underlying rules gap (membership-level
+         * delete on expertCommissions/referralCommissions/staffCommissions,
+         * and staff-level delete on doctorCommissions) is fixed in
+         * firestore.rules — delete on all four is now admin-only.
+         */}
       </div>
 
       {/* ── Modals ──────────────────────────────────────────────────────────── */}

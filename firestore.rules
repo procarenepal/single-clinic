@@ -3267,9 +3267,18 @@ match /appointmentBillingSettings/{settingsId} {
                   (!request.resource.data.keys().hasAny(['defaultPaymentMethod']) || 
                    request.resource.data.defaultPaymentMethod is string)));
   
-  // Allow super admins to update any clinic's billing settings, clinic admins for their own clinic
-  allow update: if isAuthenticated() && 
-                (isSuperAdmin() || 
+  // NOT tightened to isClinicAdminForClinic, despite this collection's own
+  // comment and delete rule saying "clinic admins" — checked against live
+  // production data before changing this: the custom RBAC role
+  // "Accountant" (users.role stays "staff"; page access comes from
+  // user_role_assignments + roles.permissions, a second, separate
+  // permission system this file has no visibility into) is explicitly
+  // granted the Appointment Billing page, whose Settings tab is the only
+  // caller of this write. Tightening to isClinicAdminForClinic would have
+  // broken that real, assigned role's actual job ("Billing oversight").
+  // Revisit only alongside reading the custom-RBAC grant itself here.
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() ||
                  belongsToClinic(settingsId)) &&
                 // Validate paymentMethods array structure if being updated
                 (!request.resource.data.keys().hasAny(['paymentMethods']) || 
@@ -3768,10 +3777,18 @@ match /expertCommissions/{commissionId} {
               (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
 
-  allow write: if isAuthenticated() &&
+  allow create, update: if isAuthenticated() &&
                (isSuperAdmin() ||
                 (request.resource.data.clinicId != null &&
                  belongsToClinic(request.resource.data.clinicId)));
+
+  // Admin-only: no application code deletes a commission record (a
+  // reversal is a negative clawback record, not a delete — see
+  // doctorCommissions' isClawback()). The former blanket `allow write`
+  // covered delete too, at plain clinic membership — any staff member
+  // could erase every expert's entire payout history with no real
+  // record of having done so.
+  allow delete: if isSuperAdmin();
 }
 
 match /expertCommissions {
@@ -3795,10 +3812,16 @@ match /referralCommissions/{commissionId} {
               (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
 
-  allow write: if isAuthenticated() &&
+  allow create, update: if isAuthenticated() &&
                (isSuperAdmin() ||
                 (request.resource.data.clinicId != null &&
                  belongsToClinic(request.resource.data.clinicId)));
+
+  // Admin-only — see expertCommissions above for why: no application
+  // code deletes a commission record, and the former blanket `allow
+  // write` let any staff member erase every referral partner's entire
+  // payout history at plain clinic membership.
+  allow delete: if isSuperAdmin();
 }
 
 match /referralCommissions {
@@ -3822,10 +3845,16 @@ match /staffCommissions/{commissionId} {
               (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
 
-  allow write: if isAuthenticated() &&
+  allow create, update: if isAuthenticated() &&
                (isSuperAdmin() ||
                 (request.resource.data.clinicId != null &&
                  belongsToClinic(request.resource.data.clinicId)));
+
+  // Admin-only — see expertCommissions above for why: no application
+  // code deletes a commission record, and the former blanket `allow
+  // write` let any staff member erase every staff member's entire
+  // payout history at plain clinic membership.
+  allow delete: if isSuperAdmin();
 }
 
 match /staffCommissions {
@@ -3900,11 +3929,12 @@ match /doctorCommissions/{commissionId} {
                   request.resource.data.totalInvoiceAmount is number && request.resource.data.totalInvoiceAmount >= 0 &&
                   request.resource.data.status in ['pending', 'paid', 'cancelled']));
   
-  // Allow clinic admins to delete their own clinic's commission records
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (hasCommissionAccess(resource.data.clinicId) &&
-                  resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId));
+  // Admin-only, not hasCommissionAccess (which also admits 'staff') — no
+  // application code deletes a commission record at all (a reversal is a
+  // negative clawback record, see isClawback() above); this was the one
+  // write this rule allowed with no corresponding legitimate caller, and
+  // it let any staff member erase a doctor's entire payout history.
+  allow delete: if isSuperAdmin();
 }
 
 // Doctor Commissions collection-level rules for queries
