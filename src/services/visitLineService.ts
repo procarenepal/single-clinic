@@ -30,7 +30,9 @@ import { walletService } from "./walletService";
 import {
   buildPackageSessionLine,
   refusalMessage,
+  resolveTypePrice,
   resolveVisitLine,
+  splitAmount,
   withLinePrice,
   type ChargeClinician,
   type ChargeRefused,
@@ -368,21 +370,35 @@ export async function appendBookedLines(input: {
 }): Promise<string[]> {
   if (input.appointment.billedOnAppointmentId) return [];
   const refusals: string[] = [];
-  // A visit that was sent back/undone after its booked fee was already
-  // collected, then re-checked-in or re-routed to a DIFFERENT clinician,
-  // must not be charged for the same service twice — mergeVisitLines keys
-  // a booked line by (type, doctor), so without this check it would see a
-  // new doctor as a genuinely new line and add a second charge for the
-  // same consultation. findBookedLine's "whoever performs it" rule is what
-  // every other screen already uses to decide a service is already on the
-  // visit; re-attributing the existing line (rather than skipping it bare)
-  // is what keeps the invoice and commission with whoever is actually
-  // seeing the patient.
   let liveLines: AppointmentBillingItem[] | null = null;
   let liveApptTypeId: string | null | undefined = null;
 
+  // Package/session rows are handled per-row, each against its own
+  // ticket — a session is never shared between clinicians. Ordinary
+  // booked-type rows are grouped by appointmentTypeId FIRST: two
+  // clinician rows picking the SAME service in one Quick Intake
+  // submission (a joint consultation, or simply the same type picked
+  // twice by mistake) must be priced ONCE and split between them — not
+  // billed in full to each, which is what a per-row loop with no
+  // grouping produced, and not silently handed to whichever row
+  // happened to be processed last either.
+  const sessionRows: BookedRow[] = [];
+  const rowsByType = new Map<string, BookedRow[]>();
+
   for (const row of input.rows) {
     if (!row.clinicianId || row.clinicianId === "unassigned") continue;
+    const typeId = row.appointmentTypeId || "";
+
+    if (row.patientPackageId || typeId.startsWith("consume_pkg_")) {
+      sessionRows.push(row);
+      continue;
+    }
+    if (!typeId || typeId === "default" || typeId.startsWith("pkg_")) continue;
+    if (!rowsByType.has(typeId)) rowsByType.set(typeId, []);
+    rowsByType.get(typeId)!.push(row);
+  }
+
+  for (const row of sessionRows) {
     const clinician = await findClinician(row.clinicianId, row.clinicianType, {
       doctors: input.lists.doctors,
       experts: input.lists.experts,
@@ -393,21 +409,19 @@ export async function appendBookedLines(input: {
       continue;
     }
     const typeId = row.appointmentTypeId || "";
+    const result = await ensureSessionLine({
+      appointment: { id: input.appointment.id },
+      patientPackageId:
+        row.patientPackageId || typeId.replace("consume_pkg_", ""),
+      packages: input.lists.packages,
+      performer: clinician,
+      ctx: input.ctx,
+    });
 
-    if (row.patientPackageId || typeId.startsWith("consume_pkg_")) {
-      const result = await ensureSessionLine({
-        appointment: { id: input.appointment.id },
-        patientPackageId:
-          row.patientPackageId || typeId.replace("consume_pkg_", ""),
-        packages: input.lists.packages,
-        performer: clinician,
-        ctx: input.ctx,
-      });
+    if (result.ok === false) refusals.push(refusalMessage(result));
+  }
 
-      if (result.ok === false) refusals.push(refusalMessage(result));
-      continue;
-    }
-    if (!typeId || typeId === "default" || typeId.startsWith("pkg_")) continue;
+  for (const [typeId, rows] of rowsByType) {
     const type = input.lists.appointmentTypes.find((t) => t.id === typeId);
 
     if (!type) {
@@ -417,6 +431,28 @@ export async function appendBookedLines(input: {
       continue;
     }
 
+    // Resolve every row's clinician, de-duplicated — two rows naming the
+    // SAME clinician for the SAME type collapse to one (nothing to
+    // split there).
+    const clinicians: ChargeClinician[] = [];
+    const seenClinicianIds = new Set<string>();
+
+    for (const row of rows) {
+      const clinician = await findClinician(row.clinicianId, row.clinicianType, {
+        doctors: input.lists.doctors,
+        experts: input.lists.experts,
+      });
+
+      if (!clinician) {
+        refusals.push("The selected clinician could not be found.");
+        continue;
+      }
+      if (seenClinicianIds.has(clinician.id)) continue;
+      seenClinicianIds.add(clinician.id);
+      clinicians.push(clinician);
+    }
+    if (clinicians.length === 0) continue;
+
     if (liveLines === null) {
       const live = await appointmentService.getAppointmentById(
         input.appointment.id,
@@ -425,9 +461,24 @@ export async function appendBookedLines(input: {
       liveLines = ((live as any)?.pendingVisitItems || []) as AppointmentBillingItem[];
       liveApptTypeId = live?.appointmentTypeId ?? null;
     }
+    // A visit that was sent back/undone after its booked fee was already
+    // collected, then re-checked-in or re-routed to a DIFFERENT
+    // clinician, must not be charged for the same service twice —
+    // mergeVisitLines keys a booked line by (type, doctor), so without
+    // this check it would see a new doctor as a genuinely new line and
+    // add a second charge for the same consultation. findBookedLine's
+    // "whoever performs it" rule is what every other screen already
+    // uses to decide a service is already on the visit; re-attributing
+    // the existing line (rather than skipping it bare) is what keeps
+    // the invoice and commission with whoever is actually seeing the
+    // patient. This path handles only the first clinician of the group —
+    // a type colliding with BOTH a pre-existing line AND a new multi-
+    // clinician split in the same batch is not something this covers.
     const existing = findBookedLine(liveLines, type.id, liveApptTypeId);
 
     if (existing) {
+      const clinician = clinicians[0];
+
       if (
         existing.doctorId !== clinician.id ||
         existing.performerKind !== clinician.kind
@@ -444,24 +495,53 @@ export async function appendBookedLines(input: {
               err,
             ),
           );
-        // Reflect the patch locally in case a later row in this same call
-        // matches the same line again.
         existing.doctorId = clinician.id;
         existing.doctorName = clinician.name;
         existing.performerKind = clinician.kind;
       }
       continue;
     }
-    const result = await ensureVisitLine({
-      appointment: { id: input.appointment.id },
-      type,
-      clinician,
-      origin: "booked",
-      ctx: input.ctx,
-    });
 
-    if (result.ok === false) refusals.push(refusalMessage(result));
-    else if (result.added) liveLines.push(result.line as AppointmentBillingItem);
+    // Genuinely new: price once, then split it across however many
+    // distinct clinicians this type was assigned to in this batch — one
+    // line per performer, each sharing the catalogue price, exactly like
+    // a multi-performer procedure item already does in
+    // handleFinaliseProcedure. The single-clinician case (by far the
+    // common one) is unaffected: splitAmount(price, 1) is just [price].
+    if (clinicians.length === 1) {
+      const result = await ensureVisitLine({
+        appointment: { id: input.appointment.id },
+        type,
+        clinician: clinicians[0],
+        origin: "booked",
+        ctx: input.ctx,
+      });
+
+      if (result.ok === false) refusals.push(refusalMessage(result));
+      else if (result.added) liveLines.push(result.line as AppointmentBillingItem);
+      continue;
+    }
+    const priced = resolveTypePrice(type, clinicians[0]);
+
+    if (priced.ok === false) {
+      refusals.push(refusalMessage(priced));
+      continue;
+    }
+    const shares = splitAmount(priced.price, clinicians.length);
+
+    for (let i = 0; i < clinicians.length; i++) {
+      const result = await ensureVisitLine({
+        appointment: { id: input.appointment.id },
+        type,
+        clinician: clinicians[i],
+        origin: "booked",
+        ctx: input.ctx,
+        price: shares[i],
+      });
+
+      if (result.ok === false) refusals.push(refusalMessage(result));
+      else if (result.added) liveLines.push(result.line as AppointmentBillingItem);
+    }
   }
 
   return refusals;
