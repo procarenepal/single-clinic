@@ -2920,7 +2920,17 @@ export default function AppointmentBillingPage() {
                 Items
               </h4>
               <div className="space-y-1">
-                {selectedBilling.items.map((i, idx) => (
+                {selectedBilling.items.map((i, idx) => {
+                  // See the identical note in appointments-billing/[id].tsx:
+                  // a service shared by more than one clinician bills the
+                  // patient once; every OTHER clinician assigned to it gets
+                  // a price-0 line whose amount is only their own
+                  // commission base, not a second charge. Shown plainly as
+                  // a commission-only line here instead of a confusing
+                  // "0 × qty" row with a nonzero total.
+                  const isCommissionOnly = i.price === 0 && i.amount > 0;
+
+                  return (
                   <div
                     key={idx}
                     className="flex justify-between items-center bg-surface border border-border-base p-2 rounded"
@@ -2932,15 +2942,19 @@ export default function AppointmentBillingPage() {
                         i.doctorName !== "Expert Cabin" && (
                           <p className="text-[12px] text-mountain-500 my-0.5">
                             Assigned: {i.doctorName}
+                            {isCommissionOnly && " (commission only)"}
                           </p>
                         )}
                       <p className="text-[11.5px] text-text-muted">
-                        {fmtCur(i.price)} × {i.quantity}
+                        {isCommissionOnly
+                          ? `Commission ${i.commission}% of ${fmtCur(i.amount)} — not separately billed`
+                          : `${fmtCur(i.price)} × ${i.quantity}`}
                       </p>
                     </div>
-                    <span>{fmtCur(i.amount)}</span>
+                    <span>{fmtCur(isCommissionOnly ? 0 : i.amount)}</span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

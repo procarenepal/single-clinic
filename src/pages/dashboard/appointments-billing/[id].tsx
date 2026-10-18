@@ -1119,7 +1119,21 @@ export default function InvoiceDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoice.items.map((item, index) => (
+                  {invoice.items.map((item, index) => {
+                    // A service shared by more than one clinician bills the
+                    // patient on exactly one line (price > 0); every OTHER
+                    // clinician assigned to it gets a line with price 0 —
+                    // nothing added to this invoice — whose amount instead
+                    // carries their OWN commission base (see
+                    // asCommissionOnlyLine). Showing that raw "Price: 0,
+                    // Amount: 1,200" pairing on a patient-facing invoice
+                    // reads as a pricing error, not the deliberate split it
+                    // is — package-session lines use the identical price-0/
+                    // amount-as-commission-base shape for the same reason
+                    // (buildPackageSessionLine), so this applies there too.
+                    const isCommissionOnly = item.price === 0 && item.amount > 0;
+
+                    return (
                     <tr key={index}>
                       <td className="text-center text-[13px] text-[rgb(var(--color-text-muted))]">
                         {index + 1}
@@ -1134,11 +1148,19 @@ export default function InvoiceDetailPage() {
                             item.doctorName !== "Expert Cabin" && (
                               <p className="text-[12px] text-mountain-500 mt-0.5">
                                 Assigned: {item.doctorName}
+                                {isCommissionOnly && (
+                                  <span className="ml-1.5 text-[10px] font-semibold uppercase text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1 py-0.5 rounded">
+                                    Commission only
+                                  </span>
+                                )}
                               </p>
                             )}
                           {item.commission > 0 && (
                             <p className="text-[11px] text-[rgb(var(--color-text-muted))] mt-0.5">
                               Commission: {item.commission}%
+                              {isCommissionOnly
+                                ? ` of ${formatCurrency(item.amount)} — not separately billed, see the matching line above`
+                                : ""}
                             </p>
                           )}
                         </div>
@@ -1150,13 +1172,16 @@ export default function InvoiceDetailPage() {
                         {item.quantity}
                       </td>
                       <td className="text-right text-[13px]">
-                        {formatCurrency(item.price)}
+                        {isCommissionOnly ? "—" : formatCurrency(item.price)}
                       </td>
                       <td className="text-right text-[13px]">
-                        {formatCurrency(item.amount)}
+                        {isCommissionOnly
+                          ? formatCurrency(0)
+                          : formatCurrency(item.amount)}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

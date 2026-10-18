@@ -199,6 +199,16 @@ export const generateUnifiedInvoiceHTML = (
   // overflow the paper.
   const itemsHtml = invoice.items
     .map((item, index) => {
+      // A service shared by more than one clinician bills the patient on
+      // exactly one line (price > 0); every OTHER clinician assigned to it
+      // gets a line with price 0 — nothing added to this invoice — whose
+      // amount instead carries their OWN commission base (see
+      // asCommissionOnlyLine / buildPackageSessionLine). Printing that raw
+      // "Price: -, Amount: 1,200" pairing on a document a PATIENT receives
+      // reads as a billing error, not the deliberate zero-charge line it
+      // is, so it prints as a plain NPR 0 line here instead.
+      const isCommissionOnly =
+        item.price !== undefined && item.price === 0 && item.amount > 0;
       const thermalSubtext = isThermal
         ? [item.subtext, `HS: ${item.hsCode || "-"}`]
             .filter(Boolean)
@@ -213,8 +223,8 @@ export const generateUnifiedInvoiceHTML = (
           </td>
           ${!isThermal ? `<td class="text-center" style="text-align: center; white-space: nowrap;">${item.hsCode || "-"}</td>` : ""}
           <td class="text-center" style="text-align: center; white-space: nowrap;">${item.quantity}</td>
-          ${!isThermal ? `<td style="text-align: right; white-space: nowrap;">${item.price !== undefined ? formatCurrency(item.price) : '-'}</td>` : ""}
-          <td style="text-align: right; white-space: nowrap; font-weight: 600;">${formatCurrency(item.amount)}</td>
+          ${!isThermal ? `<td style="text-align: right; white-space: nowrap;">${isCommissionOnly ? "-" : item.price !== undefined ? formatCurrency(item.price) : '-'}</td>` : ""}
+          <td style="text-align: right; white-space: nowrap; font-weight: 600;">${formatCurrency(isCommissionOnly ? 0 : item.amount)}</td>
         </tr>`;
     })
     .join("");
