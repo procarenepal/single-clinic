@@ -13,6 +13,7 @@ import {
   type ChargeableType,
   type ChargeClinician,
   type ChargeResolution,
+  asCommissionOnlyLine,
   previewLineCharge,
   refusalMessage,
   splitAmount,
@@ -288,6 +289,29 @@ describe("splitAmount / withLinePrice — shares that still sum to the catalogue
     expect(share.amount).toBe(1250);
     expect(share.appointmentTypeId).toBe("t");
     expect(share.id).toBe(line.line.id);
+  });
+
+  it("asCommissionOnlyLine bills the patient nothing but keeps the full price as the commission base", () => {
+    // A service shared by three clinicians: the patient is charged once
+    // (a separate full-price line, not shown here), and each OTHER
+    // clinician gets this instead — their own commission on the FULL
+    // catalogue price, not a three-way split of it.
+    const line = resolveVisitLine(
+      { id: "t", name: "Acne Consultation & Care", price: 400, defaultCommission: 12 },
+      rina,
+      { origin: "booked", addedBy: "u", now: new Date(0) },
+    );
+
+    if (line.ok === false) throw new Error("expected a line");
+    const shared = asCommissionOnlyLine(line.line, 400);
+
+    expect(shared.price).toBe(0);
+    expect(shared.amount).toBe(400);
+    expect(shared.collectAtCheckIn).toBe(false);
+    // Everything else about the line — who it's attributed to, their
+    // commission rate — is untouched.
+    expect(shared.doctorId).toBe(rina.id);
+    expect(shared.commission).toBe(12);
   });
 });
 

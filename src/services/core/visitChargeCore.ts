@@ -333,6 +333,29 @@ export function withLinePrice(line: VisitLine, price: number): VisitLine {
 }
 
 /**
+ * The same line, but not billed to the patient — only its commission
+ * stands. For when a service is shared by more than one clinician: the
+ * patient is charged once, at the full catalogue price, on ONE line; every
+ * OTHER clinician assigned to the same service gets this instead, so they
+ * each earn their own commission on the FULL price (not a divided share —
+ * commission is the clinic's own cost of paying out, not patient revenue
+ * that has to sum to one total) without adding a second charge to the
+ * invoice. Mirrors buildPackageSessionLine's price-0/amount-as-commission-
+ * base pattern, which exists for the identical reason.
+ */
+export function asCommissionOnlyLine(
+  line: VisitLine,
+  commissionBase: number,
+): VisitLine {
+  return {
+    ...line,
+    price: 0,
+    amount: round2(Math.max(0, commissionBase)),
+    collectAtCheckIn: false,
+  };
+}
+
+/**
  * n shares of an amount that sum EXACTLY to it at two decimals; the odd
  * paisa land on the first shares. Two experts performing one procedure must
  * still invoice what the catalogue priced, not 2 × round(price / 2).

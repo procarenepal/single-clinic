@@ -28,11 +28,10 @@ import { expertService } from "./expertService";
 import { patientPackageService } from "./patientPackageService";
 import { walletService } from "./walletService";
 import {
+  asCommissionOnlyLine,
   buildPackageSessionLine,
   refusalMessage,
-  resolveTypePrice,
   resolveVisitLine,
-  splitAmount,
   withLinePrice,
   type ChargeClinician,
   type ChargeRefused,
@@ -107,8 +106,12 @@ export async function findClinician(
 
 /**
  * Put one catalogue service on the visit for one performer, or say why it
- * cannot be. `price` is only for a share of a split procedure; the catalogue
- * price is the default and the only other source.
+ * cannot be. `price` is only for a share of a split procedure; `commissionOnlyBase`
+ * is for a service shared by several clinicians at check-in — the patient
+ * pays nothing on this particular line (another clinician's line carries
+ * the real charge), but this clinician still earns their own commission on
+ * the full catalogue price. The catalogue price is the default and the
+ * only other source.
  */
 export async function ensureVisitLine(input: {
   appointment: Pick<Appointment, "id">;
@@ -118,6 +121,7 @@ export async function ensureVisitLine(input: {
   ctx: VisitLineContext;
   recommendedBy?: string;
   price?: number;
+  commissionOnlyBase?: number;
 }): Promise<EnsureLineResult> {
   const resolved = resolveVisitLine(input.type, input.clinician, {
     origin: input.origin,
@@ -129,9 +133,11 @@ export async function ensureVisitLine(input: {
   if (resolved.ok === false) return resolved;
 
   const line =
-    typeof input.price === "number"
-      ? withLinePrice(resolved.line, input.price)
-      : resolved.line;
+    typeof input.commissionOnlyBase === "number"
+      ? asCommissionOnlyLine(resolved.line, input.commissionOnlyBase)
+      : typeof input.price === "number"
+        ? withLinePrice(resolved.line, input.price)
+        : resolved.line;
   const { added } = await appointmentService.appendPendingVisitLines(
     input.appointment.id,
     [line as AppointmentBillingItem],
@@ -378,10 +384,13 @@ export async function appendBookedLines(input: {
   // booked-type rows are grouped by appointmentTypeId FIRST: two
   // clinician rows picking the SAME service in one Quick Intake
   // submission (a joint consultation, or simply the same type picked
-  // twice by mistake) must be priced ONCE and split between them — not
-  // billed in full to each, which is what a per-row loop with no
-  // grouping produced, and not silently handed to whichever row
-  // happened to be processed last either.
+  // twice by mistake) must be billed to the patient ONCE, not once per
+  // clinician — a per-row loop with no grouping billed it in full to
+  // each. Each assigned clinician still earns their own commission on
+  // the FULL price, not a divided share: commission is what the clinic
+  // pays out, separate from what the patient owes, so one clinician's
+  // cut does not shrink because another was also assigned the same
+  // service (see asCommissionOnlyLine).
   const sessionRows: BookedRow[] = [];
   const rowsByType = new Map<string, BookedRow[]>();
 
@@ -502,41 +511,39 @@ export async function appendBookedLines(input: {
       continue;
     }
 
-    // Genuinely new: price once, then split it across however many
-    // distinct clinicians this type was assigned to in this batch — one
-    // line per performer, each sharing the catalogue price, exactly like
-    // a multi-performer procedure item already does in
-    // handleFinaliseProcedure. The single-clinician case (by far the
-    // common one) is unaffected: splitAmount(price, 1) is just [price].
-    if (clinicians.length === 1) {
-      const result = await ensureVisitLine({
-        appointment: { id: input.appointment.id },
-        type,
-        clinician: clinicians[0],
-        origin: "booked",
-        ctx: input.ctx,
-      });
+    // Genuinely new. The FIRST clinician's line is the real charge, at the
+    // full catalogue price — the patient pays this service once, no
+    // matter how many clinicians this batch assigned to it. Every OTHER
+    // clinician assigned the same type gets a commission-only line
+    // instead: price 0 (nothing added to the invoice), but their own
+    // commission computed on the FULL price, not a divided share —
+    // commission is what the clinic pays each clinician for their part,
+    // not patient revenue that has to sum to one total, so there is no
+    // reason one clinician's cut should shrink because another clinician
+    // also gets one. The single-clinician case (by far the common one) is
+    // just the first line, same as before this grouping existed at all.
+    const primary = await ensureVisitLine({
+      appointment: { id: input.appointment.id },
+      type,
+      clinician: clinicians[0],
+      origin: "booked",
+      ctx: input.ctx,
+    });
 
-      if (result.ok === false) refusals.push(refusalMessage(result));
-      else if (result.added) liveLines.push(result.line as AppointmentBillingItem);
+    if (primary.ok === false) {
+      refusals.push(refusalMessage(primary));
       continue;
     }
-    const priced = resolveTypePrice(type, clinicians[0]);
+    if (primary.added) liveLines.push(primary.line as AppointmentBillingItem);
 
-    if (priced.ok === false) {
-      refusals.push(refusalMessage(priced));
-      continue;
-    }
-    const shares = splitAmount(priced.price, clinicians.length);
-
-    for (let i = 0; i < clinicians.length; i++) {
+    for (let i = 1; i < clinicians.length; i++) {
       const result = await ensureVisitLine({
         appointment: { id: input.appointment.id },
         type,
         clinician: clinicians[i],
         origin: "booked",
         ctx: input.ctx,
-        price: shares[i],
+        commissionOnlyBase: primary.line.amount,
       });
 
       if (result.ok === false) refusals.push(refusalMessage(result));
