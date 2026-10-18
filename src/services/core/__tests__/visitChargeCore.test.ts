@@ -14,6 +14,7 @@ import {
   type ChargeClinician,
   type ChargeResolution,
   asCommissionOnlyLine,
+  isCommissionOnlyLine,
   previewLineCharge,
   refusalMessage,
   splitAmount,
@@ -312,6 +313,17 @@ describe("splitAmount / withLinePrice — shares that still sum to the catalogue
     // commission rate — is untouched.
     expect(shared.doctorId).toBe(rina.id);
     expect(shared.commission).toBe(12);
+  });
+
+  it("isCommissionOnlyLine recognizes a commission-only line, including after a credit note negates it", () => {
+    expect(isCommissionOnlyLine({ price: 0, amount: 1200 })).toBe(true);
+    // buildCreditNoteSkeleton negates both fields when reversing a billing:
+    // price:0 -> -0 (still zero), amount:1200 -> -1200.
+    expect(isCommissionOnlyLine({ price: -0, amount: -1200 })).toBe(true);
+    // A real charge: price nonzero.
+    expect(isCommissionOnlyLine({ price: 400, amount: 400 })).toBe(false);
+    // Fully zeroed out (fully-reversed line, or line with no commission base).
+    expect(isCommissionOnlyLine({ price: 0, amount: 0 })).toBe(false);
   });
 });
 

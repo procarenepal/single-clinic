@@ -46,6 +46,7 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { expertService } from "@/services/expertService";
 import { patientPackageService } from "@/services/patientPackageService";
+import { isCommissionOnlyLine } from "@/services/core/visitChargeCore";
 import { IrdAnnexureReport } from "./IrdAnnexureReport";
 import { CorrectedRecordsReport } from "./CorrectedRecordsReport";
 import { OutstandingBalancesReport } from "./OutstandingBalancesReport";
@@ -77,6 +78,19 @@ import {
   Expert,
   PatientPackage,
 } from "@/types/models";
+
+/**
+ * The lines of an invoice the patient was actually charged for. A service
+ * shared by several clinicians is billed once, and every other clinician on
+ * it carries a commission-only line — price 0, `amount` holding the full
+ * commission base (see asCommissionOnlyLine; package-session lines have the
+ * same shape). Revenue attribution below splits an invoice's total across
+ * its lines' `amount`, so counting those lines would inflate the
+ * denominator and credit a clinician with patient revenue for a line the
+ * patient never paid. Their earnings live in the commission reports.
+ */
+const chargedItems = (billing: Pick<AppointmentBilling, "items">) =>
+  (billing.items || []).filter((item) => !isCommissionOnlyLine(item));
 
 interface ReportData {
   appointments: Appointment[];
@@ -1040,13 +1054,14 @@ export default function ReportsPage() {
         let attributedAmount = billing.totalAmount;
 
         if (selectedDoctor !== "all" || selectedAppointmentType !== "all") {
+          const charged = chargedItems(billing);
           const itemsTotal =
-            billing.items.reduce((s, i) => s + (i.amount || 0), 0) ||
+            charged.reduce((s, i) => s + (i.amount || 0), 0) ||
             billing.subtotal ||
             1;
           const scaleFactor =
             itemsTotal > 0 ? billing.totalAmount / itemsTotal : 1;
-          const matchingItems = billing.items.filter((item) => {
+          const matchingItems = charged.filter((item) => {
             const matchesDoctor =
               selectedDoctor === "all" ||
               (item.doctorId || billing.doctorId) === selectedDoctor;
@@ -2431,14 +2446,15 @@ export default function ReportsPage() {
                           totalRevenue += b.totalAmount;
                           totalPaid += b.paidAmount || 0;
                         } else {
+                          const charged = chargedItems(b);
                           const itemsTotal =
-                            b.items.reduce((s, i) => s + (i.amount || 0), 0) ||
+                            charged.reduce((s, i) => s + (i.amount || 0), 0) ||
                             b.subtotal ||
                             1;
                           const revenueScale = b.totalAmount / itemsTotal;
                           const paidScale = (b.paidAmount || 0) / itemsTotal;
 
-                          b.items.forEach((item) => {
+                          charged.forEach((item) => {
                             const matchesDoctor =
                               selectedDoctor === "all" ||
                               (item.doctorId || b.doctorId) === selectedDoctor;
@@ -2657,14 +2673,15 @@ export default function ReportsPage() {
                       >();
 
                       filteredBillings.forEach((b) => {
+                        const charged = chargedItems(b);
                         const itemsTotal =
-                          b.items.reduce((s, i) => s + (i.amount || 0), 0) ||
+                          charged.reduce((s, i) => s + (i.amount || 0), 0) ||
                           b.subtotal ||
                           1;
                         const scaleFactor =
                           itemsTotal > 0 ? b.totalAmount / itemsTotal : 1;
 
-                        b.items.forEach((item) => {
+                        charged.forEach((item) => {
                           if (
                             selectedAppointmentType !== "all" &&
                             item.appointmentTypeId !== selectedAppointmentType

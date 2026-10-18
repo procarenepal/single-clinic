@@ -172,6 +172,43 @@ export const describeRowFee = (
   };
 };
 
+/**
+ * Rows after the first that share the exact same resolved appointment
+ * type with an earlier clinician row — a joint consultation. The backend
+ * (appendBookedLines) bills a shared service once, on the first such row,
+ * and gives every other clinician on it a commission-only line instead:
+ * nothing added to what the patient owes. Without this, each row's own
+ * preview (describeRowFee has no idea its siblings exist) shows the full
+ * price on every one of them, so a receptionist reading the "Collected at
+ * check-in" total — or any one row's own label — sees double what will
+ * actually be charged. Returns the set of row indices (into the original
+ * `clinicians` array) that are these "additional" rows.
+ */
+export const sharedTypeAdditionalRowIndices = (
+  rows: { index: number; appointmentTypeId: string }[],
+): Set<number> => {
+  const seen = new Set<string>();
+  const additional = new Set<number>();
+  for (const { index, appointmentTypeId } of rows) {
+    // Only plain booked services are ever billed-once-shared this way —
+    // a package sale and a prepaid session consumption aren't catalogue
+    // charges in the first place, so grouping them would be meaningless.
+    if (
+      !appointmentTypeId ||
+      appointmentTypeId.startsWith("pkg_") ||
+      appointmentTypeId.startsWith("consume_pkg_")
+    ) {
+      continue;
+    }
+    if (seen.has(appointmentTypeId)) {
+      additional.add(index);
+    } else {
+      seen.add(appointmentTypeId);
+    }
+  }
+  return additional;
+};
+
 export interface QuickIntakeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -728,7 +765,29 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       </button>
                     </div>
 
-                    {(quickIntakeForm.clinicians || []).map(
+                    {(() => {
+                      // Only rows with a clinician count — an unassigned row
+                      // is skipped at submit, so it must not "claim" a service
+                      // type first and make the real charge below it preview
+                      // as nothing-added.
+                      const sharedTypeAdditional = sharedTypeAdditionalRowIndices(
+                        (quickIntakeForm.clinicians || [])
+                          .map((c: any, index: number) => ({ c, index }))
+                          .filter(
+                            ({ c }) =>
+                              c.clinicianId && c.clinicianId !== "unassigned",
+                          )
+                          .map(({ c, index }) => ({
+                            index,
+                            appointmentTypeId: String(
+                              c.appointmentTypeId ||
+                                quickIntakeForm.appointmentTypeId ||
+                                "",
+                            ),
+                          })),
+                      );
+
+                      return (quickIntakeForm.clinicians || []).map(
                       (row: any, idx: number) => (
                         <div
                           key={row.id}
@@ -879,7 +938,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                             </div>
                           </div>
                           {(() => {
-                            const fee = describeRowFee(
+                            let fee = describeRowFee(
                               {
                                 ...row,
                                 appointmentTypeId:
@@ -902,6 +961,17 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 ),
                               },
                             );
+                            if (
+                              fee.status === "charge" &&
+                              sharedTypeAdditional.has(idx)
+                            ) {
+                              fee = {
+                                status: "charge",
+                                label:
+                                  "Shared with another clinician above — commission only, nothing added",
+                                collectNow: 0,
+                              };
+                            }
 
                             if (fee.status === "none") return null;
                             const tone =
@@ -924,7 +994,8 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                           })()}
                         </div>
                       ),
-                    )}
+                    );
+                    })()}
                   </div>
 
                   {/* What check-in collects: the sum of the rows' fee lines.
@@ -941,8 +1012,21 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                     const firstRowIsPackage = String(
                       allRows[0]?.appointmentTypeId || "",
                     ).startsWith("pkg_");
-                    const fees = rows.map(({ c, index }) =>
-                      describeRowFee(
+                    // A service shared by two rows is collected once (see
+                    // sharedTypeAdditionalRowIndices) — the same grouping
+                    // appendBookedLines applies when it actually bills.
+                    const sharedTypeAdditional = sharedTypeAdditionalRowIndices(
+                      rows.map(({ c, index }) => ({
+                        index,
+                        appointmentTypeId: String(
+                          c.appointmentTypeId ||
+                            quickIntakeForm.appointmentTypeId ||
+                            "",
+                        ),
+                      })),
+                    );
+                    const fees = rows.map(({ c, index }) => {
+                      const fee = describeRowFee(
                         {
                           ...c,
                           appointmentTypeId:
@@ -961,8 +1045,13 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                             quickIntakeForm.startSessionInstantly,
                           ),
                         },
-                      ),
-                    );
+                      );
+
+                      return fee.status === "charge" &&
+                        sharedTypeAdditional.has(index)
+                        ? { ...fee, collectNow: 0 }
+                        : fee;
+                    });
 
                     if (fees.length === 0) return null;
                     const collectNow = fees.reduce(

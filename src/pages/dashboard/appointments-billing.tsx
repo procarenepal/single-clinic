@@ -41,6 +41,7 @@ import { AgingTag } from "@/components/billing/AgingTag";
 
 // Services
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { isCommissionOnlyLine } from "@/services/core/visitChargeCore";
 import { getPatientOutstandingSummary } from "@/utils/patientOutstanding";
 import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
@@ -2928,7 +2929,7 @@ export default function AppointmentBillingPage() {
                   // commission base, not a second charge. Shown plainly as
                   // a commission-only line here instead of a confusing
                   // "0 × qty" row with a nonzero total.
-                  const isCommissionOnly = i.price === 0 && i.amount > 0;
+                  const isCommissionOnly = isCommissionOnlyLine(i);
 
                   return (
                   <div

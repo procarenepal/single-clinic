@@ -33,6 +33,7 @@ import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
 import { StatusBadge } from "@/components/billing/StatusBadge";
 import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { isCommissionOnlyLine } from "@/services/core/visitChargeCore";
 import { billingApi } from "@/services/api/billingApi";
 import { appointmentService } from "@/services/appointmentService";
 import { clinicService } from "@/services/clinicService";
@@ -1131,7 +1132,7 @@ export default function InvoiceDetailPage() {
                     // is — package-session lines use the identical price-0/
                     // amount-as-commission-base shape for the same reason
                     // (buildPackageSessionLine), so this applies there too.
-                    const isCommissionOnly = item.price === 0 && item.amount > 0;
+                    const isCommissionOnly = isCommissionOnlyLine(item);
 
                     return (
                     <tr key={index}>

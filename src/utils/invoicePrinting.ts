@@ -10,6 +10,7 @@ import { PrintLayoutConfig } from "@/types/printLayout";
 import { numberToWords } from "./numberToWords";
 import { adToBS } from "./dateConverter";
 import { parseLocalDate, formatLocalDate } from "./localDate";
+import { isCommissionOnlyLine } from "@/services/core/visitChargeCore";
 
 export type PrintFormat =
   | "A4"
@@ -207,8 +208,7 @@ export const generateUnifiedInvoiceHTML = (
       // "Price: -, Amount: 1,200" pairing on a document a PATIENT receives
       // reads as a billing error, not the deliberate zero-charge line it
       // is, so it prints as a plain NPR 0 line here instead.
-      const isCommissionOnly =
-        item.price !== undefined && item.price === 0 && item.amount > 0;
+      const isCommissionOnly = isCommissionOnlyLine(item);
       const thermalSubtext = isThermal
         ? [item.subtext, `HS: ${item.hsCode || "-"}`]
             .filter(Boolean)

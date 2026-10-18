@@ -356,6 +356,24 @@ export function asCommissionOnlyLine(
 }
 
 /**
+ * True for a line built by asCommissionOnlyLine/buildPackageSessionLine: no
+ * real charge to the patient, but a nonzero commission base in `amount`.
+ * Sign-agnostic because a credit note (billingLifecycleCore's
+ * buildCreditNoteSkeleton) negates both fields when reversing a billing —
+ * price:0 becomes price:-0 (still 0) and amount:1200 becomes amount:-1200,
+ * so a strict `amount > 0` check misses it on every reversal of one of
+ * these lines.
+ */
+export function isCommissionOnlyLine(item: {
+  price?: number;
+  amount?: number;
+}): boolean {
+  return (
+    Math.abs(item.price ?? 0) < 0.005 && Math.abs(item.amount ?? 0) >= 0.005
+  );
+}
+
+/**
  * n shares of an amount that sum EXACTLY to it at two decimals; the odd
  * paisa land on the first shares. Two experts performing one procedure must
  * still invoice what the catalogue priced, not 2 × round(price / 2).
