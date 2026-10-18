@@ -3346,6 +3346,22 @@ match /appointmentBilling/{billingId} {
     ]);
   }
 
+  // 'status' sits in onlyBookkeeping()'s field-name allowlist above
+  // because cancelBilling() legitimately writes status: 'cancelled' onto
+  // a finalized-but-not-yet-IRD-synced invoice (CBMS has no withdraw —
+  // credit-note-and-reissue is for a FILED invoice; a cancel is for one
+  // that never got there). But that allowlist only checks field NAMES —
+  // it had no opinion on the VALUE 'status' could take, so a client could
+  // write status: 'draft' on a locked invoice in one update (passes:
+  // affectedKeys is exactly ['status']), after which isLocked() reads
+  // false on the next write and every amount/line/date field became
+  // freely editable. Only a transition to 'cancelled' is a real app
+  // action; anything else attempted while locked is refused here.
+  function statusValueSafeWhenLocked() {
+    return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+      || request.resource.data.status == 'cancelled';
+  }
+
   allow read: if isAuthenticated() &&
               (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
@@ -3368,7 +3384,7 @@ match /appointmentBilling/{billingId} {
                  (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)))
                 && request.resource.data.clinicId == resource.data.clinicId
                 && notTouchingIrdState()
-                && (!isLocked() || onlyBookkeeping());
+                && (!isLocked() || (onlyBookkeeping() && statusValueSafeWhenLocked()));
 
   // IRD requires a billing record to survive entry — superseded by a credit
   // note or marked cancelled, never removed. No application code deletes
@@ -3476,6 +3492,15 @@ match /pathologyBilling/{billingId} {
     ]);
   }
 
+  // Same gap and fix as appointmentBilling's identical function: onlyBookkeeping()
+  // only checks field NAMES, so a lone status: 'draft' write passed it and
+  // unlocked every other field on the next write. pathologyBillingService's
+  // own cancel path is the only legitimate post-lock status change.
+  function statusValueSafeWhenLocked() {
+    return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+      || request.resource.data.status == 'cancelled';
+  }
+
   allow read: if isAuthenticated() &&
               (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
@@ -3495,7 +3520,7 @@ match /pathologyBilling/{billingId} {
                  (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)))
                 && request.resource.data.clinicId == resource.data.clinicId
                 && notTouchingIrdState()
-                && (!isLocked() || onlyBookkeeping());
+                && (!isLocked() || (onlyBookkeeping() && statusValueSafeWhenLocked()));
 
   allow delete: if false;
 }
