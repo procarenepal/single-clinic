@@ -27,6 +27,15 @@ import { WalletTransaction } from "../types/models";
 export const WALLET_TRANSACTIONS_COLLECTION = "walletTransactions";
 export const PATIENTS_COLLECTION = "patients";
 
+// Half a paisa: the same tolerance the patients collection's own delete
+// rule already uses for "this wallet is effectively empty". walletBalance
+// accumulates through repeated increment()/decrement() calls and can carry
+// a float residue like 503.91999999999996 instead of a clean 503.92 — a
+// strict >= comparison against a ROUNDED claim amount (standingWalletCredit
+// rounds to 2dp before a claim is ever made) then fails by less than a
+// paisa, every time, on a balance that is, to the paisa, sufficient.
+const WALLET_BALANCE_EPSILON = 0.005;
+
 /** The ledger row a wallet deduction writes; shared with in-transaction callers. */
 export function buildWalletDeductionRow(input: {
   patientId: string;
@@ -219,7 +228,7 @@ export const walletService = {
 
     const currentBalance = patientSnap.data()?.walletBalance || 0;
 
-    if (currentBalance < input.amount) {
+    if (currentBalance < input.amount - WALLET_BALANCE_EPSILON) {
       throw new Error("Insufficient wallet balance");
     }
 
