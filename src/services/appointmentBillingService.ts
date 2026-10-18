@@ -25,6 +25,7 @@ import { calculateTaxBreakdown } from "../utils/taxEngine";
 import { walletService, PATIENTS_COLLECTION } from "./walletService";
 import { walletRefundableAmount, WALLET_METHOD } from "./core/cashLedgerCore";
 import { applyPayment } from "./core/paymentApplicationCore";
+import { isCommissionOnlyLine } from "./core/visitChargeCore";
 import { navigationService } from "./navigationService";
 import {
   isRecordLocked,
@@ -807,7 +808,14 @@ export const appointmentBillingService = {
       itemName: item.appointmentTypeName || "Service",
       quantity: item.quantity || 1,
       rate: item.price || 0,
-      totalAmount: item.amount || 0,
+      // A commission-only line (asCommissionOnlyLine / buildPackageSessionLine)
+      // carries the full commission base in `amount` with price 0 — that base
+      // is the clinic's internal payout math, not a real charge, and has no
+      // business reaching the tax ledger as a line total (rate*qty would then
+      // disagree with totalAmount on the one record treated as authoritative
+      // for IRD). The commission engine reads `amount` straight off this
+      // billing's own Firestore document, never off this Java round-trip.
+      totalAmount: isCommissionOnlyLine(item) ? 0 : item.amount || 0,
       // Each item's own explicit setting — matches the fix to
       // calculateInvoiceTotals/resolveItemFieldsFromAppointmentType, which
       // no longer treats "unconfigured" as "taxable whenever the toggle's
@@ -1754,6 +1762,30 @@ export const appointmentBillingService = {
             "Error generating commissions inside recordPayment:",
             err,
           );
+          // This fan-out runs exactly once per invoice (gated on becamePaid),
+          // so a failure here means a clinician is owed money the system has
+          // no record of owing — and nothing would ever re-run it. Leave the
+          // same durable "operation_failed" trail the follow-up block above
+          // already does, so it surfaces in the Audit Logs page instead of
+          // dying in a browser console.
+          try {
+            const { auditLogService } = await import("./auditLogService");
+
+            await auditLogService.logEvent(
+              "operation_failed",
+              billing.clinicId,
+              {
+                operation: "commission_generation",
+                billingId: id,
+                invoiceNumber: billing.invoiceNumber,
+                patientId: billing.patientId,
+              },
+              "failure",
+              err instanceof Error ? err.message : String(err),
+            );
+          } catch {
+            // Audit logging is itself best-effort — never let it mask the original error path.
+          }
         }
 
         // 3. IRD Sync Logic
@@ -1823,6 +1855,23 @@ export const appointmentBillingService = {
             "Failed to sync invoice to IRD inside recordPayment:",
             irdError,
           );
+          try {
+            const { auditLogService } = await import("./auditLogService");
+
+            await auditLogService.logEvent(
+              "operation_failed",
+              billing.clinicId,
+              {
+                operation: "ird_sync_on_payment",
+                billingId: id,
+                invoiceNumber: billing.invoiceNumber,
+              },
+              "failure",
+              irdError instanceof Error ? irdError.message : String(irdError),
+            );
+          } catch {
+            // Audit logging is itself best-effort — never let it mask the original error path.
+          }
         }
 
         // 4. Audit Log Payment Event
