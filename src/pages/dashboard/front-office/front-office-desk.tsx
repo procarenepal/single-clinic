@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -24,6 +24,8 @@ import {
   onSnapshot,
   writeBatch,
   doc,
+  documentId,
+  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -1148,11 +1150,25 @@ export default function FrontOfficeDesk() {
 
     setLoading(true);
 
+    // The desk shows one day. Bound every live query to it server-side —
+    // these used to stream the clinic's ENTIRE appointment, invoice and
+    // prescription history into every open tab (filtered only afterwards,
+    // in memory) and re-deliver all of it on any write to any record.
+    const dayStart = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth(),
+      selectedDate.getDate(),
+    );
+    const dayEnd = new Date(dayStart);
+
+    dayEnd.setDate(dayEnd.getDate() + 1);
+
     // Subscribe to Appointments
     const unsubscribeAppts = appointmentService.subscribeToClinicAppointments(
       clinicId,
       (data) => {
-        // Filter by selected date
+        // The query is already day-bounded; this local filter stays as a
+        // belt-and-braces guard on the same local-time day boundaries.
         const filtered = data.filter((appt) => {
           const d = appt.appointmentDate;
 
@@ -1178,9 +1194,14 @@ export default function FrontOfficeDesk() {
         });
 
         setAppointments(deduped);
+        // Invoices are subscribed separately, keyed on the ids these
+        // appointments point at (see the effect below). When none do there
+        // is nothing further to wait for.
+        if (!deduped.some((appt) => appt.billingId)) setLoading(false);
       },
       (err) => {
         console.error("Live appointments subscription error:", err);
+        setLoading(false);
         addToast({
           title: "Live Updates Interrupted",
           description:
@@ -1188,40 +1209,25 @@ export default function FrontOfficeDesk() {
           color: "danger",
         });
       },
+      { start: dayStart, end: dayEnd },
     );
 
-    // Subscribe to Billings in real-time
-    const billingCollection = collection(db, "appointmentBilling");
-    const qBilling = query(billingCollection, where("clinicId", "==", clinicId));
+    // Subscribe to Prescriptions in real-time. The desk reads these two
+    // ways: a prescription for one of today's visits, and any still-active
+    // send-to-pharmacy prescription for the same patient (deriveVisitStage).
+    // A 30-day window behind the viewed day keeps the second case for any
+    // realistic pharmacy backlog without streaming every prescription ever
+    // written, and uses the existing (clinicId, createdAt DESC) index.
+    const prescriptionWindowStart = new Date(dayStart);
 
-    const unsubscribeBillings = onSnapshot(
-      qBilling,
-      (snapshot) => {
-        const records: any[] = [];
-
-        snapshot.forEach((docSnap) => {
-          records.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        setBillings(records);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Live billings subscription error:", err);
-        setLoading(false);
-        addToast({
-          title: "Live Updates Interrupted",
-          description:
-            "Lost connection to live billing data — invoice status shown may be stale. Please refresh.",
-          color: "danger",
-        });
-      },
-    );
-
-    // Subscribe to Prescriptions in real-time
+    prescriptionWindowStart.setDate(prescriptionWindowStart.getDate() - 30);
     const prescriptionCollection = collection(db, "prescriptions");
     const qPrescription = query(
       prescriptionCollection,
       where("clinicId", "==", clinicId),
+      where("createdAt", ">=", Timestamp.fromDate(prescriptionWindowStart)),
+      where("createdAt", "<", Timestamp.fromDate(dayEnd)),
+      orderBy("createdAt", "desc"),
     );
 
     const unsubscribePrescriptions = onSnapshot(
@@ -1283,12 +1289,86 @@ export default function FrontOfficeDesk() {
 
     return () => {
       unsubscribeAppts?.();
-      unsubscribeBillings?.();
       unsubscribePrescriptions?.();
       unsubscribeApptTypes?.();
       unsubscribeBillingSettings?.();
     };
   }, [clinicId, branchId, selectedDate]);
+
+  // Live Sync Invoices — exactly the ones today's visits point at. The desk
+  // only ever reads `billings` as a lookup by appt.billingId, so there is no
+  // reason to hold the clinic's whole invoice history in memory (or to
+  // re-render the board every time any historical invoice is touched).
+  // documentId()-in alongside the clinicId equality needs no composite index
+  // and keeps the query provably clinic-scoped for the read rule.
+  const billingIdsKey = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          appointments
+            .map((appt) => appt.billingId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      )
+        .sort()
+        .join("|"),
+    [appointments],
+  );
+
+  useEffect(() => {
+    if (!clinicId) return;
+    const ids = billingIdsKey ? billingIdsKey.split("|") : [];
+
+    if (ids.length === 0) {
+      setBillings([]);
+      setLoading(false);
+
+      return;
+    }
+
+    // Firestore caps an `in` filter at 30 values.
+    const chunks: string[][] = [];
+
+    for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+
+    const byChunk = new Map<number, any[]>();
+    let delivered = 0;
+
+    const unsubscribes = chunks.map((chunk, index) =>
+      onSnapshot(
+        query(
+          collection(db, "appointmentBilling"),
+          where("clinicId", "==", clinicId),
+          where(documentId(), "in", chunk),
+        ),
+        (snapshot) => {
+          const records: any[] = [];
+
+          snapshot.forEach((docSnap) => {
+            records.push({ id: docSnap.id, ...docSnap.data() });
+          });
+          if (!byChunk.has(index)) delivered += 1;
+          byChunk.set(index, records);
+          setBillings(Array.from(byChunk.values()).flat());
+          if (delivered >= chunks.length) setLoading(false);
+        },
+        (err) => {
+          console.error("Live billings subscription error:", err);
+          setLoading(false);
+          addToast({
+            title: "Live Updates Interrupted",
+            description:
+              "Lost connection to live billing data — invoice status shown may be stale. Please refresh.",
+            color: "danger",
+          });
+        },
+      ),
+    );
+
+    return () => {
+      unsubscribes.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [clinicId, billingIdsKey]);
 
   // The name of whoever is logged in right now, for attribution written
   // into permanent records — package-session consumption logs, procedure

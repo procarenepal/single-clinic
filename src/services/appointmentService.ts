@@ -1056,6 +1056,14 @@ export const appointmentService = {
     _clinicId: string | undefined,
     onData: AppointmentSnapshotHandler,
     onError?: AppointmentErrorHandler,
+    /**
+     * Bound the subscription to appointments dated within [start, end).
+     * Without it every appointment the clinic has ever created streams to
+     * the caller and is re-delivered on any write to any of them — fine for
+     * a short-lived list, ruinous for a desk left open all day. The query
+     * uses the existing (clinicId, appointmentDate DESC) composite index.
+     */
+    range?: { start: Date; end: Date },
   ) {
     // "standalone" is a deliberate sentinel for an intentionally unfiltered
     // subscription. Any other falsy value (undefined/"") is not — building an
@@ -1077,7 +1085,17 @@ export const appointmentService = {
     if (_clinicId !== "standalone") {
       constraints.push(where("clinicId", "==", _clinicId));
     }
-    // Removed orderBy to avoid composite index requirement
+    if (range) {
+      constraints.push(
+        where("appointmentDate", ">=", Timestamp.fromDate(range.start)),
+        where("appointmentDate", "<", Timestamp.fromDate(range.end)),
+        // A range filter needs an index that includes the field anyway; the
+        // one this clinic already ships is (clinicId, appointmentDate DESC),
+        // so order the same way to use it rather than demand a second one.
+        orderBy("appointmentDate", "desc"),
+      );
+    }
+    // Unbounded callers keep the index-free query; they sort in memory below.
     const q = query(appointmentsCollection, ...constraints);
 
     return onSnapshot(
