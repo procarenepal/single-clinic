@@ -120,8 +120,6 @@ import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import {
   previewLineCharge,
   refusalMessage,
-  resolveTypePrice,
-  splitAmount,
   typePerformerKind,
   type ChargeClinician,
 } from "@/services/core/visitChargeCore";
@@ -4735,16 +4733,39 @@ export default function FrontOfficeDesk() {
             refusals.push(`No clinician is assigned to "${type.name}".`);
             continue;
           }
-          // Price once, then share it; the shares sum to the catalogue price.
-          const priced = resolveTypePrice(type, performers[0]);
+          // The patient is billed once, at the full catalogue price, on
+          // the FIRST performer's line. Every OTHER performer assigned to
+          // the same item earns their own commission on that same full
+          // price instead — not a divided share of it, which under-paid
+          // every clinician the moment more than one was assigned to the
+          // same procedure (commission is the clinic's own cost of
+          // paying out, separate from what the patient owes). Mirrors
+          // appendBookedLines' identical fix for the check-in path; see
+          // asCommissionOnlyLine.
+          const primaryResult = await ensureVisitLine({
+            appointment: { id: apptToFinalise.id },
+            type,
+            clinician: performers[0],
+            origin: "procedure",
+            ctx,
+            recommendedBy: item.recommendedBy || undefined,
+          });
 
-          if (priced.ok === false) {
-            refusals.push(refusalMessage(priced));
+          if (primaryResult.ok === false) {
+            refusals.push(refusalMessage(primaryResult));
             continue;
           }
-          const shares = splitAmount(priced.price, performers.length);
+          settledTypeIds.add(type.id);
+          if (primaryResult.added) procedureTotal += primaryResult.line.amount;
+          if (
+            !firstAssignedExpert &&
+            chosen.length > 0 &&
+            performers[0].kind === "expert"
+          ) {
+            firstAssignedExpert = performers[0].id;
+          }
 
-          for (let i = 0; i < performers.length; i++) {
+          for (let i = 1; i < performers.length; i++) {
             const result = await ensureVisitLine({
               appointment: { id: apptToFinalise.id },
               type,
@@ -4752,15 +4773,13 @@ export default function FrontOfficeDesk() {
               origin: "procedure",
               ctx,
               recommendedBy: item.recommendedBy || undefined,
-              ...(performers.length > 1 ? { price: shares[i] } : {}),
+              commissionOnlyBase: primaryResult.line.amount,
             });
 
             if (result.ok === false) {
               refusals.push(refusalMessage(result));
               continue;
             }
-            settledTypeIds.add(type.id);
-            if (result.added) procedureTotal += result.line.amount;
             if (
               !firstAssignedExpert &&
               chosen.length > 0 &&
@@ -6599,14 +6618,14 @@ export default function FrontOfficeDesk() {
                             </div>
                             {(itemExperts[item.id]?.length || 0) > 1 && (
                               <p className="text-[9.5px] text-primary text-left sm:text-right">
-                                Split {itemExperts[item.id].length}-way: NPR{" "}
-                                {splitAmount(
+                                Billed once at NPR{" "}
+                                {(
                                   appointmentTypes.find((t) => t.id === item.id)
-                                    ?.price ?? 0,
-                                  itemExperts[item.id].length,
-                                )
-                                  .map((n) => n.toLocaleString())
-                                  .join(" / ")}
+                                    ?.price ?? 0
+                                ).toLocaleString()}
+                                ; each of the {itemExperts[item.id].length}{" "}
+                                selected earns their own commission on that
+                                full amount.
                               </p>
                             )}
                           </div>
