@@ -18,6 +18,7 @@ import {
   IoPulseOutline,
 } from "react-icons/io5";
 import {
+  arrayUnion,
   collection,
   query,
   where,
@@ -32,6 +33,11 @@ import {
 import { TriageModal } from "./TriageModal";
 import { RoutingModal, type RoutingFeeLine } from "./RoutingModal";
 import { CheckInSheet } from "./CheckInSheet";
+import {
+  SettleSheet,
+  type SettleSheetLine,
+  type SettleSheetResult,
+} from "./SettleSheet";
 import { ProcedureModal } from "./ProcedureModal";
 import {
   QuickIntakeModal,
@@ -62,7 +68,13 @@ import { appointmentBillingService } from "@/services/appointmentBillingService"
 import { packageService } from "@/services/packageService";
 import { walletService } from "@/services/walletService";
 import { auditLogService } from "@/services/auditLogService";
-import { splitDepositApplication } from "@/services/core/visitSettleCore";
+import {
+  buildSettlePlan,
+  discountHistoryEntry,
+  splitDepositApplication,
+  type SettlePlan,
+} from "@/services/core/visitSettleCore";
+import { canDoFrontOfficeAction } from "@/services/core/frontOfficePermissionCore";
 import {
   getVisitPaymentGate,
   mergeVisitReferrals,
@@ -769,6 +781,30 @@ export default function FrontOfficeDesk() {
     performerName?: string;
   } | null>(null);
   const [checkInSaving, setCheckInSaving] = useState(false);
+
+  // The settle sheet (Stage 4, behind frontOffice.settleV2): file, pay and
+  // close a visit in one confirm, with a real discount editor instead of
+  // the "apply a discount at checkout instead" dead end every other screen
+  // used to point to with nothing actually there. Recomputed live from
+  // buildSettlePlan as the discount/standing-credit/capture change.
+  const [settleSheet, setSettleSheet] = useState<{
+    appt: Appointment;
+    patientName: string;
+    regNumber?: string;
+    lines: SettleSheetLine[];
+    plan: SettlePlan;
+    discountType: "flat" | "percent";
+    discountValue: number;
+    initialDiscount: { type: "flat" | "percent"; value: number } | null;
+    standingCreditAvailable: number;
+    applyStandingCredit: boolean;
+    capture: PaymentCaptureValue;
+    walletBalance: number;
+    depositRows: Array<{ id: string; amount: number; paymentMethod?: string | null }>;
+    error: string | null;
+    result: SettleSheetResult | null;
+  } | null>(null);
+  const [settleSaving, setSettleSaving] = useState(false);
 
   // Procedure log modal state
   const [isProcedureModalOpen, setIsProcedureModalOpen] = useState(false);
@@ -5001,14 +5037,566 @@ export default function FrontOfficeDesk() {
     }
   };
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  type SettleRefusal =
+    | { ok: false; kind: "already-billed" }
+    | { ok: false; kind: "billed-elsewhere"; primaryBillingId?: string }
+    | { ok: false; kind: "not-priceable"; reason: string }
+    | { ok: false; kind: "refused"; reason: string };
+
+  /**
+   * Everything Settle needs to know before it can write anything: the
+   * visit's live pending state, who's on it, and whether it can be billed
+   * at all. Shared by the V1 one-click path and the V2 sheet — the sheet
+   * calls this once to build its preview, and executeSettle calls it AGAIN
+   * at confirm time so the actual write is never based on a stale read
+   * (the same discipline this visit's deposit/wallet code already follows).
+   */
+  const resolveSettleContext = async (
+    appt: Appointment,
+  ): Promise<
+    | SettleRefusal
+    | {
+        ok: true;
+        liveVisit: Appointment | null;
+        existingPendingReferrals: any[];
+        depositedAmount: number;
+        depositFromCredit: number;
+        billingItems: any[];
+        clinicianId: string;
+        isExpert: boolean;
+        docInfo: any;
+        pat: any;
+      }
+  > => {
+    // Read the visit fresh: a deposit may have been collected or retried,
+    // or a line appended (a mid-visit procedure, a booked consultation
+    // fee), from another desk or the expert's screen after this screen
+    // loaded. Settling from a stale local snapshot either lost such a
+    // collection outright or filed an invoice missing a line that was
+    // already delivered and never billed.
+    const liveVisit = await appointmentService.getAppointmentById(appt.id);
+    const existingPendingItems: any[] =
+      (liveVisit as any)?.pendingVisitItems ??
+      (appt as any).pendingVisitItems ??
+      [];
+    const existingPendingReferrals: any[] =
+      (liveVisit as any)?.pendingVisitReferrals ??
+      (appt as any).pendingVisitReferrals ??
+      [];
+    const depositedAmount =
+      liveVisit?.depositedAmount ?? ((appt as any).depositedAmount || 0);
+    const depositFromCredit = Math.min(
+      depositedAmount,
+      liveVisit?.depositFromCredit ?? ((appt as any).depositFromCredit || 0),
+    );
+
+    const isExpert =
+      appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
+    const clinicianId = isExpert
+      ? appt.assignedExpertId
+      : appt.doctorId || "unassigned";
+
+    let docInfo = doctors.find((d) => d.id === clinicianId);
+
+    if (!docInfo && isExpert) {
+      docInfo = experts.find((e) => e.id === clinicianId) as any;
+    }
+
+    if (!docInfo && clinicianId && clinicianId !== "unassigned") {
+      try {
+        const fetchedDoc = await doctorService.getDoctorById(clinicianId);
+
+        if (fetchedDoc) {
+          docInfo = fetchedDoc;
+        } else {
+          const dbExp = await expertService.getExpertById(clinicianId);
+
+          if (dbExp) docInfo = dbExp as any;
+        }
+      } catch (err) {
+        console.error("Error loading doctor/expert details dynamically:", err);
+      }
+    }
+
+    let pat = patients.find((p) => p.id === appt.patientId);
+
+    if (!pat && appt.patientId) {
+      try {
+        pat = (await patientService.getPatientById(appt.patientId)) || undefined;
+      } catch (err) {
+        console.error("Error loading patient details dynamically:", err);
+      }
+    }
+
+    // An appointment that already carries a filed invoice must never reach
+    // the fabrication fallback below: with pendingVisitItems now empty
+    // (cleared at checkout), it would invent a fresh catalogue-price line
+    // item and file a SECOND IRD invoice for a visit that was already
+    // billed. Two ways in: clicking Settle twice, and the sibling
+    // appointments created for extra clinicians in Quick Intake, whose
+    // charges all live on the primary appointment and which therefore
+    // legitimately have no pending items of their own.
+    if (existingPendingItems.length === 0 && appt.billingId) {
+      return { ok: false, kind: "already-billed" };
+    }
+
+    const billedElsewhereOn = (appt as any).billedOnAppointmentId;
+
+    if (existingPendingItems.length === 0 && billedElsewhereOn) {
+      const primary = appointments.find((a) => a.id === billedElsewhereOn);
+
+      return {
+        ok: false,
+        kind: "billed-elsewhere",
+        primaryBillingId: primary?.billingId,
+      };
+    }
+
+    // Nothing accumulated yet (a visit with no check-in fee and no
+    // mid-visit procedure): the booked service goes on the visit through
+    // the charge core, or Settle refuses. Nothing is priced by guess — the
+    // NPR 500 "General Consultation" this used to file is gone.
+    let billingItems = existingPendingItems;
+
+    if (billingItems.length === 0) {
+      const apptType = appointmentTypes.find(
+        (t) => t.id === appt.appointmentTypeId,
+      );
+      const clinician = await findClinician(
+        clinicianId,
+        isExpert ? "expert" : "doctor",
+        { doctors, experts },
+      );
+
+      if (!apptType || !clinician) {
+        return {
+          ok: false,
+          kind: "not-priceable",
+          reason: !apptType
+            ? "This visit's service is not in the catalogue, so there is nothing to invoice."
+            : "No clinician is on this visit, so its service cannot be priced.",
+        };
+      }
+      const result = await ensureVisitLine({
+        appointment: { id: appt.id },
+        type: apptType,
+        clinician,
+        origin: "booked",
+        ctx: lineContext(),
+      });
+
+      if (result.ok === false) {
+        return { ok: false, kind: "refused", reason: refusalMessage(result) };
+      }
+      billingItems = [result.line];
+    }
+
+    return {
+      ok: true,
+      liveVisit,
+      existingPendingReferrals,
+      depositedAmount,
+      depositFromCredit,
+      billingItems,
+      clinicianId,
+      isExpert,
+      docInfo,
+      pat,
+    };
+  };
+
+  /**
+   * Checkout — the one point in the visit where a real, IRD-filed invoice
+   * is created. pendingVisitItems/pendingVisitReferrals carry everything
+   * accumulated since check-in (consultation fee, any mid-visit
+   * procedures); nothing before this was ever filed, so IRD's
+   * immutable-once-filed rule is never in tension with the front-desk
+   * workflow. See "One Invoice Per Visit: Deposit at Check-in, Bill at
+   * Checkout".
+   *
+   * Shared by both Settle paths: the V1 one-click button passes the
+   * legacy pendingVisitDiscount*, no residual capture (exactly today's
+   * behaviour — any amount still due after the deposit stays uncollected,
+   * for a later "Collect" action) and no standing credit. The V2 settle
+   * sheet (Stage 4, behind frontOffice.settleV2) passes whatever the
+   * permitted user entered, a real payment capture for the residual, and
+   * any standing credit they chose to apply.
+   */
+  const executeSettle = async (
+    appt: Appointment,
+    opts: {
+      discountType: "flat" | "percent";
+      discountValue: number;
+      /** For the discount-history entry; null when there is nothing to compare against. */
+      previousDiscount: { type: "flat" | "percent"; value: number } | null;
+      /** Null to leave any due amount uncollected, matching V1. */
+      residualCapture: PaymentCaptureValue | null;
+      /** Wallet credit beyond this visit's own deposit, already capped by the caller (buildSettlePlan). */
+      standingCreditToApply?: number;
+    },
+  ): Promise<
+    SettleRefusal
+    | { ok: true; billingId: string; invoiceNumber: string; totalAmount: number }
+  > => {
+    if (!clinicId) {
+      return { ok: false, kind: "not-priceable", reason: "No clinic selected." };
+    }
+
+    const ctx = await resolveSettleContext(appt);
+
+    if (ctx.ok === false) return ctx;
+
+    const {
+      existingPendingReferrals,
+      depositedAmount,
+      depositFromCredit,
+      billingItems,
+      clinicianId,
+      isExpert,
+      docInfo,
+      pat,
+    } = ctx;
+
+    const settleTaxPercentage = billingSettings?.enableTax
+      ? billingSettings.defaultTaxPercentage || 0
+      : 0;
+    const settleTotals = appointmentBillingService.calculateInvoiceTotals(
+      billingItems,
+      opts.discountType,
+      opts.discountValue,
+      settleTaxPercentage,
+    );
+
+    // Resolve a fresh consultation-fee referral and merge it with whatever
+    // referral commissions already accumulated mid-visit
+    // (handleFinaliseProcedure) — discount-adjusted, pre-tax base, same as
+    // every other referral computation in this file.
+    const settleReferralBase =
+      settleTotals.taxableAmount + settleTotals.exemptAmount;
+    const { processedReferrals, refPartnerId, refCommissionAmt } =
+      await resolvePatientReferrals(pat, settleReferralBase);
+    // Summing on id+type collision paid one person twice for the same
+    // procedure: the mid-visit entry is computed on the procedure fee, the
+    // checkout entry on the whole invoice that already contains it. See
+    // mergeVisitReferrals for the policy and its tests.
+    const mergedReferrals = mergeVisitReferrals(
+      existingPendingReferrals as any,
+      processedReferrals as any,
+    );
+
+    const billingData = {
+      invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
+      clinicId: clinicId,
+      branchId: branchId ?? clinicId,
+      patientId: appt.patientId,
+      patientName: pat?.name || "Unknown Patient",
+      patientPanVat: pat?.patientPanVat || undefined,
+      appointmentId: appt.id,
+      doctorId: clinicianId,
+      doctorName: docInfo
+        ? docInfo.name.startsWith("Dr.") || isExpert
+          ? docInfo.name
+          : `Dr. ${docInfo.name}`
+        : isExpert
+          ? "Expert Cabin"
+          : "Unknown Doctor",
+      doctorType: (docInfo?.doctorType || "regular") as "regular" | "visitor",
+      referralPartnerId: refPartnerId,
+      referralCommissionAmount:
+        refCommissionAmt && refCommissionAmt > 0 ? refCommissionAmt : undefined,
+      referrals: mergedReferrals,
+      // One visit files at most one invoice, so the appointment id is this
+      // filing's true identity. Without it the backend's idempotency key
+      // is content + a 10-minute time bucket, which both (a) lets two
+      // genuinely distinct same-priced visits for one patient collapse
+      // into a single invoice, and (b) fails to make a retry safe — a
+      // checkout whose Firestore follow-up failed, or a second staff
+      // member clicking Settle at the same moment, would file a duplicate
+      // IRD invoice. Keyed this way, a repeat attempt returns the
+      // already-filed invoice instead.
+      idempotencyDiscriminator: `visit:${appt.id}`,
+      invoiceDate: new Date(),
+      items: billingItems,
+      subtotal: settleTotals.subtotal,
+      itemDiscountAmount: settleTotals.itemDiscountAmount,
+      mainDiscountAmount: settleTotals.mainDiscountAmount,
+      discountType: opts.discountType,
+      discountValue: opts.discountValue,
+      discountAmount: settleTotals.totalDiscount,
+      taxPercentage: settleTaxPercentage,
+      taxAmount: settleTotals.taxAmount,
+      taxableAmount: settleTotals.taxableAmount,
+      exemptAmount: settleTotals.exemptAmount,
+      totalAmount: settleTotals.totalAmount,
+      status: "draft" as const,
+      paymentStatus: "unpaid" as const,
+      paidAmount: 0,
+      balanceAmount: settleTotals.totalAmount,
+      createdBy: currentUser?.uid || "system",
+    };
+
+    const { id: newBillingId, invoiceNumber } =
+      await appointmentBillingService.createBilling(billingData);
+
+    const historyEntry = discountHistoryEntry(
+      opts.previousDiscount,
+      opts.discountValue > 0
+        ? { type: opts.discountType, value: opts.discountValue }
+        : null,
+      currentUser?.uid || "system",
+      new Date(),
+    );
+
+    // Link the invoice to the appointment BEFORE recording any payment
+    // against it. appointmentBillingService.recordPayment looks up the
+    // appointment to update by matching its billingId/consultationBillingId
+    // against the invoice id; if nothing points to the new invoice yet, it
+    // falls back to a broad "any completed appointment for this patient"
+    // query and stamps billingStatus/paymentStatus onto EVERY one of them
+    // — silently corrupting unrelated past visits' payment status. Setting
+    // billingId first makes that lookup resolve to exactly this
+    // appointment.
+    await appointmentService.updateAppointment(appt.id, {
+      billingId: newBillingId,
+      pendingVisitItems: [],
+      pendingVisitReferrals: [],
+      pendingVisitDiscountType: null,
+      pendingVisitDiscountValue: 0,
+      ...(historyEntry
+        ? { pendingVisitDiscountHistory: arrayUnion(historyEntry) }
+        : {}),
+      // depositedAmount is NOT cleared here. It is released below, only
+      // for the money that actually lands on the invoice — zeroing it
+      // first meant a wallet spent since check-in left the invoice unpaid
+      // and the visit's only record of the deposit gone. Deliberately NOT
+      // setting checkoutCompleted here. Filing the invoice and closing the
+      // visit are two different facts, and conflating them let this path
+      // mark a visit done without the triage-vitals and
+      // outstanding-balance checks that canCompleteCheckout enforces — so
+      // a patient could drop off the board still owing money. The visit
+      // now leaves "billing" because deriveVisitStage can see a live,
+      // settled invoice, and only the checkout path records an explicit
+      // closure.
+      updatedAt: new Date(),
+    } as any);
+
+    // Apply what the visit already holds, in the order the money sits: the
+    // share taken OUT of the wallet as standing credit at check-in is
+    // applied without deducting the wallet again (it used to be deducted a
+    // second time here, so the patient paid twice for it); then the
+    // cash/card share still held in the wallet is deducted. Any shortfall
+    // — a wallet spent at the pharmacy since check-in — stays on the
+    // invoice as due, with the deposit record intact for whatever did not
+    // land. Any excess stays as wallet credit, and excess CREDIT goes back
+    // to the wallet it was taken from.
+    const { creditPart, walletPart, creditExcess } = splitDepositApplication({
+      depositedAmount,
+      depositFromCredit,
+      total: settleTotals.totalAmount,
+    });
+    let creditApplied = 0;
+    let walletApplied = 0;
+    const depositNotApplied = (payErr: unknown) => {
+      console.error("Error applying visit deposit at checkout:", payErr);
+      addToast({
+        title: "Deposit Not Applied",
+        description:
+          "The invoice was created, but part of the collected deposit could not be applied — it stays recorded on the visit; apply it from the invoice page.",
+        color: "warning",
+      });
+    };
+
+    if (creditPart > 0) {
+      try {
+        await appointmentBillingService.recordPayment(
+          newBillingId,
+          creditPart,
+          "wallet",
+          undefined,
+          "Visit deposit (wallet credit taken at check-in) applied at checkout",
+          0,
+          { walletAlreadyDeducted: true },
+        );
+        creditApplied = creditPart;
+      } catch (payErr) {
+        depositNotApplied(payErr);
+      }
+    }
+
+    if (walletPart > 0) {
+      try {
+        await appointmentBillingService.recordPayment(
+          newBillingId,
+          walletPart,
+          "wallet",
+          undefined,
+          "Visit deposit applied at checkout",
+        );
+        walletApplied = walletPart;
+      } catch (payErr) {
+        depositNotApplied(payErr);
+      }
+    }
+
+    const depositToApply = creditApplied + walletApplied;
+    // Release only what landed; the held cash share beyond the invoice
+    // total simply stays as wallet credit once the cash share applied.
+    const heldExcess =
+      walletApplied === walletPart
+        ? Math.max(0, depositedAmount - depositFromCredit - walletApplied)
+        : 0;
+
+    if (depositToApply + heldExcess > 0) {
+      // The amount and its credit share leave the visit in one write.
+      await appointmentService
+        .releaseVisitDeposit(appt.id, depositToApply + heldExcess, creditApplied)
+        .catch((releaseErr) =>
+          console.error("Failed to release the applied deposit:", releaseErr),
+        );
+    }
+    if (creditExcess > 0) {
+      try {
+        await walletService.refundFunds(
+          appt.patientId,
+          clinicId,
+          creditExcess,
+          appt.id,
+          "Unused visit credit returned at checkout",
+          currentUser?.uid || "system",
+        );
+        await appointmentService.releaseVisitDeposit(
+          appt.id,
+          creditExcess,
+          creditExcess,
+        );
+      } catch (refundErr) {
+        console.error("Error returning unused visit credit:", refundErr);
+        addToast({
+          title: "Credit Not Returned",
+          description: `NPR ${creditExcess.toFixed(2)} of wallet credit taken at check-in was not needed but could not be returned automatically — add it back from the patient's wallet.`,
+          color: "warning",
+        });
+      }
+    }
+
+    // Standing wallet credit beyond this visit's own deposit — only ever
+    // offered (and so only ever non-zero) from the V2 settle sheet, when
+    // the patient has usable balance and the user chose to apply it.
+    let standingCreditApplied = 0;
+    const standingCreditToApply = Math.max(0, opts.standingCreditToApply || 0);
+
+    if (standingCreditToApply > 0) {
+      try {
+        await appointmentBillingService.recordPayment(
+          newBillingId,
+          standingCreditToApply,
+          "wallet",
+          undefined,
+          "Standing wallet credit applied at Settle",
+        );
+        standingCreditApplied = standingCreditToApply;
+      } catch (payErr) {
+        console.error("Error applying standing credit at settle:", payErr);
+        addToast({
+          title: "Standing Credit Not Applied",
+          description:
+            "The invoice was created, but the standing wallet credit could not be applied — collect the balance from the invoice page.",
+          color: "warning",
+        });
+      }
+    }
+
+    // The residual due now — only ever collected when the caller supplied
+    // a payment capture (the V2 sheet; V1 leaves it to a later "Collect"
+    // action, exactly as today).
+    const dueAfterDepositAndCredit = round2(
+      Math.max(
+        0,
+        settleTotals.totalAmount - depositToApply - standingCreditApplied,
+      ),
+    );
+    let residualCollected = 0;
+
+    if (opts.residualCapture && dueAfterDepositAndCredit > 0) {
+      try {
+        await appointmentBillingService.recordPayment(
+          newBillingId,
+          dueAfterDepositAndCredit,
+          opts.residualCapture.method,
+          opts.residualCapture.reference || undefined,
+          "Collected at Settle",
+        );
+        residualCollected = dueAfterDepositAndCredit;
+      } catch (payErr) {
+        // Unlike the deposit/credit above (already-collected money being
+        // applied), this is new money the sheet just told the user it was
+        // taking — a warning toast that still reports success would be
+        // actively misleading. Surface it as a failure so the sheet stays
+        // open and the user can retry.
+        console.error("Error collecting the residual at settle:", payErr);
+        throw new Error(
+          "The invoice was created, but the payment could not be recorded. Please retry.",
+        );
+      }
+    }
+
+    const totalApplied = depositToApply + standingCreditApplied + residualCollected;
+
+    if (totalApplied === 0 && settleTotals.totalAmount <= 0) {
+      // A zero-total visit — a package session, whose line is
+      // commission-only (price 0, already paid for at package purchase).
+      // Nothing is owed, but commission and the patient follow-up are both
+      // generated by recordPayment's unpaid -> paid transition, which a
+      // zero-total invoice would otherwise never reach: the performing
+      // clinician silently earned nothing and no recall was created.
+      // Record an explicit zero payment to drive that transition, exactly
+      // as the pre-redesign code did.
+      try {
+        await appointmentBillingService.recordPayment(
+          newBillingId,
+          0,
+          "package",
+          undefined,
+          "Package session — covered by pre-paid package, no additional charge.",
+        );
+      } catch (payErr) {
+        console.error("Error closing out zero-total visit invoice:", payErr);
+        addToast({
+          title: "Commission Not Generated",
+          description:
+            "The visit was invoiced, but its commission could not be recorded — check Commissions for this clinician.",
+          color: "warning",
+        });
+      }
+    } else if (totalApplied === 0) {
+      // Nothing collected yet on a chargeable invoice — recordPayment
+      // (which would otherwise set these) never runs, so set them
+      // directly.
+      await appointmentService.updateAppointment(appt.id, {
+        billingStatus: "unpaid",
+        paymentStatus: "unpaid",
+        updatedAt: new Date(),
+      } as any);
+    }
+
+    return {
+      ok: true,
+      billingId: newBillingId,
+      invoiceNumber,
+      totalAmount: settleTotals.totalAmount,
+    };
+  };
+
   const handleSettleBilling = async (appt: Appointment) =>
     runGuarded(`settle-billing-${appt.id}`, async () => {
-      // Guard: never let this function's fallback auto-create a plain
+      // Guard: never let executeSettle's fallback auto-create a plain
       // consultation-fee invoice while a procedure is pending — that
-      // fallback (below) only knows about the appointment's originally
-      // booked appointmentTypeId, not recommendedProcedure.items, so it
-      // would silently re-bill a generic consultation fee and discard the
-      // real procedures. Defer to the same Finalise Procedure flow the
+      // fallback only knows about the appointment's originally booked
+      // appointmentTypeId, not recommendedProcedure.items, so it would
+      // silently re-bill a generic consultation fee and discard the real
+      // procedures. Defer to the same Finalise Procedure flow the
       // "Finalise Recommended Procedure" queue button uses instead.
       const rec = (appt as any).recommendedProcedure;
       const hasPendingProcedureUpfront = !!rec?.fee && rec.fee > 0;
@@ -5024,442 +5612,62 @@ export default function FrontOfficeDesk() {
         return;
       }
 
-      // Checkout — the one point in the visit where a real, IRD-filed
-      // invoice is created. pendingVisitItems/pendingVisitReferrals carry
-      // everything accumulated since check-in (consultation fee, any
-      // mid-visit procedures); nothing before this was ever filed, so
-      // IRD's immutable-once-filed rule is never in tension with the
-      // front-desk workflow. See "One Invoice Per Visit: Deposit at
-      // Check-in, Bill at Checkout".
       try {
-        if (!clinicId) return;
-
-        // Read the visit fresh: a deposit may have been collected or
-        // retried, or a line appended (a mid-visit procedure, a booked
-        // consultation fee), from another desk or the expert's screen
-        // after this screen loaded. Settling from a stale local snapshot
-        // either lost such a collection outright or filed an invoice
-        // missing a line that was already delivered and never billed.
-        const liveVisit = await appointmentService.getAppointmentById(appt.id);
-        const existingPendingItems: any[] =
-          (liveVisit as any)?.pendingVisitItems ??
-          (appt as any).pendingVisitItems ??
-          [];
-        const existingPendingReferrals: any[] =
-          (liveVisit as any)?.pendingVisitReferrals ??
-          (appt as any).pendingVisitReferrals ??
-          [];
-        const depositedAmount =
-          liveVisit?.depositedAmount ?? ((appt as any).depositedAmount || 0);
-        const depositFromCredit = Math.min(
-          depositedAmount,
-          liveVisit?.depositFromCredit ??
-            ((appt as any).depositFromCredit || 0),
-        );
         // Whatever discount staff entered during the visit (check-in or
-        // Finalise Procedure) — checkout has no discount UI of its own, so
-        // this is the only place that decision can still take effect.
-        const {
-          discountType: settleDiscountType,
-          discountValue: settleDiscountValue,
-        } = resolveVisitDiscount(appt as any);
+        // Finalise Procedure) — this one-click path has no discount UI of
+        // its own, so this is the only place that decision can still take
+        // effect. The settle sheet (frontOffice.settleV2) replaces this
+        // entire path with a real discount editor.
+        const { discountType, discountValue } = resolveVisitDiscount(
+          appt as any,
+        );
+        const result = await executeSettle(appt, {
+          discountType,
+          discountValue,
+          previousDiscount: { type: discountType, value: discountValue },
+          residualCapture: null,
+          standingCreditToApply: 0,
+        });
 
-        const isExpert =
-          appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
-        const clinicianId = isExpert
-          ? appt.assignedExpertId
-          : appt.doctorId || "unassigned";
-
-        let docInfo = doctors.find((d) => d.id === clinicianId);
-
-        if (!docInfo && isExpert) {
-          docInfo = experts.find((e) => e.id === clinicianId) as any;
-        }
-
-        if (!docInfo && clinicianId && clinicianId !== "unassigned") {
-          try {
-            const fetchedDoc = await doctorService.getDoctorById(clinicianId);
-
-            if (fetchedDoc) {
-              docInfo = fetchedDoc;
-            } else {
-              const dbExp = await expertService.getExpertById(clinicianId);
-
-              if (dbExp) docInfo = dbExp as any;
-            }
-          } catch (err) {
-            console.error(
-              "Error loading doctor/expert details dynamically:",
-              err,
-            );
-          }
-        }
-
-        let pat = patients.find((p) => p.id === appt.patientId);
-
-        if (!pat && appt.patientId) {
-          try {
-            pat =
-              (await patientService.getPatientById(appt.patientId)) ||
-              undefined;
-          } catch (err) {
-            console.error("Error loading patient details dynamically:", err);
-          }
-        }
-
-        // An appointment that already carries a filed invoice must never
-        // reach the fabrication fallback below: with pendingVisitItems now
-        // empty (cleared at checkout), it would invent a fresh
-        // catalogue-price line item and file a SECOND IRD invoice for a
-        // visit that was already billed. Two ways in: clicking "Settle
-        // Billing Invoice" twice, and the sibling appointments created for
-        // extra clinicians in Quick Intake, whose charges all live on the
-        // primary appointment and which therefore legitimately have no
-        // pending items of their own.
-        if (existingPendingItems.length === 0 && appt.billingId) {
-          addToast({
-            title: "Already Billed",
-            description:
-              "This visit already has an invoice. Open it from Appointment Billing to collect any remaining balance.",
-            color: "warning",
-          });
-          navigate(
-            `/dashboard/appointments-billing/${appt.billingId}?from=front-office&tab=${activeTab}`,
-          );
-
-          return;
-        }
-
-        const billedElsewhereOn = (appt as any).billedOnAppointmentId;
-
-        if (existingPendingItems.length === 0 && billedElsewhereOn) {
-          const primary = appointments.find((a) => a.id === billedElsewhereOn);
-
-          addToast({
-            title: "Billed on the Main Visit",
-            description:
-              "This clinician's fee is already included on this patient's main visit invoice — settle it there instead.",
-            color: "warning",
-          });
-
-          if (primary?.billingId) {
-            navigate(
-              `/dashboard/appointments-billing/${primary.billingId}?from=front-office&tab=${activeTab}`,
-            );
-          }
-
-          return;
-        }
-
-        // Nothing accumulated yet (a visit with no check-in fee and no
-        // mid-visit procedure): the booked service goes on the visit through
-        // the charge core, or Settle refuses. Nothing is priced by guess —
-        // the NPR 500 "General Consultation" this used to file is gone.
-        let billingItems = existingPendingItems;
-
-        if (billingItems.length === 0) {
-          const apptType = appointmentTypes.find(
-            (t) => t.id === appt.appointmentTypeId,
-          );
-          const clinician = await findClinician(
-            clinicianId,
-            isExpert ? "expert" : "doctor",
-            { doctors, experts },
-          );
-
-          if (!apptType || !clinician) {
+        if (result.ok === false) {
+          if (result.kind === "already-billed") {
             addToast({
-              title: "Nothing to Bill",
-              description: !apptType
-                ? "This visit's service is not in the catalogue, so there is nothing to invoice."
-                : "No clinician is on this visit, so its service cannot be priced.",
+              title: "Already Billed",
+              description:
+                "This visit already has an invoice. Open it from Appointment Billing to collect any remaining balance.",
               color: "warning",
             });
-
-            return;
-          }
-          const result = await ensureVisitLine({
-            appointment: { id: appt.id },
-            type: apptType,
-            clinician,
-            origin: "booked",
-            ctx: lineContext(),
-          });
-
-          if (result.ok === false) {
+            navigate(
+              `/dashboard/appointments-billing/${appt.billingId}?from=front-office&tab=${activeTab}`,
+            );
+          } else if (result.kind === "billed-elsewhere") {
+            addToast({
+              title: "Billed on the Main Visit",
+              description:
+                "This clinician's fee is already included on this patient's main visit invoice — settle it there instead.",
+              color: "warning",
+            });
+            if (result.primaryBillingId) {
+              navigate(
+                `/dashboard/appointments-billing/${result.primaryBillingId}?from=front-office&tab=${activeTab}`,
+              );
+            }
+          } else if (result.kind === "not-priceable") {
+            addToast({
+              title: "Nothing to Bill",
+              description: result.reason,
+              color: "warning",
+            });
+          } else {
             addToast({
               title: "Cannot Settle",
-              description: refusalMessage(result),
+              description: result.reason,
               color: "danger",
               duration: 10000,
             });
-
-            return;
           }
-          billingItems = [result.line];
-        }
 
-        const settleTaxPercentage = billingSettings?.enableTax
-          ? billingSettings.defaultTaxPercentage || 0
-          : 0;
-        const settleTotals = appointmentBillingService.calculateInvoiceTotals(
-          billingItems,
-          settleDiscountType,
-          settleDiscountValue,
-          settleTaxPercentage,
-        );
-
-        // Resolve a fresh consultation-fee referral and merge it with
-        // whatever referral commissions already accumulated mid-visit
-        // (handleFinaliseProcedure) — discount-adjusted, pre-tax base, same
-        // as every other referral computation in this file.
-        const settleReferralBase =
-          settleTotals.taxableAmount + settleTotals.exemptAmount;
-        const { processedReferrals, refPartnerId, refCommissionAmt } =
-          await resolvePatientReferrals(pat, settleReferralBase);
-        // Summing on id+type collision paid one person twice for the same
-        // procedure: the mid-visit entry is computed on the procedure fee,
-        // the checkout entry on the whole invoice that already contains it.
-        // See mergeVisitReferrals for the policy and its tests.
-        const mergedReferrals = mergeVisitReferrals(
-          existingPendingReferrals as any,
-          processedReferrals as any,
-        );
-
-        const billingData = {
-          invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-          clinicId: clinicId,
-          branchId: branchId ?? clinicId,
-          patientId: appt.patientId,
-          patientName: pat?.name || "Unknown Patient",
-          patientPanVat: pat?.patientPanVat || undefined,
-          appointmentId: appt.id,
-          doctorId: clinicianId,
-          doctorName: docInfo
-            ? docInfo.name.startsWith("Dr.") || isExpert
-              ? docInfo.name
-              : `Dr. ${docInfo.name}`
-            : isExpert
-              ? "Expert Cabin"
-              : "Unknown Doctor",
-          doctorType: (docInfo?.doctorType || "regular") as
-            | "regular"
-            | "visitor",
-          referralPartnerId: refPartnerId,
-          referralCommissionAmount:
-            refCommissionAmt && refCommissionAmt > 0
-              ? refCommissionAmt
-              : undefined,
-          referrals: mergedReferrals,
-          // One visit files at most one invoice, so the appointment id is
-          // this filing's true identity. Without it the backend's
-          // idempotency key is content + a 10-minute time bucket, which
-          // both (a) lets two genuinely distinct same-priced visits for one
-          // patient collapse into a single invoice, and (b) fails to make a
-          // retry safe — a checkout whose Firestore follow-up failed, or a
-          // second staff member clicking Settle at the same moment, would
-          // file a duplicate IRD invoice. Keyed this way, a repeat attempt
-          // returns the already-filed invoice instead.
-          idempotencyDiscriminator: `visit:${appt.id}`,
-          invoiceDate: new Date(),
-          items: billingItems,
-          subtotal: settleTotals.subtotal,
-          itemDiscountAmount: settleTotals.itemDiscountAmount,
-          mainDiscountAmount: settleTotals.mainDiscountAmount,
-          discountType: settleDiscountType,
-          discountValue: settleDiscountValue,
-          discountAmount: settleTotals.totalDiscount,
-          taxPercentage: settleTaxPercentage,
-          taxAmount: settleTotals.taxAmount,
-          taxableAmount: settleTotals.taxableAmount,
-          exemptAmount: settleTotals.exemptAmount,
-          totalAmount: settleTotals.totalAmount,
-          status: "draft" as const,
-          paymentStatus: "unpaid" as const,
-          paidAmount: 0,
-          balanceAmount: settleTotals.totalAmount,
-          createdBy: currentUser?.uid || "system",
-        };
-
-        const { id: newBillingId } =
-          await appointmentBillingService.createBilling(billingData);
-
-        // Link the invoice to the appointment BEFORE recording any payment
-        // against it. appointmentBillingService.recordPayment looks up the
-        // appointment to update by matching its billingId/consultationBillingId
-        // against the invoice id; if nothing points to the new invoice yet,
-        // it falls back to a broad "any completed appointment for this
-        // patient" query and stamps billingStatus/paymentStatus onto EVERY
-        // one of them — silently corrupting unrelated past visits' payment
-        // status. Setting billingId first makes that lookup resolve to
-        // exactly this appointment.
-        await appointmentService.updateAppointment(appt.id, {
-          billingId: newBillingId,
-          pendingVisitItems: [],
-          pendingVisitReferrals: [],
-          pendingVisitDiscountType: null,
-          pendingVisitDiscountValue: 0,
-          // depositedAmount is NOT cleared here. It is released below, only
-          // for the money that actually lands on the invoice — zeroing it
-          // first meant a wallet spent since check-in left the invoice
-          // unpaid and the visit's only record of the deposit gone.
-          // Deliberately NOT setting checkoutCompleted here. Filing the
-          // invoice and closing the visit are two different facts, and
-          // conflating them let this path mark a visit done without the
-          // triage-vitals and outstanding-balance checks that
-          // canCompleteCheckout enforces — so a patient could drop off the
-          // board still owing money. The visit now leaves "billing" because
-          // deriveVisitStage can see a live, settled invoice, and only the
-          // checkout path records an explicit closure.
-          updatedAt: new Date(),
-        } as any);
-
-        // Apply what the visit already holds, in the order the money sits:
-        // the share taken OUT of the wallet as standing credit at check-in
-        // is applied without deducting the wallet again (it used to be
-        // deducted a second time here, so the patient paid twice for it);
-        // then the cash/card share still held in the wallet is deducted.
-        // Any shortfall — a wallet spent at the pharmacy since check-in —
-        // stays on the invoice as due, with the deposit record intact for
-        // whatever did not land. Any excess stays as wallet credit, and
-        // excess CREDIT goes back to the wallet it was taken from.
-        const { creditPart, walletPart, creditExcess } =
-          splitDepositApplication({
-            depositedAmount,
-            depositFromCredit,
-            total: settleTotals.totalAmount,
-          });
-        let creditApplied = 0;
-        let walletApplied = 0;
-        const depositNotApplied = (payErr: unknown) => {
-          console.error("Error applying visit deposit at checkout:", payErr);
-          addToast({
-            title: "Deposit Not Applied",
-            description:
-              "The invoice was created, but part of the collected deposit could not be applied — it stays recorded on the visit; apply it from the invoice page.",
-            color: "warning",
-          });
-        };
-
-        if (creditPart > 0) {
-          try {
-            await appointmentBillingService.recordPayment(
-              newBillingId,
-              creditPart,
-              "wallet",
-              undefined,
-              "Visit deposit (wallet credit taken at check-in) applied at checkout",
-              0,
-              { walletAlreadyDeducted: true },
-            );
-            creditApplied = creditPart;
-          } catch (payErr) {
-            depositNotApplied(payErr);
-          }
-        }
-
-        if (walletPart > 0) {
-          try {
-            await appointmentBillingService.recordPayment(
-              newBillingId,
-              walletPart,
-              "wallet",
-              undefined,
-              "Visit deposit applied at checkout",
-            );
-            walletApplied = walletPart;
-          } catch (payErr) {
-            depositNotApplied(payErr);
-          }
-        }
-
-        const depositToApply = creditApplied + walletApplied;
-        // Release only what landed; the held cash share beyond the invoice
-        // total simply stays as wallet credit once the cash share applied.
-        const heldExcess =
-          walletApplied === walletPart
-            ? Math.max(
-                0,
-                depositedAmount - depositFromCredit - walletApplied,
-              )
-            : 0;
-
-        if (depositToApply + heldExcess > 0) {
-          // The amount and its credit share leave the visit in one write.
-          await appointmentService
-            .releaseVisitDeposit(
-              appt.id,
-              depositToApply + heldExcess,
-              creditApplied,
-            )
-            .catch((releaseErr) =>
-              console.error("Failed to release the applied deposit:", releaseErr),
-            );
-        }
-        if (creditExcess > 0) {
-          try {
-            await walletService.refundFunds(
-              appt.patientId,
-              clinicId,
-              creditExcess,
-              appt.id,
-              "Unused visit credit returned at checkout",
-              currentUser?.uid || "system",
-            );
-            await appointmentService.releaseVisitDeposit(
-              appt.id,
-              creditExcess,
-              creditExcess,
-            );
-          } catch (refundErr) {
-            console.error("Error returning unused visit credit:", refundErr);
-            addToast({
-              title: "Credit Not Returned",
-              description: `NPR ${creditExcess.toFixed(2)} of wallet credit taken at check-in was not needed but could not be returned automatically — add it back from the patient's wallet.`,
-              color: "warning",
-            });
-          }
-        }
-
-        if (depositToApply === 0 && settleTotals.totalAmount <= 0) {
-          // A zero-total visit — a package session, whose line is
-          // commission-only (price 0, already paid for at package
-          // purchase). Nothing is owed, but commission and the patient
-          // follow-up are both generated by recordPayment's
-          // unpaid -> paid transition, which a zero-total invoice would
-          // otherwise never reach: the performing clinician silently
-          // earned nothing and no recall was created. Record an explicit
-          // zero payment to drive that transition, exactly as the
-          // pre-redesign code did.
-          try {
-            await appointmentBillingService.recordPayment(
-              newBillingId,
-              0,
-              "package",
-              undefined,
-              "Package session — covered by pre-paid package, no additional charge.",
-            );
-          } catch (payErr) {
-            console.error(
-              "Error closing out zero-total visit invoice:",
-              payErr,
-            );
-            addToast({
-              title: "Commission Not Generated",
-              description:
-                "The visit was invoiced, but its commission could not be recorded — check Commissions for this clinician.",
-              color: "warning",
-            });
-          }
-        } else if (depositToApply === 0) {
-          // Nothing collected yet on a chargeable invoice — recordPayment
-          // (which would otherwise set these) never runs, so set them
-          // directly.
-          await appointmentService.updateAppointment(appt.id, {
-            billingStatus: "unpaid",
-            paymentStatus: "unpaid",
-            updatedAt: new Date(),
-          } as any);
+          return;
         }
 
         addToast({
@@ -5469,7 +5677,7 @@ export default function FrontOfficeDesk() {
         });
 
         navigate(
-          `/dashboard/appointments-billing/${newBillingId}?from=front-office&tab=${activeTab}`,
+          `/dashboard/appointments-billing/${result.billingId}?from=front-office&tab=${activeTab}`,
         );
       } catch (err: any) {
         // Previously a failure here could be logged and then still
@@ -5484,6 +5692,258 @@ export default function FrontOfficeDesk() {
         });
       }
     });
+
+  /** The same refusal → toast mapping handleSettleBilling uses, shared with the settle sheet's open path. */
+  const toastSettleRefusal = (appt: Appointment, result: SettleRefusal) => {
+    if (result.kind === "already-billed") {
+      addToast({
+        title: "Already Billed",
+        description:
+          "This visit already has an invoice. Open it from Appointment Billing to collect any remaining balance.",
+        color: "warning",
+      });
+      navigate(
+        `/dashboard/appointments-billing/${appt.billingId}?from=front-office&tab=${activeTab}`,
+      );
+    } else if (result.kind === "billed-elsewhere") {
+      addToast({
+        title: "Billed on the Main Visit",
+        description:
+          "This clinician's fee is already included on this patient's main visit invoice — settle it there instead.",
+        color: "warning",
+      });
+      if (result.primaryBillingId) {
+        navigate(
+          `/dashboard/appointments-billing/${result.primaryBillingId}?from=front-office&tab=${activeTab}`,
+        );
+      }
+    } else if (result.kind === "not-priceable") {
+      addToast({
+        title: "Nothing to Bill",
+        description: result.reason,
+        color: "warning",
+      });
+    } else {
+      addToast({
+        title: "Cannot Settle",
+        description: result.reason,
+        color: "danger",
+        duration: 10000,
+      });
+    }
+  };
+
+  /** Recompute the settle sheet's plan from its current discount/standing-credit choice — pure, so every edit updates the preview live. */
+  const recomputeSettlePlan = (
+    state: NonNullable<typeof settleSheet>,
+  ): SettlePlan =>
+    buildSettlePlan({
+      visit: {
+        id: state.appt.id,
+        appointmentTypeId: state.appt.appointmentTypeId,
+        pendingVisitItems: state.appt.pendingVisitItems as any,
+        pendingVisitDiscountType: state.discountType,
+        pendingVisitDiscountValue: state.discountValue,
+        depositedAmount: (state.appt as any).depositedAmount,
+        depositTxnIds: (state.appt as any).depositTxnIds,
+        invoiceRevision: (state.appt as any).invoiceRevision,
+        patientPackageId: state.appt.patientPackageId,
+      },
+      walletBalance: state.walletBalance,
+      depositRows: state.depositRows,
+      standingCreditToApply: state.applyStandingCredit
+        ? state.standingCreditAvailable
+        : 0,
+      pricing: lineContext().pricing,
+    });
+
+  const openSettleSheet = (appt: Appointment) =>
+    runGuarded(`settle-billing-${appt.id}`, async () => {
+      // Same guard as the one-click path: a pending procedure routes to
+      // Finalise first, never silently re-billed as a plain consultation.
+      const rec = (appt as any).recommendedProcedure;
+
+      if (!!rec?.fee && rec.fee > 0) {
+        setApptToFinalise(appt);
+        setFinaliseSelectedItems(
+          rec.items && Array.isArray(rec.items)
+            ? rec.items.map((i: any) => i.id)
+            : [],
+        );
+
+        return;
+      }
+
+      const ctx = await resolveSettleContext(appt);
+
+      if (ctx.ok === false) {
+        toastSettleRefusal(appt, ctx);
+
+        return;
+      }
+      if (!clinicId) return;
+
+      const liveVisit = ctx.liveVisit || appt;
+      const walletBalance = Math.max(0, ctx.pat?.walletBalance || 0);
+      const txnIds: string[] = (liveVisit as any)?.depositTxnIds || [];
+      let depositRows: Array<{
+        id: string;
+        amount: number;
+        paymentMethod?: string | null;
+      }> = [];
+
+      if (txnIds.length > 0) {
+        try {
+          const all = await walletService.getPatientTransactions(
+            appt.patientId,
+            clinicId,
+          );
+          const byId = new Map(all.map((t) => [t.id, t]));
+
+          depositRows = txnIds
+            .map((id) => byId.get(id))
+            .filter((t): t is NonNullable<typeof t> => Boolean(t))
+            .map((t) => ({
+              id: t.id,
+              amount: t.amount,
+              paymentMethod: (t as any).paymentMethod,
+            }));
+        } catch (err) {
+          console.error("Error loading deposit ledger rows for settle:", err);
+        }
+      }
+
+      const lines: SettleSheetLine[] = ctx.billingItems.map((item: any) => {
+        const asDoctor = doctors.find((d) => d.id === item.doctorId);
+        const performer = asDoctor || experts.find((e) => e.id === item.doctorId);
+
+        return {
+          name: item.appointmentTypeName || "Service",
+          performerName: performer
+            ? asDoctor
+              ? withDoctorPrefix(performer.name)
+              : performer.name
+            : item.doctorName,
+          price: item.price || 0,
+          quantity: item.quantity ?? 1,
+          isTaxable: item.isTaxable === true,
+        };
+      });
+
+      const { discountType, discountValue } = resolveVisitDiscount(
+        liveVisit as any,
+      );
+      const standingCreditAvailable = Math.max(
+        0,
+        standingCreditFor(appt.patientId),
+      );
+
+      const base = {
+        appt: { ...liveVisit, pendingVisitItems: ctx.billingItems } as Appointment,
+        patientName: ctx.pat?.name || "Unknown Patient",
+        regNumber: ctx.pat?.registrationNumber,
+        lines,
+        discountType,
+        discountValue,
+        initialDiscount:
+          discountValue > 0 ? { type: discountType, value: discountValue } : null,
+        standingCreditAvailable,
+        applyStandingCredit: false,
+        capture: initialPaymentCapture(billingSettings),
+        walletBalance,
+        depositRows,
+        error: null,
+        result: null,
+      };
+
+      setSettleSheet({ ...base, plan: recomputeSettlePlan(base as any) });
+    });
+
+  const closeSettleSheet = () => {
+    if (!settleSaving) setSettleSheet(null);
+  };
+
+  const updateSettleSheet = (
+    patch: Partial<NonNullable<typeof settleSheet>>,
+  ) => {
+    setSettleSheet((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+
+      return { ...next, plan: recomputeSettlePlan(next) };
+    });
+  };
+
+  const settleSheetConfirm = async () => {
+    if (!settleSheet) return;
+    setSettleSaving(true);
+    try {
+      const { appt, plan, discountType, discountValue, initialDiscount } =
+        settleSheet;
+      const result = await executeSettle(appt, {
+        discountType,
+        discountValue,
+        previousDiscount: initialDiscount,
+        residualCapture: plan.dueNow > 0 ? settleSheet.capture : null,
+        standingCreditToApply: plan.standingCreditToApply,
+      });
+
+      if (result.ok === false) {
+        if (result.kind === "already-billed" || result.kind === "billed-elsewhere") {
+          // The visit moved out from under the sheet (settled elsewhere
+          // while it was open) — close it and let the normal toast/navigate
+          // path handle it, same as the one-click button would.
+          setSettleSheet(null);
+          toastSettleRefusal(appt, result);
+
+          return;
+        }
+        setSettleSheet((prev) =>
+          prev ? { ...prev, error: result.reason } : prev,
+        );
+
+        return;
+      }
+
+      setSettleSheet((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: null,
+              result: {
+                billingId: result.billingId,
+                invoiceNumber: result.invoiceNumber,
+                totalAmount: result.totalAmount,
+              },
+            }
+          : prev,
+      );
+    } catch (err: any) {
+      console.error("Error settling billing (sheet):", err);
+      setSettleSheet((prev) =>
+        prev
+          ? {
+              ...prev,
+              error:
+                err?.message || "Nothing was charged. Please try again.",
+            }
+          : prev,
+      );
+    } finally {
+      setSettleSaving(false);
+    }
+  };
+
+  const settleSheetDone = () => {
+    if (settleSheet?.result) {
+      addToast({
+        title: "Invoice Generated",
+        description: "Generated the invoice for this visit.",
+        color: "success",
+      });
+    }
+    setSettleSheet(null);
+  };
 
   const getGuidedAction = (appt: Appointment) => {
     const stage = getPatientStage(appt);
@@ -5636,7 +6096,10 @@ export default function FrontOfficeDesk() {
           icon: <IoCardOutline className="w-4 h-4" />,
           colorClass: "bg-saffron-500 text-white hover:bg-saffron-600",
           pendingKey: `settle-billing-${appt.id}`,
-          onClick: () => handleSettleBilling(appt),
+          onClick: () =>
+            billingSettings?.frontOffice?.settleV2
+              ? openSettleSheet(appt)
+              : handleSettleBilling(appt),
         };
       case "pharmacy":
         if (isExpertOnly) {
@@ -6386,6 +6849,57 @@ export default function FrontOfficeDesk() {
               ? performCollectDue(checkInSheet.appt, capture)
               : performCheckIn(checkInSheet.appt, capture)
           }
+        />
+      )}
+
+      {/* Stage 4: the settle sheet, behind frontOffice.settleV2 */}
+      {settleSheet && (
+        <SettleSheet
+          applyStandingCredit={settleSheet.applyStandingCredit}
+          canDiscount={canDoFrontOfficeAction(
+            userData?.role,
+            "discount",
+            billingSettings?.frontOffice,
+          )}
+          capture={settleSheet.capture}
+          discountType={settleSheet.discountType}
+          discountValue={settleSheet.discountValue}
+          error={settleSheet.error}
+          isOpen
+          lines={settleSheet.lines}
+          patientName={settleSheet.patientName}
+          plan={settleSheet.plan}
+          regNumber={settleSheet.regNumber}
+          result={settleSheet.result}
+          saving={settleSaving}
+          settings={billingSettings}
+          standingCreditAvailable={settleSheet.standingCreditAvailable}
+          onApplyStandingCreditChange={(apply) =>
+            updateSettleSheet({ applyStandingCredit: apply })
+          }
+          onCaptureChange={(next) => updateSettleSheet({ capture: next })}
+          onClose={closeSettleSheet}
+          onConfirm={settleSheetConfirm}
+          onDiscountChange={(type, value) =>
+            updateSettleSheet({ discountType: type, discountValue: value })
+          }
+          onDone={settleSheetDone}
+          onPrint={() => {
+            if (!settleSheet.result) return;
+            const win = window.open(
+              `/dashboard/appointments-billing/${settleSheet.result.billingId}?from=front-office&tab=${activeTab}&print=1`,
+              "_blank",
+            );
+
+            if (!win) {
+              addToast({
+                title: "Pop-up Blocked",
+                description:
+                  "Allow pop-ups for this site, or open the invoice from Appointment Billing to print it.",
+                color: "warning",
+              });
+            }
+          }}
         />
       )}
 

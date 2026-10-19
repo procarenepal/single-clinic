@@ -414,6 +414,37 @@ export function buildSettlePlan(input: SettlePlanInput): SettlePlan {
   };
 }
 
+export interface DiscountHistoryEntry {
+  from: { type: "flat" | "percent"; value: number } | null;
+  to: { type: "flat" | "percent"; value: number } | null;
+  by: string;
+  at: Date;
+}
+
+/**
+ * One entry for Appointment.pendingVisitDiscountHistory, or null when the
+ * discount didn't actually change (so confirming Settle with the default,
+ * untouched discount doesn't pollute the audit trail with a no-op entry).
+ */
+export function discountHistoryEntry(
+  from: { type: "flat" | "percent"; value: number } | null,
+  to: { type: "flat" | "percent"; value: number } | null,
+  by: string,
+  at: Date,
+): DiscountHistoryEntry | null {
+  const same =
+    (from === null && (to === null || to.value === 0)) ||
+    (to === null && (from === null || from.value === 0)) ||
+    (from !== null &&
+      to !== null &&
+      from.type === to.type &&
+      from.value === to.value);
+
+  if (same) return null;
+
+  return { from, to, by, at };
+}
+
 /**
  * The label the TO SETTLE row shows, derived from the plan so the button
  * states the effect and the amount before anyone clicks it.

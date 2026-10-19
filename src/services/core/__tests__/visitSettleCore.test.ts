@@ -4,6 +4,7 @@ import {
   buildSettlePlan,
   computeSettleTotals,
   deriveFundingMethods,
+  discountHistoryEntry,
   filesInvoiceFor,
   settleIdempotencyKey,
   settlePrimaryLabel,
@@ -368,5 +369,60 @@ describe("reconciliation property: deposits + residual == invoice total, to the 
         expect(l.doctorId).toBeTruthy();
       }
     }
+  });
+});
+
+describe("discountHistoryEntry", () => {
+  const by = "staff1";
+  const at = new Date("2026-10-19T10:00:00Z");
+
+  it("no entry when there was no discount and none was entered", () => {
+    expect(discountHistoryEntry(null, null, by, at)).toBeNull();
+    expect(discountHistoryEntry(null, { type: "flat", value: 0 }, by, at)).toBeNull();
+  });
+
+  it("no entry when the discount is unchanged", () => {
+    const d = { type: "percent" as const, value: 10 };
+
+    expect(discountHistoryEntry(d, { ...d }, by, at)).toBeNull();
+  });
+
+  it("an entry when a discount is newly entered", () => {
+    const entry = discountHistoryEntry(
+      null,
+      { type: "percent", value: 10 },
+      by,
+      at,
+    );
+
+    expect(entry).toEqual({
+      from: null,
+      to: { type: "percent", value: 10 },
+      by,
+      at,
+    });
+  });
+
+  it("an entry when an existing discount is changed", () => {
+    const entry = discountHistoryEntry(
+      { type: "percent", value: 10 },
+      { type: "flat", value: 500 },
+      by,
+      at,
+    );
+
+    expect(entry?.from).toEqual({ type: "percent", value: 10 });
+    expect(entry?.to).toEqual({ type: "flat", value: 500 });
+  });
+
+  it("an entry when a discount is removed", () => {
+    const entry = discountHistoryEntry(
+      { type: "percent", value: 10 },
+      null,
+      by,
+      at,
+    );
+
+    expect(entry?.to).toBeNull();
   });
 });
