@@ -35,9 +35,20 @@ public class IrdCbmsService {
 
     private static final Logger log = LoggerFactory.getLogger(IrdCbmsService.class);
 
+    // IRD's own CBMS API documentation (section "API to post bill to CBMS")
+    // names exactly one API URL — https://cbapi.ird.gov.np/api/bill — for
+    // both production and testing; there is no separate sandbox host or
+    // path. Testing is done against this SAME URL using IRD's published
+    // test credentials (username "Test_CBMS", password "test@321",
+    // seller_pan "999999999"), not a different endpoint. The "sandbox"
+    // entry below previously appended a fabricated "/sandbox" path, so
+    // every sandbox-mode sync hit a real 404 from IRD's server (confirmed
+    // live: cbms_response_code 404 on every attempt for a sandbox-mode
+    // clinic). "sandbox" and "live" now resolve identically; the clinic's
+    // own ird_environment + credentials are what distinguish them.
     private static final Map<String, String> ENVIRONMENT_ENDPOINTS = Map.of(
             "live", "https://cbapi.ird.gov.np",
-            "sandbox", "https://cbapi.ird.gov.np/sandbox",
+            "sandbox", "https://cbapi.ird.gov.np",
             "mock", "mock");
 
     private final ClinicIrdConfigService clinicIrdConfigService;
