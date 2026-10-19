@@ -41,6 +41,13 @@ async function reset() {
       setDoc(doc(db, "pathologyBilling", "lab1"), { clinicId: "default", invoiceNumber: "LAB-1", patientName: "P One", totalAmount: 565, paidAmount: 565, status: "paid", paymentStatus: "paid", irdSynced: false, createdBy: STAFF, reportStatus: "pending_collection" }),
       setDoc(doc(db, "medicinePurchases", "pur1"), { clinicId: "default", purchaseNo: "PH-1", items: [], total: 100, netAmount: 100, paymentType: "cash", paymentStatus: "paid", purchaseDate: now(), createdBy: STAFF, irdSynced: true, returns: [] }),
       setDoc(doc(db, "patientPackages", "pkg1"), { clinicId: "default", patientId: "p1", packageName: "X" }),
+      // Commission records: one owing in full, one paid in full, one cancelled, and one per sibling collection.
+      setDoc(doc(db, "doctorCommissions", "dc1"), commissionSeed("doctorId", {})),
+      setDoc(doc(db, "doctorCommissions", "dc2"), commissionSeed("doctorId", { paidAmount: 84.75, status: "paid", paymentMethod: "cash", paidDate: now() })),
+      setDoc(doc(db, "doctorCommissions", "dc3"), commissionSeed("doctorId", { status: "cancelled" })),
+      setDoc(doc(db, "expertCommissions", "ec1"), commissionSeed("expertId", {})),
+      setDoc(doc(db, "referralCommissions", "rc1"), commissionSeed("partnerId", { paidAmount: 0 })),
+      setDoc(doc(db, "staffCommissions", "sc1"), commissionSeed("staffId", {})),
     ]);
   });
 }
@@ -57,6 +64,13 @@ const invoice = (createdBy, clinicId = "default") => ({
   paidAmount: 0, balanceAmount: 100, status: "draft", paymentStatus: "unpaid", irdSynced: false, createdBy, paymentHistory: [],
 });
 const row = (over) => ({ patientId: "p1", clinicId: "default", type: "deposit", amount: 50, createdAt: now(), createdBy: STAFF, notes: "t", ...over });
+// A commission record in any of the four collections; `idField` names the clinician field.
+const commissionSeed = (idField, over) => ({
+  [idField]: "e1", clinicId: "default", branchId: "default", billingId: "inv1", billingType: "appointment",
+  invoiceNumber: "INV-1", patientId: "p1", patientName: "P One", serviceNames: ["Consult"],
+  totalInvoiceAmount: 565, commissionPercentage: 15, commissionAmount: 84.75, status: "pending",
+  createdAt: now(), updatedAt: now(), createdBy: ADMIN, ...over,
+});
 
 // ── appointmentBilling ──────────────────────────────────────────────────────
 await t("appt: staff creates own-clinic invoice with createdBy == self", () =>
@@ -237,6 +251,117 @@ await t("commission: an ordinary commission cannot be edited into a negative amo
 });
 await t("commission: other-clinic member cannot write a clawback here", () =>
   assertFails(setDoc(doc(as(OTHER), "doctorCommissions", "c8"), commission({ commissionAmount: -84.75, clawbackOf: "c1", createdBy: OTHER }))));
+
+// ── commission records: the three legitimate changes, and nothing else ──────
+// payCommission, updateCommissionStatus("cancelled") and reduceCommissionAmount
+// are the only writers; everything a direct SDK write could do beyond them is
+// refused — for clinic-admin too.
+await t("commission: paying it in full records paid", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { paidAmount: 84.75, status: "paid", paymentMethod: "cash", paidDate: now(), updatedAt: now() })));
+await t("commission: a part payment leaves it pending", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { paidAmount: 40, status: "pending", paymentMethod: "cash", paidDate: now(), paidBy: STAFF, paymentReference: "r", paymentNotes: "n", updatedAt: now() })));
+await t("commission: a part payment cannot be labelled paid", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { paidAmount: 40, status: "paid", paymentMethod: "cash", paidDate: now(), updatedAt: now() })));
+await t("commission: paying more than is owed is refused", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { paidAmount: 100, status: "paid", paymentMethod: "cash", paidDate: now(), updatedAt: now() })));
+await t("commission: marking paid with no money recorded is refused", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { status: "paid", updatedAt: now() })));
+await t("commission: a payment must say how and when it was paid", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { paidAmount: 84.75, status: "paid", updatedAt: now() })));
+await t("commission: the amount cannot be inflated", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { commissionAmount: 200, updatedAt: now() })));
+await t("commission: clinic-admin is held to the same invariants", () =>
+  assertFails(updateDoc(doc(as(ADMIN), "doctorCommissions", "dc1"), { commissionAmount: 200, updatedAt: now() })));
+await t("commission: clinic-admin cannot mark paid with no money recorded either", () =>
+  assertFails(updateDoc(doc(as(ADMIN), "doctorCommissions", "dc1"), { status: "paid", updatedAt: now() })));
+await t("commission: a partial reversal shrinks the amount", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { commissionAmount: 40, paidAmount: 0, status: "pending", updatedAt: now() })));
+await t("commission: a partial reversal of a paid record moves the paid share off it", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "doctorCommissions", "dc2"), { commissionAmount: 50, paidAmount: 50, status: "paid", updatedAt: now() })));
+await t("commission: a reversal that empties the record cancels it", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "doctorCommissions", "dc2"), { commissionAmount: 0, paidAmount: 0, status: "cancelled", updatedAt: now() })));
+await t("commission: paid money cannot vanish while the amount stands", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc2"), { paidAmount: 0, status: "pending", updatedAt: now() })));
+await t("commission: cancelling is allowed", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { status: "cancelled", updatedAt: now() })));
+await t("commission: cancelled is final", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc3"), { status: "pending", updatedAt: now() })));
+await t("commission: it cannot be moved to another clinician", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { doctorId: "someone-else", updatedAt: now() })));
+await t("commission: it cannot be re-pointed at another invoice", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { billingId: "inv2", updatedAt: now() })));
+await t("commission: its rate cannot be rewritten", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { commissionPercentage: 50, updatedAt: now() })));
+await t("commission: it cannot be turned into a clawback after the fact", () =>
+  assertFails(updateDoc(doc(as(STAFF), "doctorCommissions", "dc1"), { clawbackOf: "dc2", commissionAmount: -84.75, updatedAt: now() })));
+await t("commission: a record cannot be born paid", () =>
+  assertFails(setDoc(doc(as(STAFF), "doctorCommissions", "c9"), commission({ status: "paid", paidAmount: 84.75, createdBy: STAFF }))));
+await t("commission: a record cannot be born with money already on it", () =>
+  assertFails(setDoc(doc(as(STAFF), "doctorCommissions", "c10"), commission({ paidAmount: 10, createdBy: STAFF }))));
+await t("commission: a record cannot be born cancelled", () =>
+  assertFails(setDoc(doc(as(STAFF), "doctorCommissions", "c11"), commission({ status: "cancelled", createdBy: STAFF }))));
+await t("doctorCommissions: staff cannot delete", () =>
+  assertFails(deleteDoc(doc(as(STAFF), "doctorCommissions", "dc1"))));
+await t("doctorCommissions: clinic-admin can delete", () =>
+  assertSucceeds(deleteDoc(doc(as(ADMIN), "doctorCommissions", "dc1"))));
+
+// ── expert / referral / staff commissions: same invariants, plain membership ─
+// These three used to be `allow create, update` at clinic membership with no
+// field checks at all.
+for (const [coll, id, idField] of [
+  ["expertCommissions", "ec1", "expertId"],
+  ["referralCommissions", "rc1", "partnerId"],
+  ["staffCommissions", "sc1", "staffId"],
+]) {
+  await t(`${coll}: staff creates a sound record`, () =>
+    assertSucceeds(setDoc(doc(as(STAFF), coll, "new1"), commissionSeed(idField, { createdBy: STAFF }))));
+  await t(`${coll}: a record missing its required fields is refused`, () =>
+    assertFails(setDoc(doc(as(STAFF), coll, "new2"), { clinicId: "default", commissionAmount: 10, createdBy: STAFF })));
+  await t(`${coll}: createdBy must be the caller`, () =>
+    assertFails(setDoc(doc(as(STAFF), coll, "new3"), commissionSeed(idField, { createdBy: DOC }))));
+  await t(`${coll}: a clawback naming its original is allowed`, () =>
+    assertSucceeds(setDoc(doc(as(STAFF), coll, "new4"), commissionSeed(idField, { commissionAmount: -20, clawbackOf: id, clawbackReason: "reversed", createdBy: STAFF }))));
+  await t(`${coll}: a negative amount with no clawbackOf is refused`, () =>
+    assertFails(setDoc(doc(as(STAFF), coll, "new5"), commissionSeed(idField, { commissionAmount: -20, createdBy: STAFF }))));
+  await t(`${coll}: paying in full is allowed`, () =>
+    assertSucceeds(updateDoc(doc(as(STAFF), coll, id), { paidAmount: 84.75, status: "paid", paymentMethod: "bank", paidDate: now(), updatedAt: now() })));
+  await t(`${coll}: paying more than is owed is refused`, () =>
+    assertFails(updateDoc(doc(as(STAFF), coll, id), { paidAmount: 500, status: "paid", paymentMethod: "bank", paidDate: now(), updatedAt: now() })));
+  await t(`${coll}: the amount cannot be inflated`, () =>
+    assertFails(updateDoc(doc(as(STAFF), coll, id), { commissionAmount: 999, updatedAt: now() })));
+  await t(`${coll}: marking paid with no money recorded is refused`, () =>
+    assertFails(updateDoc(doc(as(STAFF), coll, id), { status: "paid", updatedAt: now() })));
+  await t(`${coll}: cancelling is allowed`, () =>
+    assertSucceeds(updateDoc(doc(as(STAFF), coll, id), { status: "cancelled", updatedAt: now() })));
+  await t(`${coll}: other-clinic member cannot touch it`, () =>
+    assertFails(updateDoc(doc(as(OTHER), coll, id), { status: "cancelled", updatedAt: now() })));
+  await t(`${coll}: staff cannot delete`, () =>
+    assertFails(deleteDoc(doc(as(STAFF), coll, id))));
+  await t(`${coll}: clinic-admin can delete`, () =>
+    assertSucceeds(deleteDoc(doc(as(ADMIN), coll, id))));
+}
+
+// ── users: nobody promotes themselves ────────────────────────────────────────
+await t("users: a member may edit their own profile", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "users", STAFF), { displayName: "S. One" })));
+await t("users: a member cannot change their own role", () =>
+  assertFails(updateDoc(doc(as(STAFF), "users", STAFF), { role: "clinic-admin" })));
+await t("users: a clinic-admin cannot change their own role either", () =>
+  assertFails(updateDoc(doc(as(ADMIN), "users", ADMIN), { role: "super-admin" })));
+await t("users: a member cannot move themselves to another clinic", () =>
+  assertFails(updateDoc(doc(as(STAFF), "users", STAFF), { clinicId: "other" })));
+
+// ── appointmentBilling: a locked invoice stays locked ────────────────────────
+// A lone `status: "draft"` write on a locked invoice used to pass the
+// bookkeeping allowlist (status is a bookkeeping field) and re-open it for a
+// second write that rewrote the amounts.
+await t("appt: finalized invoice cannot be re-opened by writing status draft", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointmentBilling", "inv3"), { status: "draft", updatedAt: now() })));
+// inv2 is seeded as draft+irdSynced, so "draft" would be a no-op write;
+// the assertion that matters on a synced invoice is that status moves to
+// nothing but cancelled.
+await t("appt: IRD-synced invoice — status may move only to cancelled", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointmentBilling", "inv2"), { status: "paid", updatedAt: now() })));
 
 await env.cleanup();
 const failed = results.filter((r) => r[0] === "FAIL");
