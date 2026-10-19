@@ -5,6 +5,7 @@ import com.procaresoft.billing.model.ClinicIrdConfig;
 import com.procaresoft.billing.model.Invoice;
 import com.procaresoft.billing.model.IrdSyncLog;
 import com.procaresoft.billing.repository.IrdSyncLogRepository;
+import com.procaresoft.billing.util.BikramSambatDate;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,8 +103,22 @@ public class IrdCbmsService {
         } catch (org.springframework.web.client.HttpStatusCodeException e) {
             log.warn("HTTP error during IRD sync for invoice {}: {} - {}", invoice.getInvoiceNumber(),
                     e.getStatusCode(), e.getResponseBodyAsString());
-            SyncResult result = new SyncResult(false, "Sync failed: " + e.getResponseBodyAsString(),
-                    String.valueOf(e.getStatusCode().value()));
+            // CBMS answers a model-validation failure (and others) with a
+            // non-2xx HTTP status whose BODY still carries its own documented
+            // code, e.g. HTTP 400 with body {"message":"104"}. This used to
+            // be stored as the bare HTTP status ("400") with the raw body
+            // dumped into the message — so the one case this backend had
+            // actually reached CBMS and gotten a real, documented answer
+            // ("104: model invalid") was indistinguishable from "clinic not
+            // configured", which also happens to use "400". Extracting the
+            // real code here, same as the 2xx path already does, is what
+            // makes cbms_response_code and the UI's explanation of it
+            // trustworthy for this class of response too.
+            String embeddedCode = extractCbmsCode(e.getResponseBodyAsString());
+            SyncResult result = embeddedCode != null
+                    ? describeCode(embeddedCode, isReturn)
+                    : new SyncResult(false, "Sync failed: " + e.getResponseBodyAsString(),
+                            String.valueOf(e.getStatusCode().value()));
             persistLog(invoice, payload, result, e.getResponseBodyAsString());
             return result;
         } catch (Exception e) {
@@ -155,6 +170,11 @@ public class IrdCbmsService {
                     + nullToEmpty(body), "2xx-NOCODE");
         }
 
+        return describeCode(code, isReturn);
+    }
+
+    /** What a given CBMS application code means — shared by the 2xx path above and the non-2xx path in syncInvoice's catch block. */
+    private static SyncResult describeCode(String code, boolean isReturn) {
         switch (code) {
             case "200":
                 return new SyncResult(true, "Synced successfully", code);
@@ -256,8 +276,15 @@ public class IrdCbmsService {
         payload.put("buyer_name", invoice.getBuyerName() != null ? invoice.getBuyerName() : "Cash Sales");
         payload.put("fiscal_year", fiscalYear);
         payload.put("invoice_number", invoice.getInvoiceNumber());
+        // IRD's own sample payloads give this as a Bikram Sambat date,
+        // dot-separated ("2074.07.06") — not Gregorian. Every invoice this
+        // backend ever sent used invoice.getInvoiceDate().toString()
+        // (Gregorian, hyphen-separated) here, which CBMS rejected outright
+        // on every single attempt ("104: model invalid"). See
+        // BikramSambatDate's own doc comment for how this was found.
         payload.put("invoice_date",
-                invoice.getInvoiceDate() != null ? invoice.getInvoiceDate().toString() : java.time.LocalDate.now().toString());
+                BikramSambatDate.toBsDateString(
+                        invoice.getInvoiceDate() != null ? invoice.getInvoiceDate() : java.time.LocalDate.now()));
         payload.put("total_sales", invoice.getTotalAmount());
         payload.put("taxable_sales_vat", invoice.getTaxableAmount());
         payload.put("vat", invoice.getTaxAmount());
@@ -286,7 +313,9 @@ public class IrdCbmsService {
         if (isReturn) {
             payload.put("ref_invoice_number", invoice.getRefInvoiceNumber() != null ? invoice.getRefInvoiceNumber() : "");
             payload.put("credit_note_number", invoice.getInvoiceNumber());
-            payload.put("credit_note_date", invoice.getInvoiceDate() != null ? invoice.getInvoiceDate().toString() : "");
+            // Same BS-date requirement as invoice_date above.
+            payload.put("credit_note_date",
+                    invoice.getInvoiceDate() != null ? BikramSambatDate.toBsDateString(invoice.getInvoiceDate()) : "");
             payload.put("reason_for_return", invoice.getReasonForReturn() != null ? invoice.getReasonForReturn() : "");
         }
 
