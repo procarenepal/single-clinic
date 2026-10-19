@@ -15,6 +15,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { appointmentService } from "@/services/appointmentService";
 import { patientPackageService } from "@/services/patientPackageService";
 import { auditLogService } from "@/services/auditLogService";
+import { walletService } from "@/services/walletService";
 import {
   reverseVisitPlan,
   canCompleteCheckout,
@@ -233,6 +234,20 @@ export default function PatientAppointmentsTab({
 
         const priorNotes = appt.notes || "";
 
+        // The credit share of the deposit left the wallet at check-in;
+        // clearing the deposit record without paying it back made it
+        // vanish. Refunded first so a failure leaves the record intact.
+        if (plan.walletCreditToReturn > 0) {
+          await walletService.refundFunds(
+            appt.patientId,
+            appt.clinicId || clinicId || "",
+            plan.walletCreditToReturn,
+            appointmentId,
+            `Visit credit returned — ${newStatus === "cancelled" ? "cancelled" : "marked no-show"}`,
+            currentUser?.uid || "system",
+          );
+        }
+
         await appointmentService.updateAppointment(appointmentId, {
           ...plan.patch,
           ...(plan.note
@@ -271,6 +286,7 @@ export default function PatientAppointmentsTab({
                 appointmentId,
                 patientId: appt.patientId,
                 depositReleasedAsCredit: plan.walletCreditRetained,
+                creditReturnedToWallet: plan.walletCreditToReturn,
               },
             )
             .catch((auditErr) =>

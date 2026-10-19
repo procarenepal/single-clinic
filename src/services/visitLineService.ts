@@ -20,13 +20,25 @@ import type {
   Expert,
   TreatmentPackage,
 } from "@/types/models";
-import type { VisitPricingContext } from "./core/visitBillingCore";
+import {
+  arrayUnion,
+  doc,
+  increment,
+  runTransaction,
+  Timestamp,
+  type Transaction,
+} from "firebase/firestore";
 
+import { db } from "../config/firebase";
+import {
+  getVisitPaymentGate,
+  type VisitPricingContext,
+} from "./core/visitBillingCore";
 import { appointmentService } from "./appointmentService";
 import { doctorService } from "./doctorService";
 import { expertService } from "./expertService";
 import { patientPackageService } from "./patientPackageService";
-import { walletService } from "./walletService";
+import { PATIENTS_COLLECTION, walletService } from "./walletService";
 import {
   asCommissionOnlyLine,
   buildPackageSessionLine,
@@ -204,20 +216,30 @@ export async function ensureSessionLine(input: {
 
 /**
  * Collect what the check-in scope still says is due. Standing wallet credit
- * is spent FIRST — claimed and deducted from the wallet, earmarked onto
- * this visit by the same depositedAmount counter cash uses — then any
- * remaining amount is taken as cash/card. Earmarking the credit matters:
- * without an actual wallet deduction, "covered by credit" was never
- * recorded anywhere, so the same balance could cover every other open
- * visit too, forever, and no real money was ever collected for any of
- * them. Each step is claimed atomically before its side effect, so two
- * desks cannot both take it and a wallet write failure cannot silently
- * inflate depositedAmount past what was actually secured.
+ * is spent FIRST — deducted from the wallet and earmarked onto this visit
+ * by the same depositedAmount counter cash uses — then any remaining amount
+ * is taken as cash/card. Earmarking the credit matters: without an actual
+ * wallet deduction, "covered by credit" was never recorded anywhere, so the
+ * same balance could cover every other open visit too, forever, and no
+ * real money was ever collected for any of them.
+ *
+ * Each step is ONE transaction over the visit, the patient's wallet and
+ * the ledger row: what the visit still owes is re-read inside it (so two
+ * desks cannot both take it — the loser sees 0 due), and the row, the
+ * balance and the visit's depositedAmount commit together or not at all.
+ * This used to be a claim on the visit in one transaction and the wallet
+ * move in another, with a best-effort "release the claim" if the second
+ * failed; when that release itself failed — on the same bad connection —
+ * the visit showed money collected that never was, and nothing ever
+ * reconciled it. The two steps stay separate transactions because the
+ * patients rule validates a balance move against exactly one ledger row.
  */
 export interface DepositCapture {
   method: string;
   reference?: string;
 }
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function collectCheckInDue(
   visit: { id: string; patientId: string },
@@ -226,124 +248,146 @@ export async function collectCheckInDue(
   capture: DepositCapture | null,
   opts: { standingCredit?: number } = {},
 ): Promise<{ collected: number; creditApplied: number; txnId: string | null }> {
+  const standingCredit = Math.max(0, opts.standingCredit || 0);
+  const appointmentRef = doc(db, "appointments", visit.id);
+  const patientRef = doc(db, PATIENTS_COLLECTION, visit.patientId);
+  const now = ctx.now ?? new Date();
+
+  // Firestore wants every read in a transaction before any write.
+  const readBoth = async (transaction: Transaction) => {
+    const [apptSnap, patientSnap] = await Promise.all([
+      transaction.get(appointmentRef),
+      transaction.get(patientRef),
+    ]);
+
+    if (!apptSnap.exists()) throw new Error("Appointment not found");
+    if (!patientSnap.exists()) throw new Error("Patient not found");
+
+    return { apptSnap, patientSnap };
+  };
+
+  // A failed step leaves nothing half-applied, so the marker only tells the
+  // desk "the last attempt took nothing — try again" (CheckInSheet).
+  const markFailed = () =>
+    appointmentService
+      .markCheckInDepositFailed(visit.id, true)
+      .catch((markErr) =>
+        console.error("Failed to mark the deposit as failed:", markErr),
+      );
+
   let creditApplied = 0;
   let creditTxnId: string | null = null;
-  const standingCredit = Math.max(0, opts.standingCredit || 0);
 
   if (standingCredit > 0) {
-    // Claimed against the visit's TRUE remaining due (no credit netted in
-    // this gate read), capped at the credit on offer — so the claim can
-    // never exceed what the visit actually owes.
-    const creditClaim = await appointmentService.claimVisitDeposit(
-      visit.id,
-      standingCredit,
-      ctx.pricing,
-      "checkin",
-      {},
-    );
+    try {
+      const credit = await runTransaction(db, async (transaction) => {
+        const { apptSnap, patientSnap } = await readBoth(transaction);
+        // Against the visit's TRUE remaining due (no credit netted in this
+        // gate read), capped at the credit on offer and at what the wallet
+        // actually holds right now — the desk's balance may be stale.
+        const gate = getVisitPaymentGate(
+          apptSnap.data() as never,
+          ctx.pricing,
+          "checkin",
+          {},
+        );
+        const balance = Math.max(
+          0,
+          Number(patientSnap.data()?.walletBalance) || 0,
+        );
+        let claim = round2(Math.min(gate.dueAmount, standingCredit));
 
-    if (creditClaim > 0) {
-      try {
-        creditTxnId = await walletService.deductFunds(
-          visit.patientId,
-          ctx.clinicId,
-          creditClaim,
-          visit.id,
-          `Visit deposit — covered by wallet credit (appointment ${visit.id})`,
-          ctx.userId,
-          "appointment",
+        if (claim > balance + 0.005) claim = Math.floor(balance * 100) / 100;
+        if (claim <= 0) return { claim: 0, txnId: null as string | null };
+
+        const txnId = walletService.deductFundsInTransaction(
+          transaction,
+          patientSnap,
+          {
+            patientId: visit.patientId,
+            clinicId: ctx.clinicId,
+            amount: claim,
+            referenceId: visit.id,
+            referenceType: "appointment",
+            notes: `Visit deposit — covered by wallet credit (appointment ${visit.id})`,
+            createdBy: ctx.userId,
+            now,
+          },
         );
-        creditApplied = creditClaim;
-      } catch (err) {
-        await appointmentService
-          .releaseVisitDeposit(visit.id, creditClaim)
-          .catch((releaseErr) =>
-            console.error(
-              "Failed to release an unfulfilled credit claim:",
-              releaseErr,
-            ),
-          );
-        await appointmentService
-          .markCheckInDepositFailed(visit.id, true)
-          .catch((markErr) =>
-            console.error("Failed to mark the deposit as failed:", markErr),
-          );
-        throw err;
-      }
-      // The ledger row is already written and the wallet already debited,
-      // so this is bookkeeping that must not undo a collection that
-      // already happened — but losing the fromCredit marker specifically
-      // would make checkout deduct this same money from the wallet AGAIN,
-      // so it is retried a few times (inside attachVisitDepositTxn) rather
-      // than only logged. This share of the deposit has already LEFT the
-      // wallet; checkout applies it without deducting again and a no-show
-      // returns it — the cash path below, by contrast, pays INTO the wallet.
-      await appointmentService
-        .attachVisitDepositTxn(visit.id, creditTxnId, creditClaim)
-        .catch((attachErr) =>
-          console.error(
-            "Failed to record the credit deduction's ledger row and credit share (retries exhausted):",
-            attachErr,
-          ),
-        );
+
+        // This share has LEFT the wallet: checkout applies it without
+        // deducting again and a no-show returns it — the cash step below,
+        // by contrast, pays INTO the wallet.
+        transaction.update(appointmentRef, {
+          depositedAmount: round2(gate.deposited + claim),
+          depositFromCredit: increment(claim),
+          depositTxnIds: arrayUnion(txnId),
+          checkInDepositFailedAt: null,
+          updatedAt: Timestamp.now(),
+        });
+
+        return { claim, txnId };
+      });
+
+      creditApplied = credit.claim;
+      creditTxnId = credit.txnId;
+    } catch (err) {
+      await markFailed();
+      throw err;
     }
   }
 
   if (!capture) return { collected: 0, creditApplied, txnId: creditTxnId };
 
-  // The credit step above already earmarked its share onto depositedAmount,
-  // so a plain "due" claim here — no credit netted again — asks for exactly
-  // what remains in cash.
-  const claimed = await appointmentService.claimVisitDeposit(
-    visit.id,
-    "due",
-    ctx.pricing,
-    "checkin",
-    {},
-  );
-
-  if (claimed <= 0) return { collected: 0, creditApplied, txnId: null };
-
-  let txnId: string;
-
   try {
-    txnId = await walletService.addFunds(
-      visit.patientId,
-      ctx.clinicId,
-      claimed,
-      capture.method || "cash",
-      `Visit deposit — collected at check-in (appointment ${visit.id})`,
-      ctx.userId,
-      visit.id,
-      "appointment",
-      capture.reference,
-    );
+    const cash = await runTransaction(db, async (transaction) => {
+      const { apptSnap, patientSnap } = await readBoth(transaction);
+      // The credit step already earmarked its share onto depositedAmount,
+      // so this gate read asks for exactly what remains in cash.
+      const gate = getVisitPaymentGate(
+        apptSnap.data() as never,
+        ctx.pricing,
+        "checkin",
+        {},
+      );
+      const claim = round2(gate.dueAmount);
+
+      if (claim <= 0) return { claim: 0, txnId: null as string | null };
+
+      const txnId = walletService.addFundsInTransaction(
+        transaction,
+        patientSnap,
+        {
+          patientId: visit.patientId,
+          clinicId: ctx.clinicId,
+          amount: claim,
+          paymentMethod: capture.method || "cash",
+          notes: `Visit deposit — collected at check-in (appointment ${visit.id})`,
+          createdBy: ctx.userId,
+          referenceId: visit.id,
+          referenceType: "appointment",
+          paymentReference: capture.reference,
+          now,
+        },
+      );
+
+      transaction.update(appointmentRef, {
+        depositedAmount: round2(gate.deposited + claim),
+        depositTxnIds: arrayUnion(txnId),
+        checkInDepositFailedAt: null,
+        updatedAt: Timestamp.now(),
+      });
+
+      return { claim, txnId };
+    });
+
+    if (cash.claim <= 0) return { collected: 0, creditApplied, txnId: null };
+
+    return { collected: cash.claim, creditApplied, txnId: cash.txnId };
   } catch (err) {
-    await appointmentService
-      .releaseVisitDeposit(visit.id, claimed)
-      .catch((releaseErr) =>
-        console.error(
-          "Failed to release an unfulfilled deposit claim:",
-          releaseErr,
-        ),
-      );
-    await appointmentService
-      .markCheckInDepositFailed(visit.id, true)
-      .catch((markErr) =>
-        console.error("Failed to mark the deposit as failed:", markErr),
-      );
+    await markFailed();
     throw err;
   }
-
-  // The ledger row is written; recording its id is bookkeeping and must
-  // not undo a collection that already happened.
-  await appointmentService
-    .attachVisitDepositTxn(visit.id, txnId)
-    .catch((attachErr) =>
-      console.error("Failed to record the deposit's ledger row:", attachErr),
-    );
-
-  return { collected: claimed, creditApplied, txnId };
 }
 
 export interface BookedRow {

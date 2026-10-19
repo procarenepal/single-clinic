@@ -5385,17 +5385,15 @@ export default function FrontOfficeDesk() {
             : 0;
 
         if (depositToApply + heldExcess > 0) {
+          // The amount and its credit share leave the visit in one write.
           await appointmentService
-            .releaseVisitDeposit(appt.id, depositToApply + heldExcess)
+            .releaseVisitDeposit(
+              appt.id,
+              depositToApply + heldExcess,
+              creditApplied,
+            )
             .catch((releaseErr) =>
               console.error("Failed to release the applied deposit:", releaseErr),
-            );
-        }
-        if (creditApplied > 0) {
-          await appointmentService
-            .markVisitDepositFromCredit(appt.id, -creditApplied)
-            .catch((markErr) =>
-              console.error("Failed to release the credit share:", markErr),
             );
         }
         if (creditExcess > 0) {
@@ -5408,10 +5406,10 @@ export default function FrontOfficeDesk() {
               "Unused visit credit returned at checkout",
               currentUser?.uid || "system",
             );
-            await appointmentService.releaseVisitDeposit(appt.id, creditExcess);
-            await appointmentService.markVisitDepositFromCredit(
+            await appointmentService.releaseVisitDeposit(
               appt.id,
-              -creditExcess,
+              creditExcess,
+              creditExcess,
             );
           } catch (refundErr) {
             console.error("Error returning unused visit credit:", refundErr);

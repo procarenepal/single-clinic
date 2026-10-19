@@ -1394,12 +1394,68 @@ match /appointments/{appointmentId} {
                   belongsToClinic(request.resource.data.clinicId) &&
                   request.resource.data.createdBy == request.auth.uid));
   
+  // ── The visit's deposit ────────────────────────────────────────────────
+  // depositedAmount is money already collected for THIS visit before any
+  // invoice exists; depositFromCredit is the share of it that was taken out
+  // of the patient's wallet as standing credit (the rest is cash paid into
+  // the wallet). Any clinic member could rewrite both with a direct SDK
+  // write — making an uncollected deposit look collected, or a collected one
+  // vanish. Now, binding administrators too:
+  //  - it RISES only together with the wallet ledger row that took the money,
+  //    written in the same transaction (visitLineService.collectCheckInDue):
+  //    the row names this visit, is for exactly the rise, and a rise of the
+  //    credit share is vouched for by a deduction row for exactly that much;
+  //  - it FALLS only on a visit that has been invoiced (checkout applies the
+  //    deposit to the invoice, then releases it) or will never be (no-show,
+  //    cancelled — which return it), and the credit share never outgrows it.
+  // depositTxnIds is bookkeeping the rise rule reads to find its row; the
+  // rows themselves are the record.
+  function eps() {
+    return 0.005;
+  }
+  function depositUntouched() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['depositedAmount', 'depositFromCredit']);
+  }
+  function depositRiseIsLedgered() {
+    let before = resource.data.get('depositedAmount', 0);
+    let after = request.resource.data.get('depositedAmount', 0);
+    let creditBefore = resource.data.get('depositFromCredit', 0);
+    let creditAfter = request.resource.data.get('depositFromCredit', 0);
+    let ids = request.resource.data.get('depositTxnIds', []);
+    let row = getAfter(/databases/$(database)/documents/walletTransactions/$(ids[ids.size() - 1])).data;
+    return after > before + eps()
+        && ids.size() > 0
+        && row.patientId == resource.data.patientId
+        && row.get('referenceId', '') == appointmentId
+        && row.get('referenceType', '') == 'appointment'
+        && row.type in ['deposit', 'deduction']
+        && math.abs(row.amount - (after - before)) < eps()
+        && (math.abs(creditAfter - creditBefore) < eps()
+            || (row.type == 'deduction'
+                && math.abs((creditAfter - creditBefore) - (after - before)) < eps()));
+  }
+  function depositFallIsSettled() {
+    let before = resource.data.get('depositedAmount', 0);
+    let after = request.resource.data.get('depositedAmount', 0);
+    let creditBefore = resource.data.get('depositFromCredit', 0);
+    let creditAfter = request.resource.data.get('depositFromCredit', 0);
+    return after < before - eps()
+        && after > -eps()
+        && (resource.data.get('billingId', '') != ''
+            || resource.data.get('status', '') in ['no-show', 'cancelled']
+            || request.resource.data.get('status', '') in ['no-show', 'cancelled'])
+        && creditAfter <= creditBefore + eps()
+        && creditAfter <= after + eps();
+  }
+
   // Allow clinic users to update their own clinic's appointments
-  allow update: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
                   belongsToClinic(resource.data.clinicId) &&
-                  request.resource.data.clinicId == resource.data.clinicId));
+                  request.resource.data.clinicId == resource.data.clinicId))
+                && (depositUntouched() || depositRiseIsLedgered() || depositFallIsSettled());
   
   // An appointment now carries this visit's pre-invoice financial state —
   // pendingVisitItems (the priced lines that become an IRD invoice at

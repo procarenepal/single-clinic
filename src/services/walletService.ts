@@ -83,63 +83,104 @@ export const walletService = {
     paymentReference?: string,
   ): Promise<string> {
     try {
-      const now = new Date();
       const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
-      const transactionRef = doc(collection(db, WALLET_TRANSACTIONS_COLLECTION));
 
       // The ledger row and the balance move together or not at all. This
       // used to be two separate writes — addDoc the row, then updateDoc the
       // balance — so a failure between them left a deposit on record that
       // the balance didn't reflect, and a retry of the whole call would
-      // then record the deposit twice. deductFunds has been a single
-      // transaction since the deposit model landed; the deposit side of
-      // the same ledger was the one left behind. Front-office cash enters
-      // the system through exactly this method, so the window mattered.
-      const transaction: Omit<WalletTransaction, "id"> = {
-        patientId,
-        clinicId,
-        branchId: clinicId,
-        type: "deposit",
-        amount,
-        paymentMethod,
-        notes,
-        createdAt: now,
-        createdBy,
-        ...(referenceId ? { referenceId } : {}),
-        ...(referenceType ? { referenceType } : {}),
-        ...(paymentReference?.trim()
-          ? { paymentReference: paymentReference.trim() }
-          : {}),
-      };
-
-      await runTransaction(db, async (dbTransaction) => {
+      // then record the deposit twice. The body is addFundsInTransaction so
+      // the front desk can take a check-in deposit inside the same
+      // transaction that records it on the visit.
+      return await runTransaction(db, async (dbTransaction) => {
         const patientSnap = await dbTransaction.get(patientRef);
 
-        if (!patientSnap.exists()) {
-          throw new Error("Patient not found");
-        }
-
-        dbTransaction.set(transactionRef, {
-          ...transaction,
-          createdAt: Timestamp.fromDate(now),
-        });
-        dbTransaction.update(patientRef, {
-          walletBalance: increment(amount),
-          // Names the ledger row this movement belongs to. The patients
-          // security rule refuses any walletBalance change that does not
-          // point at a row created in the same transaction for exactly
-          // this amount, and the walletTransactions rule checks the inverse
-          // — so the ledger is enforced, not merely kept.
-          lastWalletTxnId: transactionRef.id,
-          updatedAt: Timestamp.now(),
+        return walletService.addFundsInTransaction(dbTransaction, patientSnap, {
+          patientId,
+          clinicId,
+          amount,
+          paymentMethod,
+          notes,
+          createdBy,
+          referenceId,
+          referenceType,
+          paymentReference,
+          now: new Date(),
         });
       });
-
-      return transactionRef.id;
     } catch (error) {
       console.error("Error adding funds to wallet:", error);
       throw error;
     }
+  },
+
+  /**
+   * Deposits into a wallet INSIDE a transaction the caller owns — the
+   * deposit counterpart of deductFundsInTransaction, for the same reason:
+   * the check-in deposit used to be claimed on the visit in one
+   * transaction and paid into the wallet in another, with a best-effort
+   * "release the claim" if the second failed. When the release itself
+   * failed, the visit showed money collected that never was. With the row,
+   * the balance and the visit's own record in one transaction there is
+   * nothing to compensate.
+   *
+   * The caller does transaction.get(patientRef) in its read phase and
+   * passes the snapshot; this only checks and writes. Returns the row id.
+   */
+  addFundsInTransaction(
+    transaction: Transaction,
+    patientSnap: DocumentSnapshot<DocumentData>,
+    input: {
+      patientId: string;
+      clinicId: string;
+      amount: number;
+      paymentMethod: string;
+      notes: string;
+      createdBy: string;
+      referenceId?: string;
+      referenceType?: "invoice" | "package" | "appointment";
+      paymentReference?: string;
+      now: Date;
+    },
+  ): string {
+    if (!patientSnap.exists()) {
+      throw new Error("Patient not found");
+    }
+
+    const transactionRef = doc(collection(db, WALLET_TRANSACTIONS_COLLECTION));
+    const row: Omit<WalletTransaction, "id"> = {
+      patientId: input.patientId,
+      clinicId: input.clinicId,
+      branchId: input.clinicId,
+      type: "deposit",
+      amount: input.amount,
+      paymentMethod: input.paymentMethod,
+      notes: input.notes,
+      createdAt: input.now,
+      createdBy: input.createdBy,
+      ...(input.referenceId ? { referenceId: input.referenceId } : {}),
+      ...(input.referenceType ? { referenceType: input.referenceType } : {}),
+      ...(input.paymentReference?.trim()
+        ? { paymentReference: input.paymentReference.trim() }
+        : {}),
+    };
+
+    transaction.set(transactionRef, {
+      ...row,
+      createdAt: Timestamp.fromDate(input.now),
+    });
+    transaction.update(patientSnap.ref, {
+      walletBalance: increment(input.amount),
+      // Names the ledger row this movement belongs to. The patients
+      // security rule refuses any walletBalance change that does not
+      // point at a row created in the same transaction for exactly
+      // this amount, and the walletTransactions rule checks the inverse
+      // — so the ledger is enforced, not merely kept.
+      lastWalletTxnId: transactionRef.id,
+      updatedAt: Timestamp.now(),
+    });
+
+    return transactionRef.id;
   },
 
   /**

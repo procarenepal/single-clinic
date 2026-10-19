@@ -48,6 +48,10 @@ async function reset() {
       setDoc(doc(db, "expertCommissions", "ec1"), commissionSeed("expertId", {})),
       setDoc(doc(db, "referralCommissions", "rc1"), commissionSeed("partnerId", { paidAmount: 0 })),
       setDoc(doc(db, "staffCommissions", "sc1"), commissionSeed("staffId", {})),
+      // Visits: one with nothing collected yet, one holding a deposit (part of it wallet credit), one invoiced.
+      setDoc(doc(db, "appointments", "a1"), { clinicId: "default", patientId: "p1", status: "confirmed", depositedAmount: 0, createdBy: STAFF }),
+      setDoc(doc(db, "appointments", "a2"), { clinicId: "default", patientId: "p1", status: "confirmed", depositedAmount: 500, depositFromCredit: 200, depositTxnIds: ["w1", "w2"], createdBy: STAFF }),
+      setDoc(doc(db, "appointments", "a3"), { clinicId: "default", patientId: "p1", status: "completed", billingId: "inv1", depositedAmount: 500, depositFromCredit: 200, depositTxnIds: ["w1", "w2"], createdBy: STAFF }),
     ]);
   });
 }
@@ -340,6 +344,74 @@ for (const [coll, id, idField] of [
   await t(`${coll}: clinic-admin can delete`, () =>
     assertSucceeds(deleteDoc(doc(as(ADMIN), coll, id))));
 }
+
+// ── appointments: the visit's deposit is ledgered ───────────────────────────
+// A rise must be written in the same transaction as the wallet row that took
+// the money and names this visit (collectCheckInDue); a fall is only for a
+// visit that has been invoiced or will never be. Everything else is refused —
+// clinic-admin included.
+const depositRow = (over) => row({ referenceId: "a1", referenceType: "appointment", amount: 500, ...over });
+await t("deposit: cash collected at check-in — row + balance + visit in one batch", async () => {
+  const db = as(STAFF); const b = writeBatch(db);
+  b.set(doc(db, "walletTransactions", "d1"), depositRow({}));
+  b.update(doc(db, "patients", "p1"), { walletBalance: 600, lastWalletTxnId: "d1" });
+  b.update(doc(db, "appointments", "a1"), { depositedAmount: 500, depositTxnIds: ["d1"], checkInDepositFailedAt: null });
+  await assertSucceeds(b.commit());
+});
+await t("deposit: wallet credit spent at check-in — deduction row, credit share rises by exactly it", async () => {
+  const db = as(STAFF); const b = writeBatch(db);
+  b.set(doc(db, "walletTransactions", "d2"), depositRow({ type: "deduction", amount: 80 }));
+  b.update(doc(db, "patients", "p1"), { walletBalance: 20, lastWalletTxnId: "d2" });
+  b.update(doc(db, "appointments", "a1"), { depositedAmount: 80, depositFromCredit: increment(80), depositTxnIds: ["d2"] });
+  await assertSucceeds(b.commit());
+});
+await t("deposit: a rise with no ledger row is refused", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointments", "a1"), { depositedAmount: 500 })));
+await t("deposit: clinic-admin cannot invent a deposit either", () =>
+  assertFails(updateDoc(doc(as(ADMIN), "appointments", "a1"), { depositedAmount: 500, depositTxnIds: ["nope"] })));
+await t("deposit: a rise larger than its row is refused", async () => {
+  const db = as(STAFF); const b = writeBatch(db);
+  b.set(doc(db, "walletTransactions", "d3"), depositRow({}));
+  b.update(doc(db, "patients", "p1"), { walletBalance: 600, lastWalletTxnId: "d3" });
+  b.update(doc(db, "appointments", "a1"), { depositedAmount: 900, depositTxnIds: ["d3"] });
+  await assertFails(b.commit());
+});
+await t("deposit: a row for a different visit does not vouch for this one", async () => {
+  const db = as(STAFF); const b = writeBatch(db);
+  b.set(doc(db, "walletTransactions", "d4"), depositRow({ referenceId: "a2" }));
+  b.update(doc(db, "patients", "p1"), { walletBalance: 600, lastWalletTxnId: "d4" });
+  b.update(doc(db, "appointments", "a1"), { depositedAmount: 500, depositTxnIds: ["d4"] });
+  await assertFails(b.commit());
+});
+await t("deposit: the credit share cannot rise on a cash (deposit) row", async () => {
+  const db = as(STAFF); const b = writeBatch(db);
+  b.set(doc(db, "walletTransactions", "d5"), depositRow({}));
+  b.update(doc(db, "patients", "p1"), { walletBalance: 600, lastWalletTxnId: "d5" });
+  b.update(doc(db, "appointments", "a1"), { depositedAmount: 500, depositFromCredit: 500, depositTxnIds: ["d5"] });
+  await assertFails(b.commit());
+});
+await t("deposit: the credit share alone cannot be rewritten", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointments", "a2"), { depositFromCredit: 500 })));
+await t("deposit: a collected deposit cannot be zeroed on a live visit", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointments", "a2"), { depositedAmount: 0, depositFromCredit: 0 })));
+await t("deposit: clinic-admin cannot zero it on a live visit either", () =>
+  assertFails(updateDoc(doc(as(ADMIN), "appointments", "a2"), { depositedAmount: 0, depositFromCredit: 0 })));
+await t("deposit: checkout releases the applied deposit and its credit share together", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a3"), { depositedAmount: increment(-500), depositFromCredit: increment(-200), updatedAt: now() })));
+await t("deposit: checkout may release part of it, credit share first", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a3"), { depositedAmount: 300, depositFromCredit: 0, updatedAt: now() })));
+await t("deposit: a release that leaves the credit share above the deposit is refused", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointments", "a3"), { depositedAmount: 100, updatedAt: now() })));
+await t("deposit: cancelling the visit clears it in the same write", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a2"), { status: "cancelled", depositedAmount: 0, depositFromCredit: 0, depositTxnIds: [], pendingVisitItems: [] })));
+await t("deposit: no-show clears it after the status moved", async () => {
+  await assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a2"), { status: "no-show" }));
+  await assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a2"), { depositedAmount: 0, depositFromCredit: 0 }));
+});
+await t("deposit: it cannot go negative", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointments", "a3"), { depositedAmount: -50, depositFromCredit: 0 })));
+await t("deposit: untouched — other fields edit freely", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a2"), { notes: "triaged", pendingVisitItems: [{ id: "l1", price: 700, amount: 700 }] })));
 
 // ── users: nobody promotes themselves ────────────────────────────────────────
 await t("users: a member may edit their own profile", () =>

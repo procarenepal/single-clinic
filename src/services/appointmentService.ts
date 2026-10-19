@@ -17,18 +17,12 @@ import {
   DocumentSnapshot,
   runTransaction,
   increment,
-  arrayUnion,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
 import { cacheService } from "@/services/cacheService";
 import { Appointment, AppointmentBillingItem } from "@/types/models";
 import { mergeVisitLines } from "@/services/core/legacyVisitAdapters";
-import {
-  getVisitPaymentGate,
-  type VisitGateScope,
-  type VisitPricingContext,
-} from "@/services/core/visitBillingCore";
 import { parseLocalDate } from "@/utils/localDate";
 import { resolveClinicId } from "./currentClinic";
 
@@ -517,80 +511,10 @@ export const appointmentService = {
   },
 
   /**
-   * Atomically claim an amount of this visit's outstanding deposit, BEFORE
-   * any money is actually moved.
-   *
-   * Collecting a deposit used to be a read-modify-write against a React
-   * snapshot: two staff (or two tabs) both read `depositedAmount: 0`, both
-   * decided the full amount was due, and both collected it — the wallet
-   * took the money twice while the appointment recorded it once, leaving
-   * untracked credit that no report surfaces.
-   *
-   * This re-reads the appointment inside a transaction and claims only what
-   * is genuinely still due, so the loser of a race claims 0 and its caller
-   * can stop instead of charging the patient again. Mirrors the "claim the
-   * payment atomically before side effects" pattern in
-   * appointmentBillingService.recordPayment.
-   *
-   * @returns the amount actually claimed — 0 means someone else already
-   *          collected it and NO money should be moved.
-   */
-  async claimVisitDeposit(
-    appointmentId: string,
-    /** An amount, or "due" to claim everything the scope still owes. */
-    requestedAmount: number | "due",
-    /**
-     * The clinic's tax settings, so "what is still due" is computed the
-     * same way the desk computed the amount it is asking to claim. Without
-     * them this fell back to the pre-tax line total: the desk asked for
-     * the tax-inclusive gap, the claim capped it at the pre-tax gap, and
-     * the visit was stuck forever — "Collect Deposit" still showing, a
-     * second click answering "already collected".
-     */
-    pricing: VisitPricingContext,
-    /**
-     * Which lines count as owed: "checkin" is what is collected before the
-     * clinician (the check-in deposit), "all" is the whole visit.
-     */
-    scope: VisitGateScope = "all",
-    /** Standing wallet credit that reduces what is due (never a ledger row). */
-    opts: { standingCredit?: number } = {},
-  ): Promise<number> {
-    if (requestedAmount !== "due" && !(requestedAmount > 0)) return 0;
-
-    const appointmentRef = doc(db, "appointments", appointmentId);
-
-    return runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(appointmentRef);
-
-      if (!snap.exists()) {
-        throw new Error("Appointment not found");
-      }
-
-      const data = snap.data();
-      const gate = getVisitPaymentGate(data as any, pricing, scope, opts);
-      const alreadyDeposited = gate.deposited;
-      const stillDue = gate.dueAmount;
-      const claimable =
-        requestedAmount === "due"
-          ? stillDue
-          : Math.min(requestedAmount, stillDue);
-
-      if (claimable <= 0) return 0;
-
-      transaction.update(appointmentRef, {
-        depositedAmount: alreadyDeposited + claimable,
-        updatedAt: Timestamp.now(),
-      });
-
-      return claimable;
-    });
-  },
-
-  /**
    * Move a scheduled visit to the lobby, once. Two desks clicking Check In
-   * both land here; only the first transitions. The deposit claim is a
-   * separate transaction, so the second desk takes no money of its own.
+   * both land here; only the first transitions. The deposit is taken in
+   * its own transaction (visitLineService.collectCheckInDue, which re-reads
+   * what is still due), so the second desk takes no money of its own.
    */
   async checkInAppointment(
     appointmentId: string,
@@ -623,65 +547,6 @@ export const appointmentService = {
     }
 
     return result;
-  },
-
-  /**
-   * Record the ledger row behind a collected deposit, and — only when the
-   * money came from standing credit — that it must not be deducted from
-   * the wallet again at checkout. One write for both: the deduction has
-   * already happened in the wallet by the time this runs, so this is the
-   * only record of which share of the deposit that was; splitting it into
-   * two separate best-effort writes doubled the chance of the second one
-   * being lost while the first silently succeeded. A success also clears
-   * any earlier "deposit failed" marker.
-   */
-  async attachVisitDepositTxn(
-    appointmentId: string,
-    txnId: string,
-    fromCredit: number = 0,
-  ): Promise<void> {
-    const data: Record<string, unknown> = {
-      depositTxnIds: arrayUnion(txnId),
-      checkInDepositFailedAt: null,
-      updatedAt: Timestamp.now(),
-    };
-    if (fromCredit > 0) data.depositFromCredit = increment(fromCredit);
-
-    // This is the only record of which share of an already-collected
-    // deposit was credit vs. cash — losing it re-opens the double-charge
-    // this exists to prevent, so a transient failure is worth retrying
-    // a few times rather than logging and moving on.
-    const ref = doc(db, "appointments", appointmentId);
-    let lastErr: unknown;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await updateDoc(ref, data);
-        return;
-      } catch (err) {
-        lastErr = err;
-        if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-        }
-      }
-    }
-    throw lastErr;
-  },
-
-  /**
-   * Moves the credit-funded share of the visit's deposit by `delta` —
-   * negative when checkout applies it or a no-show returns it. (The
-   * positive case, at check-in, goes through attachVisitDepositTxn above
-   * in the same write as the ledger-row id.)
-   */
-  async markVisitDepositFromCredit(
-    appointmentId: string,
-    delta: number,
-  ): Promise<void> {
-    if (!delta) return;
-    await updateDoc(doc(db, "appointments", appointmentId), {
-      depositFromCredit: increment(delta),
-      updatedAt: Timestamp.now(),
-    });
   },
 
   async markCheckInDepositFailed(
@@ -792,39 +657,30 @@ export const appointmentService = {
   },
 
   /**
-   * Give back a previously claimed deposit amount when the money move that
-   * followed it failed, so the visit doesn't look paid for when nothing was
-   * collected. Uses an atomic decrement rather than a recomputed write so a
-   * concurrent legitimate collection isn't clobbered.
+   * Release part of the visit's recorded deposit once checkout has applied
+   * it to the invoice (or returned unused credit to the wallet), together
+   * with whatever share of it was wallet credit. One write for both: as two
+   * writes, depositFromCredit briefly exceeded depositedAmount — a state
+   * the appointments rule refuses. Atomic decrements rather than recomputed
+   * values, so a concurrent write isn't clobbered. The positive direction
+   * is written only by visitLineService.collectCheckInDue, in the same
+   * transaction as the wallet ledger row that vouches for it.
    */
   async releaseVisitDeposit(
     appointmentId: string,
     amount: number,
+    fromCredit: number = 0,
   ): Promise<void> {
     if (!(amount > 0)) return;
 
-    await updateDoc(doc(db, "appointments", appointmentId), {
+    const data: Record<string, unknown> = {
       depositedAmount: increment(-amount),
       updatedAt: Timestamp.now(),
-    });
-  },
+    };
 
-  /**
-   * Add to this visit's recorded deposit atomically. Used where the amount
-   * is already known to be legitimately collectable (e.g. a fee this call
-   * itself just appended), so no claim/re-check is needed — but the write
-   * must still not be a read-modify-write against stale state.
-   */
-  async addToVisitDeposit(
-    appointmentId: string,
-    amount: number,
-  ): Promise<void> {
-    if (!(amount > 0)) return;
+    if (fromCredit > 0) data.depositFromCredit = increment(-fromCredit);
 
-    await updateDoc(doc(db, "appointments", appointmentId), {
-      depositedAmount: increment(amount),
-      updatedAt: Timestamp.now(),
-    });
+    await updateDoc(doc(db, "appointments", appointmentId), data);
   },
 
   /**

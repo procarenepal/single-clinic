@@ -458,8 +458,38 @@ describe("reverseVisitPlan", () => {
     expect(plan.patch.pendingVisitItems).toEqual([]);
     expect(plan.patch.depositedAmount).toBe(0);
     expect(plan.walletCreditRetained).toBe(791);
+    expect(plan.walletCreditToReturn).toBe(0);
     expect(plan.releasesSession).toBe(true);
     expect(plan.note).toMatch(/Cancelled by staff1/);
+  });
+
+  it("cancel returns the credit share to the wallet and keeps only the cash share as credit", () => {
+    // NPR 791 collected at check-in: 300 taken out of the wallet as standing
+    // credit, 491 paid in as cash. Cancelling must put the 300 back — it
+    // used to be left at 0 with the deposit record cleared, so the patient
+    // simply lost it — and the 491 stays in the wallet as credit.
+    const plan = reverseVisitPlan(
+      "cancel",
+      { status: "confirmed", depositedAmount: 791, depositFromCredit: 300, pendingVisitItems: [{ price: 700, amount: 700 }] },
+      { by, now, reason: "left" },
+    );
+
+    expect(plan.allowed).toBe(true);
+    expect(plan.patch.depositedAmount).toBe(0);
+    expect(plan.patch.depositFromCredit).toBe(0);
+    expect(plan.walletCreditToReturn).toBe(300);
+    expect(plan.walletCreditRetained).toBe(491);
+  });
+
+  it("cancel never returns more credit than was deposited", () => {
+    const plan = reverseVisitPlan(
+      "cancel",
+      { status: "confirmed", depositedAmount: 100, depositFromCredit: 250 },
+      { by, now },
+    );
+
+    expect(plan.walletCreditToReturn).toBe(100);
+    expect(plan.walletCreditRetained).toBe(0);
   });
 
   it("cancel is refused once an invoice has been filed", () => {

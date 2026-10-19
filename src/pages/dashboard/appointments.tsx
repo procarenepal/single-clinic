@@ -43,6 +43,7 @@ import { addToast } from "@/components/ui/toast";
 import { appointmentService } from "@/services/appointmentService";
 import { patientPackageService } from "@/services/patientPackageService";
 import { auditLogService } from "@/services/auditLogService";
+import { walletService } from "@/services/walletService";
 import {
   reverseVisitPlan,
   canCompleteCheckout,
@@ -460,6 +461,21 @@ export default function AppointmentsPage() {
 
       const priorNotes = appt.notes || "";
 
+      // The credit share of the deposit was taken OUT of the wallet at
+      // check-in; clearing the visit's deposit record below without paying
+      // it back made it vanish. Refunded first, the way the desk's no-show
+      // already does, so a failure here leaves the visit's record intact.
+      if (plan.walletCreditToReturn > 0) {
+        await walletService.refundFunds(
+          appt.patientId,
+          appt.clinicId || clinicId || "",
+          plan.walletCreditToReturn,
+          appt.id,
+          `Visit credit returned — ${newStatus === "cancelled" ? "cancelled" : "marked no-show"}`,
+          currentUser?.uid || "system",
+        );
+      }
+
       await appointmentService.updateAppointment(appt.id, {
         ...plan.patch,
         ...(plan.note
@@ -491,6 +507,7 @@ export default function AppointmentsPage() {
               appointmentId: appt.id,
               patientId: appt.patientId,
               depositReleasedAsCredit: plan.walletCreditRetained,
+              creditReturnedToWallet: plan.walletCreditToReturn,
               reason,
             },
           )

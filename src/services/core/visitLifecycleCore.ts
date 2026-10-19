@@ -66,6 +66,8 @@ export interface VisitLifecycleInput {
   checkoutCompleted?: boolean;
   pendingVisitItems?: VisitBillingItem[];
   depositedAmount?: number;
+  /** The share of depositedAmount taken OUT of the wallet as standing credit at check-in. */
+  depositFromCredit?: number | null;
   pendingVisitDiscountType?: "flat" | "percent" | null;
   pendingVisitDiscountValue?: number | null;
   recommendedProcedure?: unknown;
@@ -434,8 +436,17 @@ export interface ReverseVisitPlan {
   patch: Record<string, unknown>;
   /** A package session ticket this visit held must be released. */
   releasesSession: boolean;
-  /** Money already in the wallet that stays there as credit (never clawed). */
+  /** The cash share of the deposit: already in the wallet, stays there as credit (never clawed). */
   walletCreditRetained: number;
+  /**
+   * The credit share of the deposit: taken OUT of the wallet at check-in
+   * (visitLineService.collectCheckInDue), so clearing the visit's deposit
+   * record without paying it back makes it vanish. The caller refunds
+   * exactly this (walletService.refundFunds). Cancel used to clear the
+   * deposit and leave this at 0, so a cancelled, credit-funded visit lost
+   * the patient their credit.
+   */
+  walletCreditToReturn: number;
   /** A line to append to the visit's notes. */
   note?: string;
 }
@@ -454,11 +465,16 @@ export function reverseVisitPlan(
 ): ReverseVisitPlan {
   const status = visit.status?.toLowerCase();
   const deposit = Math.max(0, visit.depositedAmount || 0);
+  const creditTaken = Math.min(
+    deposit,
+    Math.max(0, visit.depositFromCredit || 0),
+  );
   const none: ReverseVisitPlan = {
     allowed: false,
     patch: {},
     releasesSession: false,
     walletCreditRetained: 0,
+    walletCreditToReturn: 0,
   };
   const stamp = (label: string) =>
     `[${label} by ${input.by} at ${input.now.toISOString()}${input.reason ? `: ${input.reason}` : ""}]`;
@@ -478,6 +494,7 @@ export function reverseVisitPlan(
         patch: { status: "no-show" },
         releasesSession: false,
         walletCreditRetained: 0,
+        walletCreditToReturn: 0,
         note: stamp("No-show"),
       };
 
@@ -506,10 +523,12 @@ export function reverseVisitPlan(
           recommendedItems: [],
           recommendedProcedure: null,
           depositedAmount: 0,
+          depositFromCredit: 0,
           depositTxnIds: [],
         },
         releasesSession: Boolean(visit.patientPackageId),
-        walletCreditRetained: deposit,
+        walletCreditRetained: deposit - creditTaken,
+        walletCreditToReturn: creditTaken,
         note: stamp("Cancelled"),
       };
 
@@ -530,6 +549,7 @@ export function reverseVisitPlan(
         patch: { status: "confirmed", cabinName: null },
         releasesSession: false,
         walletCreditRetained: 0,
+        walletCreditToReturn: 0,
         note: stamp("Sent back to waiting"),
       };
 
@@ -559,6 +579,7 @@ export function reverseVisitPlan(
         },
         releasesSession: Boolean(visit.patientPackageId),
         walletCreditRetained: 0,
+        walletCreditToReturn: 0,
         note: stamp("Check-in undone"),
       };
 
@@ -575,6 +596,7 @@ export function reverseVisitPlan(
         patch: { status: "scheduled", cancelReason: null, checkedInAt: null },
         releasesSession: false,
         walletCreditRetained: 0,
+        walletCreditToReturn: 0,
         note: stamp("Reinstated"),
       };
   }
