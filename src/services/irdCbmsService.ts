@@ -2,6 +2,7 @@ import NepaliDate from "nepali-datetime";
 
 import { auth } from "../config/firebase";
 import { parseLocalDate } from "../utils/localDate";
+import { describeCbmsResponseCode } from "../utils/cbmsResponseCodes";
 
 /**
  * Calculates the Nepali Fiscal Year (e.g., "2080.081") based on the provided date.
@@ -64,7 +65,7 @@ export const retryIrdSync = async (
   invoiceId: string,
   invoiceType: "appointment" | "pathology" | "pharmacy",
   isReturn: boolean = false,
-): Promise<{ success: boolean; message: string }> => {
+): Promise<{ success: boolean; message: string; responseCode?: string }> => {
   try {
     const { clinicSettingsService } = await import("./clinicSettingsService");
     const { clinicService } = await import("./clinicService");
@@ -200,12 +201,23 @@ export const retryIrdSync = async (
       // itself; writing it from here as well would mean two writers for one
       // fact, and the client is the one that can be wrong.
 
+      // cbmsResponseCode was always on this response — it just never made it
+      // past this function before, so every failure read as the same
+      // generic "Java Backend Sync Failed" regardless of cause.
+      const reason = javaResult.irdSynced
+        ? null
+        : describeCbmsResponseCode(javaResult.cbmsResponseCode);
+
       result = {
         success: javaResult.irdSynced,
         responseCode: javaResult.cbmsResponseCode,
         message: javaResult.irdSynced
           ? "Java Backend Sync Success"
-          : "Java Backend Sync Failed",
+          : reason
+            ? `Sync failed: ${reason}`
+            : javaResult.cbmsResponseCode
+              ? `Sync failed (CBMS code ${javaResult.cbmsResponseCode}).`
+              : "Java Backend Sync Failed",
       };
     } catch (err: any) {
       result = { success: false, responseCode: "500", message: err.message };
@@ -233,6 +245,7 @@ export const retryIrdSync = async (
     return {
       success: result.success,
       message: result.message || "Sync attempt finished.",
+      responseCode: result.responseCode,
     };
   } catch (error: any) {
     console.error("Retry sync error:", error);

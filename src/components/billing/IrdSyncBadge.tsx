@@ -1,4 +1,7 @@
+import { useState } from "react";
+
 import { addToast } from "@/components/ui/toast";
+import { describeCbmsResponseCode } from "@/utils/cbmsResponseCodes";
 
 /**
  * Shared IRD sync status pill (Synced / Failed + Retry / N/A) — used by
@@ -22,13 +25,20 @@ export function IrdSyncBadge({
   recordId,
   invoiceType,
   onSynced,
+  /** The record's own cbmsResponseCode, when it has one — the backend mirrors
+   * this onto the record from every sync attempt. Shown directly under a
+   * Failed badge (no click required) instead of making staff retry just to
+   * learn why it's already failing. */
+  responseCode,
 }: {
   attempted: boolean;
   synced: boolean;
   recordId: string;
   invoiceType: "appointment" | "pathology" | "pharmacy";
   onSynced?: () => void;
+  responseCode?: string | null;
 }) {
+  const [liveReason, setLiveReason] = useState<string | null>(null);
   if (!attempted) {
     return (
       <span className="text-[10px] text-text-muted/60">➖ N/A</span>
@@ -52,6 +62,7 @@ export function IrdSyncBadge({
         addToast({ title: "IRD Sync successful!", color: "success" });
         onSynced?.();
       } else {
+        setLiveReason(res.message || null);
         addToast({
           title: "IRD Sync failed",
           description: res.message,
@@ -63,11 +74,18 @@ export function IrdSyncBadge({
     }
   };
 
+  // Prefer what this attempt just said (liveReason) over the record's own
+  // stored code, so a second failure explains itself without a page reload.
+  const reason = liveReason || describeCbmsResponseCode(responseCode);
+
   return (
-    <div className="flex flex-col gap-1 items-start">
+    <div className="flex flex-col gap-1 items-start max-w-[220px]">
       <span className="text-[10px] bg-danger-50 text-danger-600 px-1.5 py-0.5 rounded font-medium border border-danger-200">
         ⚠️ Failed
       </span>
+      {reason && (
+        <p className="text-[10px] text-text-muted leading-snug">{reason}</p>
+      )}
       <button
         className="text-[10px] text-primary hover:underline"
         type="button"

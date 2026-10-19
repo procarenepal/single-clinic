@@ -2877,6 +2877,7 @@ export default function PathologyBillingTab({
                             )}
                             invoiceType="pathology"
                             recordId={billing.id}
+                            responseCode={billing.cbmsResponseCode}
                             synced={Boolean(billing.irdSynced)}
                             onSynced={async () => {
                               const updated =

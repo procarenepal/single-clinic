@@ -4281,6 +4281,7 @@ export default function PharmacyPage() {
                                         ? purchase.sourceBillingId!
                                         : purchase.id
                                     }
+                                    responseCode={purchase.cbmsResponseCode}
                                     synced={Boolean(purchase.irdSynced)}
                                     onSynced={async () => {
                                       // A billing-counter row isn't a real

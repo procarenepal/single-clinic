@@ -1058,6 +1058,7 @@ export default function InvoiceDetailPage() {
                   )}
                   invoiceType="appointment"
                   recordId={invoice.id}
+                  responseCode={invoice.cbmsResponseCode}
                   synced={Boolean(invoice.irdSynced)}
                   onSynced={async () => {
                     const updatedInvoice =

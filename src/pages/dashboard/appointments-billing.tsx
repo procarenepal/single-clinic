@@ -2289,6 +2289,7 @@ export default function AppointmentBillingPage() {
                               )}
                               invoiceType="appointment"
                               recordId={b.id}
+                              responseCode={b.cbmsResponseCode}
                               synced={Boolean(b.irdSynced)}
                               onSynced={loadData}
                             />

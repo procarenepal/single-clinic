@@ -711,6 +711,7 @@ export default function PathologyInvoiceDetailPage() {
                   )}
                   invoiceType="pathology"
                   recordId={invoice.id}
+                  responseCode={invoice.cbmsResponseCode}
                   synced={Boolean(invoice.irdSynced)}
                   onSynced={async () => {
                     const updated = await pathologyBillingService.getBillingById(
