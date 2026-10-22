@@ -40,7 +40,11 @@ async function reset() {
       setDoc(doc(db, "appointmentBilling", "inv3"), { clinicId: "default", invoiceNumber: "INV-3", patientId: "p1", doctorId: "d", totalAmount: 565, paidAmount: 0, balanceAmount: 565, status: "finalized", paymentStatus: "unpaid", irdSynced: false, createdBy: STAFF, paymentHistory: [] }),
       setDoc(doc(db, "pathologyBilling", "lab1"), { clinicId: "default", invoiceNumber: "LAB-1", patientName: "P One", totalAmount: 565, paidAmount: 565, status: "paid", paymentStatus: "paid", irdSynced: false, createdBy: STAFF, reportStatus: "pending_collection" }),
       setDoc(doc(db, "medicinePurchases", "pur1"), { clinicId: "default", purchaseNo: "PH-1", items: [], total: 100, netAmount: 100, paymentType: "cash", paymentStatus: "paid", purchaseDate: now(), createdBy: STAFF, irdSynced: true, returns: [] }),
-      setDoc(doc(db, "patientPackages", "pkg1"), { clinicId: "default", patientId: "p1", packageName: "X" }),
+      setDoc(doc(db, "patientPackages", "pkg1"), { clinicId: "default", patientId: "p1", packageId: "pk1", packageName: "X", branchId: "default", totalSessions: 5, usedSessions: 1, perSessionValue: 100, status: "active", createdBy: STAFF }),
+      setDoc(doc(db, "patientPackages", "pkg_expired"), { clinicId: "default", patientId: "p1", packageId: "pk1", packageName: "X", branchId: "default", totalSessions: 5, usedSessions: 1, perSessionValue: 100, status: "expired", createdBy: STAFF }),
+      setDoc(doc(db, "patientPackages", "pkg_completed"), { clinicId: "default", patientId: "p1", packageId: "pk1", packageName: "X", branchId: "default", totalSessions: 5, usedSessions: 5, perSessionValue: 100, status: "completed", createdBy: STAFF }),
+      setDoc(doc(db, "patientPackages", "pkg_refunded"), { clinicId: "default", patientId: "p1", packageId: "pk1", packageName: "X", branchId: "default", totalSessions: 5, usedSessions: 1, perSessionValue: 100, status: "refunded", refundedAt: now(), refundedAmount: 400, refundReason: "r", refundedSessions: 4, createdBy: STAFF }),
+      setDoc(doc(db, "appointmentBillingSettings", "default"), { clinicId: "default", frontOffice: { discountRoles: ["clinic-admin"] } }),
       // Commission records: one owing in full, one paid in full, one cancelled, and one per sibling collection.
       setDoc(doc(db, "doctorCommissions", "dc1"), commissionSeed("doctorId", {})),
       setDoc(doc(db, "doctorCommissions", "dc2"), commissionSeed("doctorId", { paidAmount: 84.75, status: "paid", paymentMethod: "cash", paidDate: now() })),
@@ -207,12 +211,45 @@ await t("wallet: a patient cannot be born with a balance", () =>
 // ── patientPackages ─────────────────────────────────────────────────────────
 await t("packages: clinic member can create and update", async () => {
   await assertSucceeds(setDoc(doc(as(STAFF), "patientPackages", "pkg2"), { clinicId: "default", patientId: "p1" }));
-  await assertSucceeds(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), { usedSessions: 1 }));
+  await assertSucceeds(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), { usedSessions: 2 }));
 });
 await t("packages: nobody deletes, clinic-admin included", async () => {
   await assertFails(deleteDoc(doc(as(STAFF), "patientPackages", "pkg1")));
   await assertFails(deleteDoc(doc(as(ADMIN), "patientPackages", "pkg1")));
 });
+await t("packages: cannot be born already partly used or non-active", async () => {
+  await assertFails(setDoc(doc(as(STAFF), "patientPackages", "pkg3"), { clinicId: "default", patientId: "p1", usedSessions: 2 }));
+  await assertFails(setDoc(doc(as(STAFF), "patientPackages", "pkg4"), { clinicId: "default", patientId: "p1", status: "completed" }));
+});
+await t("packages: usedSessions cannot go backward", () =>
+  assertFails(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), { usedSessions: 0 })));
+await t("packages: usedSessions cannot exceed totalSessions", () =>
+  assertFails(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), { usedSessions: 6 })));
+await t("packages: identity/pricing fields are immutable", async () => {
+  await assertFails(updateDoc(doc(as(ADMIN), "patientPackages", "pkg1"), { totalSessions: 10 }));
+  await assertFails(updateDoc(doc(as(ADMIN), "patientPackages", "pkg1"), { perSessionValue: 1 }));
+  await assertFails(updateDoc(doc(as(ADMIN), "patientPackages", "pkg1"), { patientId: "p9" }));
+});
+await t("packages: active can complete", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), { status: "completed", usedSessions: 5 })));
+await t("packages: active can expire", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), { status: "expired" })));
+await t("packages: active can be refunded", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), {
+    status: "refunded", refundedAt: now(), refundedAmount: 400, refundReason: "unused", refundedSessions: 4,
+  })));
+await t("packages: expired can still be refunded", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "patientPackages", "pkg_expired"), {
+    status: "refunded", refundedAt: now(), refundedAmount: 400, refundReason: "unused", refundedSessions: 4,
+  })));
+await t("packages: completed is terminal", () =>
+  assertFails(updateDoc(doc(as(ADMIN), "patientPackages", "pkg_completed"), { status: "active", usedSessions: 1 })));
+await t("packages: refunded is terminal and its fields cannot be rewritten", async () => {
+  await assertFails(updateDoc(doc(as(ADMIN), "patientPackages", "pkg_refunded"), { status: "active" }));
+  await assertFails(updateDoc(doc(as(ADMIN), "patientPackages", "pkg_refunded"), { refundedAmount: 1 }));
+});
+await t("packages: refund fields cannot be set without the status moving to refunded", () =>
+  assertFails(updateDoc(doc(as(STAFF), "patientPackages", "pkg1"), { refundedAt: now(), refundedAmount: 400 })));
 
 
 // ── patients: delete ─────────────────────────────────────────────────────────
@@ -412,6 +449,35 @@ await t("deposit: it cannot go negative", () =>
   assertFails(updateDoc(doc(as(STAFF), "appointments", "a3"), { depositedAmount: -50, depositFromCredit: 0 })));
 await t("deposit: untouched — other fields edit freely", () =>
   assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a2"), { notes: "triaged", pendingVisitItems: [{ id: "l1", price: 700, amount: 700 }] })));
+
+// ── appointments: status machine, pending-lines sanity, discount gate ───────
+await t("status: an impossible value is refused", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointments", "a1"), { status: "paid-in-full" })));
+await t("status: completed is terminal, clinic-admin included", async () => {
+  await assertFails(updateDoc(doc(as(STAFF), "appointments", "a3"), { status: "confirmed" }));
+  await assertFails(updateDoc(doc(as(ADMIN), "appointments", "a3"), { status: "scheduled" }));
+});
+await t("status: writing the same value back is always fine", () =>
+  assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a3"), { status: "completed", notes: "x" })));
+await t("pendingVisitItems: must be a list, with a sanity size cap", async () => {
+  await assertFails(updateDoc(doc(as(STAFF), "appointments", "a1"), { pendingVisitItems: "not-a-list" }));
+  await assertFails(updateDoc(doc(as(STAFF), "appointments", "a1"), {
+    pendingVisitItems: Array.from({ length: 201 }, (_, i) => ({ id: `l${i}` })),
+  }));
+});
+await t("discount: staff cannot grant itself discount authority the UI gates behind clinic-admin", () =>
+  assertFails(updateDoc(doc(as(STAFF), "appointments", "a1"), {
+    pendingVisitDiscountType: "percent", pendingVisitDiscountValue: 50,
+  })));
+await t("discount: clinic-admin may set it (the default discountRoles)", () =>
+  assertSucceeds(updateDoc(doc(as(ADMIN), "appointments", "a1"), {
+    pendingVisitDiscountType: "percent", pendingVisitDiscountValue: 10, pendingVisitDiscountReason: "loyalty",
+  })));
+await t("discount: a role added to billingSettings.frontOffice.discountRoles gains authority here too", async () => {
+  await env.withSecurityRulesDisabled((c) =>
+    updateDoc(doc(c.firestore(), "appointmentBillingSettings", "default"), { "frontOffice.discountRoles": ["clinic-admin", "staff"] }));
+  await assertSucceeds(updateDoc(doc(as(STAFF), "appointments", "a1"), { pendingVisitDiscountValue: 5 }));
+});
 
 // ── users: nobody promotes themselves ────────────────────────────────────────
 await t("users: a member may edit their own profile", () =>

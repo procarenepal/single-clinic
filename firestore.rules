@@ -483,12 +483,61 @@ match /patientPackages/{docId} {
   allow create: if isAuthenticated() &&
                 (isSuperAdmin() ||
                  (request.resource.data.clinicId != null &&
-                  belongsToClinic(request.resource.data.clinicId)));
+                  belongsToClinic(request.resource.data.clinicId)))
+                && request.resource.data.get('status', 'active') == 'active'
+                && request.resource.data.get('usedSessions', 0) == 0;
+
+  // ── Package integrity ───────────────────────────────────────────────────
+  // sessions/sessionHistory are lists of maps, which Firestore rules cannot
+  // validate element-by-element (no list comprehension) — only the scalar
+  // accounting fields are bound here. usedSessions only rises
+  // (consumeSession's increment(1)) and never exceeds totalSessions;
+  // identity/pricing fields set at sale never change; status follows the
+  // one path every write site takes (active -> completed once exhausted,
+  // active or expired -> refunded, both terminal); the refund fields are
+  // set exactly once, together with the move to "refunded".
+  function packageIdentityUnchanged() {
+    return request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.packageId == resource.data.packageId
+        && request.resource.data.get('packageName', null) == resource.data.get('packageName', null)
+        && request.resource.data.get('billingId', null) == resource.data.get('billingId', null)
+        && request.resource.data.get('branchId', null) == resource.data.get('branchId', null)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('totalSessions', 0) == resource.data.get('totalSessions', 0)
+        && request.resource.data.get('perSessionValue', 0) == resource.data.get('perSessionValue', 0);
+  }
+  function packageUsageIsSane() {
+    let before = resource.data.get('usedSessions', 0);
+    let after = request.resource.data.get('usedSessions', 0);
+    return after >= before && after <= request.resource.data.get('totalSessions', 0);
+  }
+  function packageStatusIsSane() {
+    let before = resource.data.get('status', 'active');
+    let after = request.resource.data.get('status', 'active');
+    return before == after
+        || (before == 'active' && after in ['completed', 'expired', 'refunded'])
+        || (before == 'expired' && after == 'refunded');
+  }
+  function packageRefundFieldsAreSane() {
+    let before = resource.data.get('refundedAt', null);
+    return before == null
+      ? (request.resource.data.get('refundedAt', null) == null
+         || request.resource.data.get('status', '') == 'refunded')
+      : (request.resource.data.get('refundedAt', null) == before
+         && request.resource.data.get('refundedAmount', null) == resource.data.get('refundedAmount', null)
+         && request.resource.data.get('refundReason', null) == resource.data.get('refundReason', null)
+         && request.resource.data.get('refundedSessions', null) == resource.data.get('refundedSessions', null));
+  }
+
   allow update: if isAuthenticated() &&
                 (isSuperAdmin() ||
                  (resource.data.clinicId != null &&
                   belongsToClinic(resource.data.clinicId) &&
-                  request.resource.data.clinicId == resource.data.clinicId));
+                  request.resource.data.clinicId == resource.data.clinicId))
+                && packageIdentityUnchanged()
+                && packageUsageIsSane()
+                && packageStatusIsSane()
+                && packageRefundFieldsAreSane();
   allow delete: if false;
 }
 
@@ -1449,13 +1498,65 @@ match /appointments/{appointmentId} {
         && creditAfter <= after + eps();
   }
 
+  // ── The visit's pre-invoice state: pendingVisitItems/pendingVisitReferrals,
+  // pendingVisitDiscount*, and status — previously completely unconstrained
+  // beyond clinicId. Firestore rules have no per-array-element predicate
+  // (no list comprehension), so the pending-lines lists get only a shape +
+  // size sanity bound here; their real integrity backstop is the checkout
+  // path that turns them into one real invoice, not this rule. Status gets
+  // the one invariant found with confidence across every caller: once a
+  // visit is completed, nothing legitimate moves it to anything else — a
+  // full transition graph was deliberately NOT encoded here, since an
+  // existing caller (no-show from a "confirmed" visit, not just "scheduled")
+  // shows the real workflow is looser than a strict graph would allow, and
+  // guessing wrong in the restrictive direction risks exactly the kind of
+  // production lockout this session already had once from an overly strict
+  // rule. Discount fields are gated by role, mirroring
+  // frontOfficePermissionCore.canDoFrontOfficeAction's discountRoles check
+  // (the % cap itself is UI-side only — replicating it here would mean
+  // trusting this rule to recompute a subtotal from pendingVisitItems, which
+  // has the same per-element-validation limitation).
+  function visitListIsSane(v) {
+    return v is list && v.size() <= 200;
+  }
+  function visitStatusIsSane() {
+    let before = resource.data.get('status', '');
+    let after = request.resource.data.get('status', '');
+    return after in ['scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show']
+        && (before != 'completed' || after == 'completed');
+  }
+  function visitPendingFieldsAreSane() {
+    return (!('pendingVisitItems' in request.resource.data) || visitListIsSane(request.resource.data.pendingVisitItems))
+        && (!('pendingVisitReferrals' in request.resource.data) || visitListIsSane(request.resource.data.pendingVisitReferrals))
+        && (!('pendingVisitDiscountHistory' in request.resource.data) || visitListIsSane(request.resource.data.pendingVisitDiscountHistory))
+        && visitStatusIsSane();
+  }
+  function visitDiscountRoles(clinicId) {
+    let settingsPath = /databases/$(database)/documents/appointmentBillingSettings/$(clinicId);
+    return exists(settingsPath)
+      ? get(settingsPath).data.get('frontOffice', {}).get('discountRoles', ['clinic-admin'])
+      : ['clinic-admin'];
+  }
+  function visitDiscountFieldsUntouched() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['pendingVisitDiscountType', 'pendingVisitDiscountValue',
+               'pendingVisitDiscountReason', 'pendingVisitDiscountHistory']);
+  }
+  function visitDiscountChangeIsAuthorized(clinicId) {
+    return visitDiscountFieldsUntouched()
+        || isSuperAdmin()
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in visitDiscountRoles(clinicId);
+  }
+
   // Allow clinic users to update their own clinic's appointments
   allow update: if isAuthenticated() &&
                 (isSuperAdmin() ||
                  (resource.data.clinicId != null &&
                   belongsToClinic(resource.data.clinicId) &&
                   request.resource.data.clinicId == resource.data.clinicId))
-                && (depositUntouched() || depositRiseIsLedgered() || depositFallIsSettled());
+                && (depositUntouched() || depositRiseIsLedgered() || depositFallIsSettled())
+                && visitPendingFieldsAreSane()
+                && visitDiscountChangeIsAuthorized(resource.data.clinicId);
   
   // An appointment now carries this visit's pre-invoice financial state —
   // pendingVisitItems (the priced lines that become an IRD invoice at
