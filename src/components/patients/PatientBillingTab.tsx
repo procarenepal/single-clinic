@@ -34,6 +34,7 @@ import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { patientService } from "@/services/patientService";
 import { referralPartnerService } from "@/services/referralPartnerService";
+import { findDuplicateChargeVisit } from "@/services/core/visitChargeCore";
 import {
   getLastPaymentMethod,
   setLastPaymentMethod,
@@ -686,28 +687,17 @@ export default function PatientBillingTab({
       });
 
       // A visit counts as already-covered if it carries a filed invoice OR
-      // is mid-flight in front office. Front office accumulates a visit's
-      // charges on the appointment (pendingVisitItems) and files ONE
-      // invoice at checkout — for that whole window billingId is still
-      // null, so checking only the invoice pointers let this guard pass
-      // silently on exactly the case it exists to catch: a visit that is
-      // already charged (often with a deposit collected) but not yet filed.
-      const coveredAppt = todaysAppointments.find((a) => {
-        const existingBillId =
-          (a as any).consultationBillingId || (a as any).billingId;
-        const hasPendingCharges = Boolean((a as any).pendingVisitItems?.length);
-
-        if (!existingBillId && !hasPendingCharges) return false;
-
-        return formData.items.some(
-          (item) => item.appointmentTypeId === a.appointmentTypeId,
-        );
-      });
+      // is mid-flight in front office — see findDuplicateChargeVisit, the
+      // one shared guard this tab, appointments-billing's list page, and
+      // billing-counter all need, so none of them can drift from the
+      // others on what "already covered" means.
+      const coveredAppt = findDuplicateChargeVisit(
+        todaysAppointments,
+        formData.items.map((item) => item.appointmentTypeId),
+      );
 
       if (coveredAppt) {
-        const existingBillId =
-          (coveredAppt as any).consultationBillingId ||
-          (coveredAppt as any).billingId;
+        const existingBillId = coveredAppt.existingBillId;
 
         if (existingBillId) {
           const existingBilling =

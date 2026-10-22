@@ -462,3 +462,47 @@ export function previewLineCharge(
 export function refusalMessage(r: ChargeRefused): string {
   return `${r.reason} Fix it under ${r.fixPath}.`;
 }
+
+export interface VisitForDuplicateCharge {
+  appointmentTypeId?: string | null;
+  billingId?: string | null;
+  consultationBillingId?: string | null;
+  pendingVisitItems?: unknown[] | null;
+}
+
+/**
+ * Whether today's visit already carries one of these appointment types as
+ * a charge — either filed (billingId/consultationBillingId) or still
+ * pending at front-office checkout (pendingVisitItems is non-empty). A
+ * visit's charges sit in pendingVisitItems until checkout files ONE
+ * invoice, during which window billingId stays null — a caller that only
+ * checks billingId re-bills exactly this visit, often one that already has
+ * a deposit collected against it.
+ *
+ * Matches at the visit level (its own booked appointment type), not by
+ * inspecting individual pendingVisitItems entries — this is the one
+ * duplicate-invoice guard PatientBillingTab and the appointments-billing
+ * list page each grew independently; unified here so neither can drift
+ * from the other, and so billing-counter/other callers get it for free.
+ */
+export function findDuplicateChargeVisit<T extends VisitForDuplicateCharge>(
+  todaysVisits: T[],
+  appointmentTypeIds: Array<string | null | undefined>,
+): (T & { existingBillId: string | null }) | null {
+  const wanted = new Set(
+    appointmentTypeIds.filter((id): id is string => Boolean(id)),
+  );
+
+  for (const visit of todaysVisits) {
+    const existingBillId =
+      visit.consultationBillingId || visit.billingId || null;
+    const hasPendingCharges = Boolean(visit.pendingVisitItems?.length);
+
+    if (!existingBillId && !hasPendingCharges) continue;
+    if (visit.appointmentTypeId && wanted.has(visit.appointmentTypeId)) {
+      return { ...visit, existingBillId };
+    }
+  }
+
+  return null;
+}

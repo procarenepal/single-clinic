@@ -1015,17 +1015,26 @@ export default function AppointmentBillingPage() {
     }
 
     // Block (don't just warn) if this form's items re-bill the SAME
-    // appointment type as an already-billed visit today — items on this
-    // form can be added manually via "Add Item" with no awareness of
-    // appointments at all, so this is the one place in this tab that can
-    // otherwise silently create a second consultation invoice for a visit
-    // that was already auto-billed. Scoped to a literal duplicate (same
-    // appointmentTypeId) so a legitimate second invoice for something
-    // different (e.g. a same-day lab add-on) is never blocked.
+    // appointment type as an already-billed — or already-pending-at-the-
+    // front-desk — visit today. Items on this form can be added manually
+    // via "Add Item" with no awareness of appointments at all, so this is
+    // the one place in this tab that can otherwise silently create a
+    // second consultation invoice for a visit that was already billed OR
+    // is still mid-flight in front office (front office accumulates a
+    // visit's charges on the appointment itself and files ONE invoice at
+    // checkout — during that window billingId is still null, so checking
+    // only the invoice pointer missed exactly that case). Scoped to a
+    // literal duplicate (same appointmentTypeId) so a legitimate second
+    // invoice for something different (e.g. a same-day lab add-on) is
+    // never blocked — see findDuplicateChargeVisit, the one shared guard
+    // this tab and PatientBillingTab both need.
     if (formData.patientId && formData.patientId !== "walk-in") {
       try {
         const { appointmentService } = await import(
           "@/services/appointmentService"
+        );
+        const { findDuplicateChargeVisit } = await import(
+          "@/services/core/visitChargeCore"
         );
         const todaysAppointments = (
           await appointmentService.getAppointmentsByPatient(formData.patientId)
@@ -1036,31 +1045,32 @@ export default function AppointmentBillingPage() {
           return isToday && (a as any).status !== "cancelled";
         });
 
-        const duplicateAppt = todaysAppointments.find((a) => {
-          const existingBillId =
-            (a as any).consultationBillingId || (a as any).billingId;
-
-          if (!existingBillId) return false;
-
-          return formData.items.some(
-            (item) => item.appointmentTypeId === a.appointmentTypeId,
-          );
-        });
+        const duplicateAppt = findDuplicateChargeVisit(
+          todaysAppointments,
+          formData.items.map((item) => item.appointmentTypeId),
+        );
 
         if (duplicateAppt) {
-          const existingBillId =
-            (duplicateAppt as any).consultationBillingId ||
-            (duplicateAppt as any).billingId;
-          const existingBilling =
-            await appointmentBillingService.getBillingById(existingBillId);
-          const existingInvoiceNumber =
-            existingBilling?.invoiceNumber || existingBillId;
+          const existingBillId = duplicateAppt.existingBillId;
 
-          addToast({
-            title: "Duplicate invoice blocked",
-            description: `${formData.patientName} already has invoice ${existingInvoiceNumber} covering this same visit today. Edit that invoice instead of creating a new one.`,
-            color: "danger",
-          });
+          if (existingBillId) {
+            const existingBilling =
+              await appointmentBillingService.getBillingById(existingBillId);
+            const existingInvoiceNumber =
+              existingBilling?.invoiceNumber || existingBillId;
+
+            addToast({
+              title: "Duplicate invoice blocked",
+              description: `${formData.patientName} already has invoice ${existingInvoiceNumber} covering this same visit today. Edit that invoice instead of creating a new one.`,
+              color: "danger",
+            });
+          } else {
+            addToast({
+              title: "Duplicate invoice blocked",
+              description: `${formData.patientName} has an in-progress visit at the front desk that already includes this charge. Complete it from the Billing Counter instead of raising a separate invoice.`,
+              color: "danger",
+            });
+          }
 
           return;
         }

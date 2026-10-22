@@ -19,6 +19,7 @@ import {
   refusalMessage,
   splitAmount,
   withLinePrice,
+  findDuplicateChargeVisit,
 } from "../visitChargeCore";
 import { findBookedLine, mergeVisitLines } from "../legacyVisitAdapters";
 
@@ -499,5 +500,58 @@ describe("legacy pseudo-id lines", () => {
     const r = mergeVisitLines([legacy], [legacy], "c");
 
     expect(r.added).toEqual([]);
+  });
+});
+
+describe("findDuplicateChargeVisit", () => {
+  it("is null when no visit today matches any wanted type", () => {
+    const visits = [{ appointmentTypeId: "a", billingId: "inv1" }];
+
+    expect(findDuplicateChargeVisit(visits, ["b"])).toBeNull();
+  });
+
+  it("is null when a visit matches the type but is neither billed nor pending", () => {
+    const visits = [{ appointmentTypeId: "a" }];
+
+    expect(findDuplicateChargeVisit(visits, ["a"])).toBeNull();
+  });
+
+  it("matches a visit already filed under billingId", () => {
+    const visits = [{ appointmentTypeId: "a", billingId: "inv1" }];
+    const match = findDuplicateChargeVisit(visits, ["a"]);
+
+    expect(match?.existingBillId).toBe("inv1");
+  });
+
+  it("consultationBillingId wins over billingId when both are present", () => {
+    const visits = [
+      { appointmentTypeId: "a", billingId: "inv1", consultationBillingId: "inv2" },
+    ];
+    const match = findDuplicateChargeVisit(visits, ["a"]);
+
+    expect(match?.existingBillId).toBe("inv2");
+  });
+
+  it("matches a visit still pending at front-office checkout, with no bill yet", () => {
+    const visits = [{ appointmentTypeId: "a", pendingVisitItems: [{ id: "l1" }] }];
+    const match = findDuplicateChargeVisit(visits, ["a"]);
+
+    expect(match?.existingBillId).toBeNull();
+  });
+
+  it("an unrelated visit type is never blocked — only the literal duplicate", () => {
+    const visits = [
+      { appointmentTypeId: "lab-test", billingId: "inv1" },
+      { appointmentTypeId: "consultation", pendingVisitItems: [] },
+    ];
+
+    expect(findDuplicateChargeVisit(visits, ["consultation"])).toBeNull();
+  });
+
+  it("checks every wanted type, not just the first", () => {
+    const visits = [{ appointmentTypeId: "b", billingId: "inv1" }];
+    const match = findDuplicateChargeVisit(visits, ["a", "b"]);
+
+    expect(match?.appointmentTypeId).toBe("b");
   });
 });
