@@ -37,6 +37,10 @@ import { Select, SelectItem } from "@/components/ui/select";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import {
+  resolveTypePrice,
+  resolveLineCommission,
+} from "@/services/core/visitChargeCore";
+import {
   createDispensingBill,
   hasDispensableLines,
 } from "@/services/unifiedBillingService";
@@ -358,6 +362,7 @@ export default function BillingCounterPage() {
         name: d.name,
         kind: "doctor" as const,
         defaultCommission: d.defaultCommission,
+        consultationCharge: d.consultationCharge,
       })),
       ...experts.map((e) => ({
         id: e.id,
@@ -380,21 +385,54 @@ export default function BillingCounterPage() {
 
   /**
    * A service line takes its price, tax treatment and commission from the
-   * appointment type, through the same resolver the other billing screens use.
-   * Reading only name and price here — which is what this did — meant a type
-   * configured as taxable was billed exempt unless staff remembered to tick
-   * the box, and a type with its own commission rate was ignored in favour of
-   * the clinician's.
+   * appointment type, through the same resolver front-office uses
+   * (resolveTypePrice/resolveLineCommission) rather than this screen's own
+   * parallel copy, which never understood a type billed by the clinician's
+   * own consultation charge (pricedBy: "doctor") — it just read the
+   * catalogue price field, which is blank/stale for a type configured that
+   * way, so a "Doctor Consultation" sold here could silently go out free
+   * or at a leftover number.
+   *
+   * The correct resolver REFUSES a doctor-priced type when the selected
+   * clinician has no consultation charge set, rather than guessing — exactly
+   * right for front-office, where that refusal stops the sale before any
+   * money moves. Doing the same here outright would mean a live counter
+   * screen starts blocking a sale the moment it hits a clinician whose
+   * profile hasn't been filled in, with no way to know in advance how many
+   * that is. So on a refusal, this falls back to the OLD catalogue-price
+   * behavior (unchanged, not newly broken) and surfaces why — addLine turns
+   * priceWarning into a toast telling staff exactly which doctor's profile
+   * needs the fix, instead of a silent wrong price.
    */
   const resolveServiceFields = (apptTypeId: string, clinicianId?: string) => {
     const apptType = apptTypes.find((t) => t.id === apptTypeId);
 
     if (!apptType) return null;
 
-    return appointmentBillingService.resolveItemFieldsFromAppointmentType(
+    const clinician = clinicians.find((c) => c.id === clinicianId) || null;
+    const priced = resolveTypePrice(apptType as any, clinician as any);
+    // resolveLineCommission only knows "the type's own rate, else the
+    // clinician's own default" — the clinic-wide fallback behind THAT is
+    // this screen's own concept (see defaultCommissionFor's comment above),
+    // so it's resolved first and handed in as the clinician's "default" as
+    // far as resolveLineCommission is concerned, preserving the exact
+    // three-tier precedence this screen already had.
+    const { calculateCommission, commission } = resolveLineCommission(
       apptType,
-      defaultCommissionFor(clinicianId),
+      { defaultCommission: defaultCommissionFor(clinicianId) },
     );
+
+    return {
+      appointmentTypeName: apptType.name,
+      price: priced.ok ? priced.price : apptType.price,
+      categoryId: apptType.categoryId,
+      commission,
+      calculateCommission,
+      isTaxable: apptType.isTaxable,
+      taxRate: apptType.taxRate,
+      hsCode: apptType.hsCode,
+      priceWarning: priced.ok ? null : (priced as { reason: string }).reason,
+    };
   };
 
   /**
@@ -442,6 +480,19 @@ export default function BillingCounterPage() {
     const resolved = isService
       ? resolveServiceFields(entry.id, doctorId)
       : null;
+
+    // A doctor-priced type whose clinician has no consultation charge set
+    // falls back to the catalogue price above rather than blocking the
+    // sale — this surfaces exactly why, so staff know the line may be
+    // priced wrong and an admin can fix the doctor's profile.
+    if (resolved?.priceWarning) {
+      addToast({
+        title: "Price may be wrong",
+        description: `${resolved.priceWarning} Billed at the catalogue price (NPR ${entry.price.toLocaleString()}) instead.`,
+        color: "warning",
+        duration: 10000,
+      });
+    }
 
     setItems((prev) => [
       ...prev,
