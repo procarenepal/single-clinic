@@ -12,6 +12,12 @@ export interface TaxEngineItemInput {
   discountValue?: number;
   isTaxable?: boolean; // Default false for exempt medical services, true for taxable goods
   taxRate?: number; // VAT rate, e.g., 13
+  /** True when `price` already includes VAT (Nepal's MRP convention — e.g.
+   * a dispensed medicine line) and the taxable base must be backed OUT of
+   * it; false/undefined means VAT is added ON TOP of price (services, lab
+   * tests). Only consulted by `calculateMixedTaxBreakdown`, which is the
+   * only place an invoice can genuinely mix both conventions on one bill. */
+  priceIsTaxInclusive?: boolean;
 }
 
 export interface TaxEngineCalculationInput {
@@ -36,10 +42,11 @@ export interface TaxEngineResult {
 interface AllocatedItem {
   isTaxable: boolean;
   taxRate: number;
+  priceIsTaxInclusive: boolean;
   /** Net amount for this item after item-level AND pro-rata main discount —
    * NOT yet split into taxable/tax/exempt, since that split differs between
-   * tax-exclusive and tax-inclusive pricing (see the two breakdown
-   * functions below, which are the only two consumers of this). */
+   * tax-exclusive and tax-inclusive pricing (see the three breakdown
+   * functions below, which are the only consumers of this). */
   netItemAmount: number;
 }
 
@@ -106,6 +113,7 @@ function allocateItemsWithProRataDiscount(
       // an untrusted per-item override) must not produce a negative or
       // wildly inflated tax amount.
       taxRate: Math.min(100, Math.max(0, item.taxRate ?? defaultTaxPercentage)),
+      priceIsTaxInclusive: Boolean(item.priceIsTaxInclusive),
     };
   });
 
@@ -128,7 +136,12 @@ function allocateItemsWithProRataDiscount(
         : 0;
     const netItemAmount = Math.max(0, item.netBeforeMainDiscount - itemMainDiscountShare);
 
-    return { isTaxable: item.isTaxable, taxRate: item.taxRate, netItemAmount };
+    return {
+      isTaxable: item.isTaxable,
+      taxRate: item.taxRate,
+      priceIsTaxInclusive: item.priceIsTaxInclusive,
+      netItemAmount,
+    };
   });
 
   return {
@@ -225,6 +238,70 @@ export function calculateTaxInclusiveBreakdown(
   // post-discount gross the items already summed to (taxable + tax is
   // just the taxable item's own netItemAmount split two ways) — this is
   // expected, unlike exclusive mode where tax is genuinely additional.
+  const totalAmount = Math.round((taxableAmount + exemptAmount + taxAmount) * 100) / 100;
+
+  return {
+    subtotal,
+    itemDiscountAmount,
+    mainDiscountAmount,
+    totalDiscountAmount,
+    taxableAmount,
+    taxAmount,
+    exemptAmount,
+    totalAmount,
+  };
+}
+
+/**
+ * Calculate complete invoice financial breakdown with pro-rata discount
+ * allocation — MIXED pricing, decided per item via `priceIsTaxInclusive`.
+ *
+ * Only Billing Counter's dispensing bill can genuinely need this: it is the
+ * one invoice in this app that mixes tax-exclusive lines (services, lab
+ * tests — VAT added on top) with tax-inclusive ones (a dispensed medicine's
+ * MRP — VAT backed out of it), on the SAME bill, sharing ONE pro-rata
+ * discount allocation. Treating the whole invoice as one mode or the other
+ * is wrong either way: exclusive-only double-counts VAT already baked into
+ * a medicine's MRP (the bug this function replaces); inclusive-only would
+ * wrongly back VAT out of a service/lab price that never had it in.
+ *
+ * Each item's contribution to `taxableAmount + taxAmount` always equals
+ * its own true charged amount regardless of mode — for an exclusive item
+ * that's `netItemAmount * (1 + rate/100)` (tax is additional); for an
+ * inclusive item that's `netItemAmount` unchanged (tax was already inside
+ * it, just split out for reporting) — so `totalAmount = taxableAmount +
+ * exemptAmount + taxAmount` stays correct even with both modes present.
+ */
+export function calculateMixedTaxBreakdown(
+  input: TaxEngineCalculationInput,
+): TaxEngineResult {
+  const { subtotal, itemDiscountAmount, mainDiscountAmount, totalDiscountAmount, items } =
+    allocateItemsWithProRataDiscount(input);
+
+  let netTaxableSales = 0;
+  let netExemptSales = 0;
+  let vatAmount = 0;
+
+  items.forEach((item) => {
+    if (!item.isTaxable || item.taxRate <= 0) {
+      netExemptSales += item.netItemAmount;
+
+      return;
+    }
+    if (item.priceIsTaxInclusive) {
+      const itemTaxable = item.netItemAmount / (1 + item.taxRate / 100);
+
+      netTaxableSales += itemTaxable;
+      vatAmount += item.netItemAmount - itemTaxable;
+    } else {
+      netTaxableSales += item.netItemAmount;
+      vatAmount += item.netItemAmount * (item.taxRate / 100);
+    }
+  });
+
+  const taxableAmount = Math.round(Math.max(0, netTaxableSales) * 100) / 100;
+  const taxAmount = Math.round(Math.max(0, vatAmount) * 100) / 100;
+  const exemptAmount = Math.round(Math.max(0, netExemptSales) * 100) / 100;
   const totalAmount = Math.round((taxableAmount + exemptAmount + taxAmount) * 100) / 100;
 
   return {

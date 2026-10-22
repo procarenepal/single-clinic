@@ -20,7 +20,10 @@ import {
   AppointmentType,
   PaymentMethod,
 } from "../types/models";
-import { calculateTaxBreakdown } from "../utils/taxEngine";
+import {
+  calculateTaxBreakdown,
+  calculateMixedTaxBreakdown,
+} from "../utils/taxEngine";
 
 import { walletService, PATIENTS_COLLECTION } from "./walletService";
 import { walletRefundableAmount, WALLET_METHOD } from "./core/cashLedgerCore";
@@ -946,11 +949,13 @@ export const appointmentBillingService = {
               branchId: billingData.branchId,
               billingId: docRef.id,
               invoiceNumber: javaResult.invoiceNumber,
+              source: "settle",
               after: {
                 discountType: billingData.discountType,
                 discountValue: billingData.discountValue,
                 applyTax: taxPercentage > 0,
                 taxPercentage,
+                reason: billingData.discountReason,
               },
             });
           } catch (auditError) {
@@ -1073,6 +1078,7 @@ export const appointmentBillingService = {
               branchId: existing.branchId,
               billingId: id,
               invoiceNumber: existing.invoiceNumber,
+              source: "settle",
               before: {
                 discountType: existing.discountType,
                 discountValue: existing.discountValue,
@@ -1096,6 +1102,10 @@ export const appointmentBillingService = {
                   "taxPercentage" in billingData
                     ? billingData.taxPercentage
                     : existing.taxPercentage,
+                reason:
+                  "discountReason" in billingData
+                    ? billingData.discountReason
+                    : existing.discountReason,
               },
             });
           } catch (auditError) {
@@ -2084,6 +2094,59 @@ export const appointmentBillingService = {
       defaultTaxPercentage: taxPercentage,
       // Same reasoning as createBilling() above: a category-taxable item
       // must be taxed regardless of the invoice-level "Apply Tax" toggle.
+      isTaxEnabled:
+        taxPercentage > 0 || items.some((i) => i.isTaxable === true),
+    });
+
+    return {
+      subtotal: calc.subtotal,
+      itemDiscountAmount: calc.itemDiscountAmount,
+      mainDiscountAmount: calc.mainDiscountAmount,
+      totalDiscount: calc.totalDiscountAmount,
+      taxAmount: calc.taxAmount,
+      totalAmount: calc.totalAmount,
+      taxableAmount: calc.taxableAmount,
+      exemptAmount: calc.exemptAmount,
+    };
+  },
+
+  /**
+   * Same shape as calculateInvoiceTotals, for the one kind of invoice that
+   * can genuinely mix pricing conventions on one bill — Billing Counter's
+   * dispensing bill. A medicine line's price is the MRP (VAT already
+   * inside it, backed out); a service/lab line's price is tax-exclusive
+   * (VAT added on top) — using the plain exclusive engine for the whole
+   * invoice double-counted VAT on every taxable medicine line.
+   */
+  calculateMixedInvoiceTotals(
+    items: AppointmentBillingItem[],
+    discountType: "flat" | "percent",
+    discountValue: number,
+    taxPercentage: number,
+  ): {
+    subtotal: number;
+    itemDiscountAmount: number;
+    mainDiscountAmount: number;
+    totalDiscount: number;
+    taxAmount: number;
+    totalAmount: number;
+    taxableAmount: number;
+    exemptAmount: number;
+  } {
+    const calc = calculateMixedTaxBreakdown({
+      items: items.map((i) => ({
+        itemName: i.appointmentTypeName || "Service",
+        quantity: i.quantity,
+        price: i.price,
+        discountType: i.discountType,
+        discountValue: i.discountValue,
+        isTaxable: i.isTaxable === true,
+        taxRate: i.taxRate,
+        priceIsTaxInclusive: i.lineKind === "medicine",
+      })),
+      discountType,
+      discountValue,
+      defaultTaxPercentage: taxPercentage,
       isTaxEnabled:
         taxPercentage > 0 || items.some((i) => i.isTaxable === true),
     });

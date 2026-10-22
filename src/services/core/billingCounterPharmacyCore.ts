@@ -1,10 +1,14 @@
 import type { MedicinePurchaseReturn } from "../../types/models";
 
 /**
- * Billing Counter prices are tax-EXCLUSIVE — VAT goes on top of the line —
- * unlike pharmacy's MRP-inclusive sales. calculateInvoiceTotals charges VAT
- * only on lines explicitly marked taxable, at the line's own rate or else
- * the invoice's, so the same rule rebuilds a dispensed line's VAT here.
+ * Billing Counter mixes two pricing conventions on one invoice: a
+ * service/lab line's price is tax-EXCLUSIVE (VAT goes on top), a dispensed
+ * medicine line's price is its MRP — tax-INCLUSIVE, same as pharmacy's own
+ * sales — and VAT must be backed OUT of it instead. `calculateMixedTaxBreakdown`
+ * is what actually bills the invoice correctly; `billingLineRate` below
+ * just resolves which rate applies (a line's own override, or else the
+ * invoice's), used by the reporting code that rebuilds a dispensed line's
+ * VAT for display elsewhere.
  */
 export function billingLineRate(
   invoice: { taxPercentage?: number },
@@ -62,8 +66,13 @@ export function creditNotesAsReturns(params: {
 
       if (!cnItem) return [];
 
+      // cnItem.amount is already the complete MRP-inclusive gross the
+      // original dispensing-bill line charged, negated — not a pre-tax
+      // base, so there is nothing to add on top of it (that was the same
+      // double-counting bug calculateMixedTaxBreakdown fixes on the
+      // invoice itself).
       const reversed = Math.abs(cnItem.amount || 0);
-      const reversedGross = reversed + vatOn(reversed, params.rate);
+      const reversedGross = reversed;
       // A partial credit note scales amounts but keeps the original
       // quantity, so the units reversed come from the amount's share.
       const share = lineAmount > 0 ? Math.min(1, reversed / lineAmount) : 1;

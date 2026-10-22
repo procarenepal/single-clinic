@@ -35,12 +35,14 @@ import {
   IoEllipsisVerticalOutline,
 } from "react-icons/io5";
 
-import { calculateTaxInclusiveBreakdown } from "@/utils/taxEngine";
+import {
+  calculateTaxInclusiveBreakdown,
+  calculateInclusiveUnitBreakdown,
+} from "@/utils/taxEngine";
 import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   billingLineRate,
   creditNotesAsReturns,
-  vatOn,
 } from "@/services/core/billingCounterPharmacyCore";
 import { stockTotalAtEndOfDay } from "@/services/core/stockMovementCore";
 import {
@@ -319,6 +321,15 @@ import { printHtmlViaIframe } from "@/utils/printHtmlViaIframe";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { clinicService } from "@/services/clinicService";
 import { addToast } from "@/components/ui/toast";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  canDoPharmacyAction,
+  pharmacyDiscountCapForRole,
+  DEFAULT_PHARMACY_ROLES,
+} from "@/services/core/pharmacyPermissionCore";
+import { discountExceedsCap } from "@/services/core/frontOfficePermissionCore";
+import { DISCOUNT_REASON_OPTIONS } from "@/services/core/visitSettleCore";
+import { auditLogService } from "@/services/auditLogService";
 import {
   Supplier,
   SupplierLedgerEntry,
@@ -331,6 +342,7 @@ import {
   Item,
   MedicineStock,
   MedicinePurchaseItem,
+  UserRole,
 } from "@/types/models";
 
 
@@ -554,10 +566,61 @@ interface PharmacySettings {
   invoicePrefix: string;
   nextInvoiceNumber: number;
   enabledPaymentMethods: PaymentMethod[];
+  editPriceRoles?: UserRole[];
+  deactivateMedicineRoles?: UserRole[];
+  issueReturnRoles?: UserRole[];
+  discountRoles?: UserRole[];
+  writeOffStockRoles?: UserRole[];
+  discountCapPercent?: Partial<Record<UserRole, number>>;
+  priceChangeCapPercent?: Partial<Record<UserRole, number>>;
   createdAt: Date;
   updatedAt: Date;
   updatedBy: string;
 }
+
+const PHARMACY_SETTINGS_ROLES: Array<{ key: UserRole; label: string }> = [
+  { key: "clinic-admin", label: "Clinic admin" },
+  { key: "staff", label: "Staff" },
+  { key: "doctor", label: "Doctor" },
+  { key: "expert", label: "Expert" },
+];
+
+const PHARMACY_ACTION_ROWS: Array<{
+  field:
+    | "editPriceRoles"
+    | "deactivateMedicineRoles"
+    | "issueReturnRoles"
+    | "discountRoles"
+    | "writeOffStockRoles";
+  label: string;
+  help: string;
+}> = [
+  {
+    field: "editPriceRoles",
+    label: "Edit a batch's cost/sale price",
+    help: "The Refill/Restock modal.",
+  },
+  {
+    field: "deactivateMedicineRoles",
+    label: "Activate / deactivate a medicine",
+    help: "",
+  },
+  {
+    field: "issueReturnRoles",
+    label: "Issue a return / credit note",
+    help: "",
+  },
+  {
+    field: "discountRoles",
+    label: "Give a discount on a sale",
+    help: "Others see the discount, read-only.",
+  },
+  {
+    field: "writeOffStockRoles",
+    label: "Write off expired / damaged stock",
+    help: "The Stock tab's Write Off action.",
+  },
+];
 
 interface SupplierLedgerSummary {
   supplier: Supplier;
@@ -723,6 +786,15 @@ export default function PharmacyPage() {
     {},
   );
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+  const canDiscount = canDoPharmacyAction(
+    userData?.role,
+    "discount",
+    pharmacySettings,
+  );
+  const discountCapPercent = pharmacyDiscountCapForRole(
+    userData?.role,
+    pharmacySettings,
+  );
 
   // Purchase form state - now handles both medicines and items
   const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([
@@ -757,6 +829,7 @@ export default function PharmacyPage() {
     discount: 0,
     discountType: "flat" as "flat" | "percent",
     discountPercentage: 0,
+    discountReason: "",
     taxPercentage: 0,
     taxAmount: 0,
     handlingAmount: 0,
@@ -991,6 +1064,24 @@ export default function PharmacyPage() {
           notes: supplierPaymentForm.note?.trim() || undefined,
           recordedBy: currentUser.uid,
         });
+
+        // A payment/refund is a credit against the supplier's running
+        // balance — without this, the ledger table (and its balance) never
+        // reflects what was just recorded above.
+        await medicineService.createSupplierLedgerEntry({
+          supplierId: selectedSupplierForLedger.id,
+          supplierName: selectedSupplierForLedger.name,
+          transactionDate: parseLocalDate(supplierPaymentForm.date),
+          debitAmount: 0,
+          creditAmount: amountValue,
+          type: "payment",
+          referenceNumber:
+            supplierPaymentForm.referenceNumber?.trim() || undefined,
+          notes: supplierPaymentForm.note?.trim() || undefined,
+          clinicId,
+          branchId: effectiveBranchId || userData?.branchId || "",
+          createdBy: currentUser.uid,
+        });
       }
 
       await refreshSupplierPayments();
@@ -1167,11 +1258,17 @@ export default function PharmacyPage() {
             (b.items || [])
               .filter((item: any) => item.lineKind === "medicine")
               .map((item: any): MedicinePurchase => {
-                // Billing Counter lines are tax-exclusive — rebuild the
-                // VAT so the row shows what was actually collected.
+                // A medicine line's amount is the MRP — VAT is already
+                // inside it and must be backed OUT, not added on top (that
+                // was the same bug `calculateMixedTaxBreakdown` fixes on
+                // the invoice itself; this rebuilds the same split for
+                // display here using the shared single-line helper).
                 const rate = billingLineRate(b, item);
                 const lineAmount = item.amount || 0;
-                const vat = vatOn(lineAmount, rate);
+                const { taxAmount: vat } = calculateInclusiveUnitBreakdown(
+                  lineAmount,
+                  rate,
+                );
                 const { returns, totalReturnedAmount } = creditNotesAsReturns({
                   invoice: b,
                   item,
@@ -1201,7 +1298,9 @@ export default function PharmacyPage() {
                   discount: item.discountAmount || 0,
                   taxPercentage: rate,
                   taxAmount: vat,
-                  netAmount: lineAmount + vat,
+                  // lineAmount is already the MRP-inclusive total charged —
+                  // vat is a portion of it, not an addition to it.
+                  netAmount: lineAmount,
                   paymentType: b.paymentMethod || "cash",
                   paymentStatus: b.paymentStatus,
                   paymentNote: "",
@@ -2489,6 +2588,39 @@ export default function PharmacyPage() {
     if (isSubmitting) return;
     if (!clinicId || !currentUser) return;
 
+    const discountValueGiven =
+      purchaseForm.discountType === "flat"
+        ? purchaseForm.discount
+        : purchaseForm.discountPercentage;
+
+    if (discountValueGiven > 0) {
+      if (!canDiscount) {
+        addToast({
+          title: "Not permitted",
+          description: "Your role may not give a discount on a sale.",
+          color: "danger",
+        });
+
+        return;
+      }
+      if (
+        discountExceedsCap(
+          purchaseForm.discountType === "flat" ? "flat" : "percent",
+          discountValueGiven,
+          purchaseForm.total,
+          discountCapPercent,
+        )
+      ) {
+        addToast({
+          title: "Over your discount limit",
+          description: `This discount is over your role's ${discountCapPercent}% limit.`,
+          color: "danger",
+        });
+
+        return;
+      }
+    }
+
     // Validate customer type and patient selection
     if (purchaseForm.customerType === "patient" && !purchaseForm.patientId) {
       addToast({
@@ -2577,6 +2709,9 @@ export default function PharmacyPage() {
         items: purchaseItems_formatted,
         total: purchaseForm.total,
         discount: discountAmount,
+        ...(discountAmount > 0 && purchaseForm.discountReason.trim()
+          ? { discountReason: purchaseForm.discountReason.trim() }
+          : {}),
         taxPercentage: purchaseForm.taxPercentage,
         taxAmount: purchaseForm.taxAmount,
         netAmount: purchaseForm.netAmount,
@@ -2620,6 +2755,27 @@ export default function PharmacyPage() {
       const purchaseResult =
         await pharmacyService.createMedicinePurchase(purchaseData);
       const createdPurchaseId = purchaseResult.id;
+
+      if (discountAmount > 0) {
+        auditLogService
+          .logDiscountTaxChange({
+            performedBy: currentUser.uid,
+            performedByName: userData?.displayName,
+            clinicId,
+            branchId: effectiveBranchId || userData?.branchId || undefined,
+            billingId: createdPurchaseId,
+            invoiceNumber: purchaseResult.purchaseNo,
+            source: "pharmacy",
+            after: {
+              discountType: purchaseForm.discountType,
+              discountValue: discountValueGiven,
+              reason: purchaseForm.discountReason.trim() || undefined,
+            },
+          })
+          .catch((err) =>
+            console.error("Error logging pharmacy discount audit event:", err),
+          );
+      }
 
       if (purchaseResult.javaSyncError) {
         addToast({
@@ -2739,6 +2895,7 @@ export default function PharmacyPage() {
         discount: 0,
         discountType: "flat",
         discountPercentage: 0,
+        discountReason: "",
         taxPercentage: pharmacySettings?.enableTax
           ? pharmacySettings.defaultTaxPercentage || 0
           : 0,
@@ -4799,6 +4956,9 @@ export default function PharmacyPage() {
                                             title="Pay Bill"
                                             type="button"
                                             onClick={() => {
+                                              setSelectedSupplierForLedger(
+                                                selectedSupplierForTransactions,
+                                              );
                                               setSupplierPaymentForm({
                                                 supplierId: entry.supplierId,
                                                 amount:
@@ -5724,6 +5884,176 @@ export default function PharmacyPage() {
                           }
                         />
                       </div>
+                    </CardBody>
+                  </Card>
+
+                  {/* Who may do what */}
+                  <Card>
+                    <CardHeader className="bg-default-50 border-b border-default-200">
+                      <div>
+                        <h4 className="text-stat-sm font-semibold text-primary">
+                          Who May Do What
+                        </h4>
+                        <p className="text-sm text-default-500 mt-1">
+                          Money-sensitive pharmacy actions are role
+                          decisions, not open to everyone who can see this
+                          page. Checking a role for &quot;Give a
+                          discount&quot; or &quot;Edit a batch&apos;s
+                          cost/sale price&quot; reveals a % cap for that
+                          role — blank means no limit. The price cap is
+                          per edit, against the current price.
+                        </p>
+                      </div>
+                    </CardHeader>
+                    <CardBody className="overflow-x-auto">
+                      <table className="min-w-[560px] w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs uppercase tracking-wide text-default-500">
+                            <th className="py-2 pr-4">Action</th>
+                            {PHARMACY_SETTINGS_ROLES.map((r) => (
+                              <th
+                                key={r.key}
+                                className="py-2 px-2 text-center"
+                              >
+                                {r.label}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {PHARMACY_ACTION_ROWS.map((row) => (
+                            <tr
+                              key={row.field}
+                              className="border-t border-default-200"
+                            >
+                              <td className="py-2 pr-4">
+                                <div className="font-medium">{row.label}</div>
+                                {row.help && (
+                                  <div className="text-xs text-default-500">
+                                    {row.help}
+                                  </div>
+                                )}
+                              </td>
+                              {PHARMACY_SETTINGS_ROLES.map((r) => {
+                                const list =
+                                  (settingsForm[row.field] as
+                                    | UserRole[]
+                                    | undefined) ||
+                                  DEFAULT_PHARMACY_ROLES[
+                                    row.field === "editPriceRoles"
+                                      ? "editPrice"
+                                      : row.field === "deactivateMedicineRoles"
+                                        ? "deactivateMedicine"
+                                        : row.field === "issueReturnRoles"
+                                          ? "issueReturn"
+                                          : row.field === "writeOffStockRoles"
+                                            ? "writeOffStock"
+                                            : "discount"
+                                  ];
+
+                                return (
+                                  <td
+                                    key={r.key}
+                                    className="py-2 px-2 text-center"
+                                  >
+                                    <Checkbox
+                                      aria-label={`${row.label}: ${r.label}`}
+                                      isSelected={list.includes(r.key)}
+                                      size="sm"
+                                      onValueChange={() => {
+                                        const next = list.includes(r.key)
+                                          ? list.filter((x) => x !== r.key)
+                                          : [...list, r.key];
+
+                                        setSettingsForm((prev) => ({
+                                          ...prev,
+                                          [row.field]: next,
+                                        }));
+                                      }}
+                                    />
+                                    {row.field === "discountRoles" &&
+                                      list.includes(r.key) && (
+                                        <input
+                                          aria-label={`${r.label} discount cap %`}
+                                          className="mt-1 w-14 h-6 px-1 text-[11px] text-center border border-default-200 rounded"
+                                          min={0}
+                                          placeholder="no limit"
+                                          type="number"
+                                          value={
+                                            settingsForm.discountCapPercent?.[
+                                              r.key
+                                            ] ?? ""
+                                          }
+                                          onChange={(e) => {
+                                            const raw = e.target.value;
+
+                                            setSettingsForm((prev) => {
+                                              const nextCap = {
+                                                ...(prev.discountCapPercent ||
+                                                  {}),
+                                              };
+
+                                              if (raw === "")
+                                                delete nextCap[r.key];
+                                              else
+                                                nextCap[r.key] = Math.max(
+                                                  0,
+                                                  Number(raw) || 0,
+                                                );
+
+                                              return {
+                                                ...prev,
+                                                discountCapPercent: nextCap,
+                                              };
+                                            });
+                                          }}
+                                        />
+                                      )}
+                                    {row.field === "editPriceRoles" &&
+                                      list.includes(r.key) && (
+                                        <input
+                                          aria-label={`${r.label} price-change cap %`}
+                                          className="mt-1 w-14 h-6 px-1 text-[11px] text-center border border-default-200 rounded"
+                                          min={0}
+                                          placeholder="no limit"
+                                          type="number"
+                                          value={
+                                            settingsForm.priceChangeCapPercent?.[
+                                              r.key
+                                            ] ?? ""
+                                          }
+                                          onChange={(e) => {
+                                            const raw = e.target.value;
+
+                                            setSettingsForm((prev) => {
+                                              const nextCap = {
+                                                ...(prev.priceChangeCapPercent ||
+                                                  {}),
+                                              };
+
+                                              if (raw === "")
+                                                delete nextCap[r.key];
+                                              else
+                                                nextCap[r.key] = Math.max(
+                                                  0,
+                                                  Number(raw) || 0,
+                                                );
+
+                                              return {
+                                                ...prev,
+                                                priceChangeCapPercent: nextCap,
+                                              };
+                                            });
+                                          }}
+                                        />
+                                      )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </CardBody>
                   </Card>
                 </div>
@@ -7689,6 +8019,7 @@ export default function PharmacyPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <CustomSelect
+                      disabled={!canDiscount}
                       label="Discount Type"
                       options={[
                         { value: "flat", label: "Flat Amount (NPR)" },
@@ -7714,6 +8045,7 @@ export default function PharmacyPage() {
 
                     {purchaseForm.discountType === "flat" ? (
                       <CustomInput
+                        disabled={!canDiscount}
                         label="Discount (NPR)"
                         min="0"
                         startContent={
@@ -7733,6 +8065,7 @@ export default function PharmacyPage() {
                       />
                     ) : (
                       <CustomInput
+                        disabled={!canDiscount}
                         label="Discount (%)"
                         max="100"
                         min="0"
@@ -7754,6 +8087,75 @@ export default function PharmacyPage() {
                         }
                       />
                     )}
+                  </div>
+
+                  {canDiscount &&
+                    (purchaseForm.discountType === "flat"
+                      ? purchaseForm.discount
+                      : purchaseForm.discountPercentage) > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                        <CustomSelect
+                          label="Discount reason (optional)"
+                          options={[
+                            { value: "", label: "— none —" },
+                            ...DISCOUNT_REASON_OPTIONS.map((r) => ({
+                              value: r,
+                              label: r,
+                            })),
+                          ]}
+                          value={
+                            (DISCOUNT_REASON_OPTIONS as readonly string[]).includes(
+                              purchaseForm.discountReason,
+                            )
+                              ? purchaseForm.discountReason
+                              : purchaseForm.discountReason
+                                ? "Other"
+                                : ""
+                          }
+                          onChange={(e: any) =>
+                            setPurchaseForm((prev) => ({
+                              ...prev,
+                              discountReason:
+                                e.target.value === "Other" ? "" : e.target.value,
+                            }))
+                          }
+                        />
+                        {discountCapPercent !== null && (
+                          <p
+                            className={`text-[11px] self-center ${
+                              discountExceedsCap(
+                                purchaseForm.discountType === "flat"
+                                  ? "flat"
+                                  : "percent",
+                                purchaseForm.discountType === "flat"
+                                  ? purchaseForm.discount
+                                  : purchaseForm.discountPercentage,
+                                purchaseForm.total,
+                                discountCapPercent,
+                              )
+                                ? "text-danger font-medium"
+                                : "text-text-muted"
+                            }`}
+                          >
+                            {discountExceedsCap(
+                              purchaseForm.discountType === "flat"
+                                ? "flat"
+                                : "percent",
+                              purchaseForm.discountType === "flat"
+                                ? purchaseForm.discount
+                                : purchaseForm.discountPercentage,
+                              purchaseForm.total,
+                              discountCapPercent,
+                            )
+                              ? `Over your limit of ${discountCapPercent}%.`
+                              : `Up to ${discountCapPercent}% without a higher-capped role.`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    <div />
 
                     <CustomInput
                       label={`${settingsForm.taxLabel || "Tax"} % (default: ${settingsForm.defaultTaxPercentage || 0})`}

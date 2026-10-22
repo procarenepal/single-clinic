@@ -27,11 +27,14 @@ import { Tabs, Tab } from "@/components/ui/tabs";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { medicineService } from "@/services/medicineService";
+import { pharmacyService } from "@/services/pharmacyService";
+import { canDoPharmacyAction } from "@/services/core/pharmacyPermissionCore";
 import {
   Medicine,
   MedicineStock,
   StockTransaction,
   ClinicSettings,
+  PharmacySettings,
 } from "@/types/models";
 import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 
@@ -45,6 +48,23 @@ export default function StockTab({
   onStatsChange,
 }: StockTabProps) {
   const { userData, clinicId } = useAuthContext();
+  const [pharmacySettings, setPharmacySettings] =
+    useState<PharmacySettings | null>(null);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    pharmacyService
+      .getPharmacySettings(clinicId)
+      .then(setPharmacySettings)
+      .catch((err) => console.error("Error loading pharmacy settings:", err));
+  }, [clinicId]);
+
+  const canWriteOffStock = canDoPharmacyAction(
+    userData?.role,
+    "writeOffStock",
+    pharmacySettings,
+  );
+
   const [stockItems, setStockItems] = useState<
     (MedicineStock & { medicine: Medicine })[]
   >([]);
@@ -81,6 +101,10 @@ export default function StockTab({
     expiryDate: "",
     reason: "",
     invoiceNumber: "",
+    /** Set only when opened from a specific batch row (e.g. Write Off) —
+     * targets that exact medicineStock doc instead of the ambiguous
+     * "first batch for this medicine" lookup used for ad-hoc entries. */
+    stockItemId: "",
   });
 
   const branchScopeId = clinicId ?? null;
@@ -211,7 +235,57 @@ export default function StockTab({
       expiryDate: "",
       reason: "",
       invoiceNumber: "",
+      stockItemId: "",
     });
+    setIsTransactionModalOpen(true);
+  };
+
+  /** Pre-fills the same modal for ONE exact batch — the per-row Write Off
+   * action — so it can never silently deduct from a different batch of
+   * the same medicine than the one actually expired/damaged. */
+  const openWriteOffModal = (item: MedicineStock & { medicine: Medicine }) => {
+    if (!canWriteOffStock) {
+      addToast({
+        title: "Not permitted",
+        description: "Your role may not write off stock.",
+      });
+
+      return;
+    }
+    let expStr = "";
+
+    if (item.expiryDate) {
+      const dateVal = item.expiryDate as any;
+      const d =
+        dateVal && typeof dateVal.toDate === "function"
+          ? dateVal.toDate()
+          : dateVal instanceof Date
+            ? dateVal
+            : parseLocalDate(dateVal);
+
+      if (!isNaN(d.getTime())) expStr = formatLocalDate(d);
+    }
+
+    // recordStockTransaction only ever adjusts currentStock, never
+    // schemeStock — pre-filling with the combined total would silently
+    // leave scheme stock on an expired batch fully untouched and sellable.
+    setTransactionFormData({
+      medicineId: item.medicineId,
+      type: "expired",
+      quantity: String(item.currentStock),
+      unitPrice: "",
+      batchNumber: item.batchNumber || "",
+      expiryDate: expStr,
+      reason: "",
+      invoiceNumber: "",
+      stockItemId: item.id,
+    });
+    if (item.schemeStock > 0) {
+      addToast({
+        title: "Scheme stock not included",
+        description: `This batch also has ${item.schemeStock} scheme-stock units — only regular stock (${item.currentStock}) is pre-filled. Adjust scheme stock separately via Edit Stock if it's also expired.`,
+      });
+    }
     setIsTransactionModalOpen(true);
   };
 
@@ -319,13 +393,42 @@ export default function StockTab({
       return;
     }
 
+    const isWriteOff =
+      transactionFormData.type === "expired" ||
+      transactionFormData.type === "damaged";
+
+    if (isWriteOff) {
+      if (!canWriteOffStock) {
+        addToast({
+          title: "Not permitted",
+          description: "Your role may not write off stock.",
+        });
+
+        return;
+      }
+      if (!transactionFormData.reason.trim()) {
+        addToast({
+          title: "Reason required",
+          description:
+            "Writing off expired or damaged stock needs a reason, for the audit trail.",
+        });
+
+        return;
+      }
+    }
+
     if (!clinicId || !userData?.id) return;
 
     setIsLoading(true);
     try {
-      const stockItem = stockItems.find(
-        (item) => item.medicineId === transactionFormData.medicineId,
-      );
+      // Prefer the exact batch the action was opened for (Write Off always
+      // sets this); only fall back to the ambiguous "first batch for this
+      // medicine" lookup for an ad-hoc manual entry with no batch context.
+      const stockItem = transactionFormData.stockItemId
+        ? stockItems.find((item) => item.id === transactionFormData.stockItemId)
+        : stockItems.find(
+            (item) => item.medicineId === transactionFormData.medicineId,
+          );
       const quantity = parseInt(transactionFormData.quantity);
 
       const transactionData = {
@@ -395,9 +498,27 @@ export default function StockTab({
     return totalStock === 0;
   });
 
+  const isBatchExpired = (item: MedicineStock & { medicine: Medicine }) => {
+    if (!item.expiryDate) return false;
+    const dateVal = item.expiryDate as any;
+    const d =
+      dateVal && typeof dateVal.toDate === "function"
+        ? dateVal.toDate()
+        : dateVal instanceof Date
+          ? dateVal
+          : parseLocalDate(dateVal);
+
+    return !isNaN(d.getTime()) && d.getTime() < Date.now();
+  };
+
   const getStockStatus = (item: MedicineStock & { medicine: Medicine }) => {
     const totalStock = item.currentStock + (item.schemeStock || 0);
 
+    // Expiry takes priority over quantity — stock that's merely plentiful
+    // but expired is not "In Stock" in any sense that matters; it must not
+    // read as fine at a glance.
+    if (totalStock > 0 && isBatchExpired(item))
+      return { label: "Expired", color: "danger" as const };
     if (totalStock === 0)
       return { label: "Out of Stock", color: "danger" as const };
     if (totalStock <= item.reorderLevel)
@@ -693,6 +814,22 @@ export default function StockTab({
                                   >
                                     <IoTimeOutline className="w-4 h-4" />
                                   </button>
+                                  {isBatchExpired(item) &&
+                                    item.currentStock + (item.schemeStock || 0) >
+                                      0 && (
+                                      <button
+                                        className="p-1.5 rounded border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                        disabled={!canWriteOffStock}
+                                        title={
+                                          canWriteOffStock
+                                            ? "Write off this expired batch"
+                                            : "Your role may not write off stock"
+                                        }
+                                        onClick={() => openWriteOffModal(item)}
+                                      >
+                                        <IoWarningOutline className="w-4 h-4" />
+                                      </button>
+                                    )}
                                 </div>
                               </td>
                             </tr>
@@ -737,13 +874,29 @@ export default function StockTab({
                           <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                             SHORTAGE
                           </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            SUGGESTED REORDER
+                          </th>
                           <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-24">
                             ACTIONS
                           </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
-                        {lowStockItems.map((item) => (
+                        {lowStockItems.map((item) => {
+                          const totalStock =
+                            item.currentStock + (item.schemeStock || 0);
+                          // Top up to the max shelf level when one's set;
+                          // otherwise a sane default of twice the reorder
+                          // level, so there's always a concrete number to
+                          // act on rather than just "this is low."
+                          const suggestedQty = item.maximumStock
+                            ? Math.max(0, item.maximumStock - totalStock)
+                            : Math.max(0, item.reorderLevel * 2 - totalStock);
+                          const unitCost = item.costPrice ?? item.medicine.costPrice ?? 0;
+                          const estCost = suggestedQty * unitCost;
+
+                          return (
                           <tr
                             key={item.id}
                             className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors"
@@ -792,6 +945,20 @@ export default function StockTab({
                               </span>
                             </td>
                             <td className="px-5 py-3">
+                              <div>
+                                <p className="text-[13px] font-semibold text-primary">
+                                  {suggestedQty} {item.medicine.unit}
+                                </p>
+                                {suggestedQty > 0 && (
+                                  <p className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                                    {unitCost > 0
+                                      ? `~NPR ${estCost.toLocaleString()}`
+                                      : "no cost on record"}
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
                               <button
                                 className="clarity-btn clarity-btn-primary px-3 py-1 text-[11.5px]"
                                 onClick={() => openStockModal(item)}
@@ -800,7 +967,8 @@ export default function StockTab({
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1232,10 +1400,23 @@ export default function StockTab({
               <div>
                 <label className="text-sm font-medium text-default-700 mb-1.5 block">
                   Reason/Notes
+                  {(transactionFormData.type === "expired" ||
+                    transactionFormData.type === "damaged") && (
+                    <span className="text-danger"> * required for write-offs</span>
+                  )}
                 </label>
                 <Input
+                  isRequired={
+                    transactionFormData.type === "expired" ||
+                    transactionFormData.type === "damaged"
+                  }
                   name="reason"
-                  placeholder="Enter reason or notes"
+                  placeholder={
+                    transactionFormData.type === "expired" ||
+                    transactionFormData.type === "damaged"
+                      ? "Why this stock is being written off (required)"
+                      : "Enter reason or notes"
+                  }
                   value={transactionFormData.reason}
                   variant="bordered"
                   onChange={(e) => handleTransactionChange(e as any)}

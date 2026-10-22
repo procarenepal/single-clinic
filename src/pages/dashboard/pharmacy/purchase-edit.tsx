@@ -409,7 +409,7 @@ export default function PurchaseEditPage() {
                           {item.quantity}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {npr(item.mrp ?? item.salePrice)}
+                          {npr(item.salePrice)}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           {item.taxRate ?? purchase.taxPercentage}

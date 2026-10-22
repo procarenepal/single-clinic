@@ -3,6 +3,7 @@ import {
   calculateTaxBreakdown,
   calculateTaxInclusiveBreakdown,
   calculateInclusiveUnitBreakdown,
+  calculateMixedTaxBreakdown,
 } from "../taxEngine";
 
 describe("taxEngine", () => {
@@ -143,5 +144,141 @@ describe("taxEngine — calculateInclusiveUnitBreakdown (single-line live previe
 
     expect(taxableAmount).toBe(0);
     expect(taxAmount).toBe(0);
+  });
+});
+
+describe("taxEngine — calculateMixedTaxBreakdown (Billing Counter's dispensing bill)", () => {
+  // Golden regression case: Billing Counter was feeding a dispensed
+  // medicine's MRP into the plain exclusive engine, which added 13% VAT ON
+  // TOP of an already tax-inclusive price — Rate 8, Amount 8.00, VAT 1.04,
+  // Total 9.04 instead of the correct Taxable 7.08 / VAT 0.92 / Total 8.00.
+  it("backs VAT out of a tax-inclusive medicine line instead of adding it on top", () => {
+    const result = calculateMixedTaxBreakdown({
+      items: [
+        {
+          itemName: "Amoxicillin 500mg",
+          quantity: 1,
+          price: 8,
+          isTaxable: true,
+          taxRate: 13,
+          priceIsTaxInclusive: true,
+        },
+      ],
+      isTaxEnabled: true,
+      defaultTaxPercentage: 13,
+    });
+
+    expect(result.taxableAmount).toBe(7.08);
+    expect(result.taxAmount).toBe(0.92);
+    expect(result.totalAmount).toBe(8); // NOT 9.04 — the MRP already includes VAT
+  });
+
+  it("still adds VAT on top of a tax-exclusive service/lab line", () => {
+    const result = calculateMixedTaxBreakdown({
+      items: [
+        {
+          itemName: "Consultation",
+          quantity: 1,
+          price: 1000,
+          isTaxable: true,
+          taxRate: 13,
+          priceIsTaxInclusive: false,
+        },
+      ],
+      isTaxEnabled: true,
+      defaultTaxPercentage: 13,
+    });
+
+    expect(result.taxableAmount).toBe(1000);
+    expect(result.taxAmount).toBe(130);
+    expect(result.totalAmount).toBe(1130);
+  });
+
+  it("mixes both conventions correctly on one invoice — the actual billing-counter case", () => {
+    const result = calculateMixedTaxBreakdown({
+      items: [
+        {
+          itemName: "Consultation",
+          quantity: 1,
+          price: 1000,
+          isTaxable: true,
+          taxRate: 13,
+          priceIsTaxInclusive: false,
+        },
+        {
+          itemName: "Amoxicillin 500mg",
+          quantity: 1,
+          price: 8,
+          isTaxable: true,
+          taxRate: 13,
+          priceIsTaxInclusive: true,
+        },
+      ],
+      isTaxEnabled: true,
+      defaultTaxPercentage: 13,
+    });
+
+    // Service: 1000 taxable + 130 VAT = 1130. Medicine: 7.08 taxable +
+    // 0.92 VAT = 8.00 (unchanged, already inclusive). Combined:
+    expect(result.taxableAmount).toBe(1007.08);
+    expect(result.taxAmount).toBe(130.92);
+    expect(result.totalAmount).toBe(1138);
+  });
+
+  it("an exempt medicine line is untouched by either convention", () => {
+    const result = calculateMixedTaxBreakdown({
+      items: [
+        {
+          itemName: "Exempt medicine",
+          quantity: 2,
+          price: 50,
+          isTaxable: false,
+          priceIsTaxInclusive: true,
+        },
+      ],
+      isTaxEnabled: true,
+      defaultTaxPercentage: 13,
+    });
+
+    expect(result.taxableAmount).toBe(0);
+    expect(result.exemptAmount).toBe(100);
+    expect(result.taxAmount).toBe(0);
+    expect(result.totalAmount).toBe(100);
+  });
+
+  it("an invoice-level discount still allocates pro-rata across both conventions", () => {
+    const result = calculateMixedTaxBreakdown({
+      items: [
+        {
+          itemName: "Consultation",
+          quantity: 1,
+          price: 1000,
+          isTaxable: true,
+          taxRate: 13,
+          priceIsTaxInclusive: false,
+        },
+        {
+          itemName: "Amoxicillin 500mg",
+          quantity: 1,
+          price: 8,
+          isTaxable: true,
+          taxRate: 13,
+          priceIsTaxInclusive: true,
+        },
+      ],
+      discountType: "flat",
+      discountValue: 100.8, // 10% of the 1008 combined subtotal
+      isTaxEnabled: true,
+      defaultTaxPercentage: 13,
+    });
+
+    // 100.8 is exactly 10% of the 1008 subtotal, so pro-rata allocation
+    // gives each line exactly a 10% haircut on its own net amount — and a
+    // uniform % discount drops each line's own total contribution (net +
+    // tax either added or backed out) by that same %, for both
+    // conventions. Pre-discount combined total is 1130 + 8 = 1138; 90% of
+    // that is 1024.20.
+    expect(result.totalDiscountAmount).toBe(100.8);
+    expect(result.totalAmount).toBe(1024.2);
   });
 });

@@ -44,7 +44,11 @@ describe("vatOn", () => {
 });
 
 describe("creditNotesAsReturns", () => {
-  it("folds a full reversal into a return for the whole line, VAT included", () => {
+  // item.amount (100) is already the MRP-inclusive gross the original
+  // dispensing-bill line charged — VAT is already inside it, so reversing
+  // it must not add VAT a second time (the exact double-count
+  // calculateMixedTaxBreakdown fixes on the forward sale).
+  it("folds a full reversal into a return for the whole line, with no VAT added on top", () => {
     const { returns, totalReturnedAmount } = creditNotesAsReturns({
       invoice: { id: "inv-1" },
       item,
@@ -53,11 +57,11 @@ describe("creditNotesAsReturns", () => {
     });
 
     expect(returns).toHaveLength(1);
-    expect(returns[0].totalAmount).toBe(-113);
+    expect(returns[0].totalAmount).toBe(-100);
     expect(returns[0].purchaseId).toBe("inv-1");
     expect(returns[0].items[0].quantity).toBe(2);
     expect(returns[0].items[0].purchaseItemId).toBe("line-1");
-    expect(totalReturnedAmount).toBe(113);
+    expect(totalReturnedAmount).toBe(100);
   });
 
   it("derives the units of a partial credit note from its share of the amount", () => {
@@ -68,7 +72,7 @@ describe("creditNotesAsReturns", () => {
       creditNotes: [creditNote({ items: [{ id: "line-1", quantity: 2, amount: -50 }] })],
     });
 
-    expect(returns[0].totalAmount).toBe(-56.5);
+    expect(returns[0].totalAmount).toBe(-50);
     expect(returns[0].items[0].quantity).toBe(1);
   });
 

@@ -23,6 +23,9 @@ export interface StockBatchData {
   schemeStock?: number;
   salePrice?: number;
   schemePrice?: number;
+  /** This batch's own purchase cost — carried onto the allocation so a sale
+   * can record the COGS it actually drew from, not a clinic-wide average. */
+  costPrice?: number;
   batchNumber?: string;
   /** Firestore Timestamp, Date, or date string — all three occur in practice. */
   expiryDate?: any;
@@ -54,6 +57,8 @@ export interface BatchAllocation {
   qty: number;
   /** The batch's own price where it has one, else the request's fallback. */
   price: number;
+  /** This batch's own cost price, so a sale can record real COGS — 0 when the batch never recorded one, never the sale price. */
+  costPrice: number;
   expiryDate: any | null;
   /** Stock in the relevant pool before and after this allocation. */
   previousStock: number;
@@ -167,6 +172,7 @@ export function planStockDeduction(
       batchNumber: data.batchNumber || "DEFAULT",
       qty,
       price,
+      costPrice: data.costPrice ?? 0,
       expiryDate: data.expiryDate ?? null,
       previousStock: available,
       newStock: isScheme ? newSchemeStock : newRegularStock,

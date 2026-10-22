@@ -32,11 +32,13 @@ import { addToast } from "@heroui/toast";
 import { title } from "@/components/primitives";
 import { useAuthContext } from "@/context/AuthContext";
 import { pharmacyService } from "@/services/pharmacyService";
+import { canDoPharmacyAction } from "@/services/core/pharmacyPermissionCore";
 import {
   MedicinePurchase,
   MedicinePurchaseItem,
   MedicinePurchaseReturn,
   MedicinePurchaseReturnItem,
+  PharmacySettings,
 } from "@/types/models";
 
 interface LocalReturnItem {
@@ -66,6 +68,22 @@ export default function PurchaseReturnPage() {
   const [refundMethod, setRefundMethod] = useState<string>("cash");
   const [notes, setNotes] = useState<string>("");
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [pharmacySettings, setPharmacySettings] =
+    useState<PharmacySettings | null>(null);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    pharmacyService
+      .getPharmacySettings(clinicId)
+      .then(setPharmacySettings)
+      .catch((err) => console.error("Error loading pharmacy settings:", err));
+  }, [clinicId]);
+
+  const canIssueReturn = canDoPharmacyAction(
+    userData?.role,
+    "issueReturn",
+    pharmacySettings,
+  );
 
   useEffect(() => {
     const loadPurchase = async () => {
@@ -303,6 +321,15 @@ export default function PurchaseReturnPage() {
   };
 
   const handleSubmit = async () => {
+    if (!canIssueReturn) {
+      addToast({
+        title: "Not permitted",
+        description: "Your role may not issue a pharmacy return.",
+        color: "danger",
+      });
+
+      return;
+    }
     if (!purchase || !currentUser) {
       addToast({
         title: "Error",
@@ -709,9 +736,14 @@ export default function PurchaseReturnPage() {
             </Button>
             <Button
               color="primary"
-              isDisabled={submitting}
+              isDisabled={submitting || !canIssueReturn}
               isLoading={submitting}
               startContent={<IoSaveOutline />}
+              title={
+                canIssueReturn
+                  ? undefined
+                  : "Your role may not issue a pharmacy return."
+              }
               onPress={handleSubmit}
             >
               Confirm Return

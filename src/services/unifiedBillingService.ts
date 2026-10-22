@@ -224,6 +224,7 @@ export async function createDispensingBill(
           isSchemeStock: alloc.isSchemeStock,
           salePrice: alloc.price,
           unitPrice: alloc.price,
+          costPrice: alloc.costPrice,
           totalAmount: alloc.price * alloc.qty,
           batchNumber: alloc.batchNumber,
           expiryDate: alloc.expiryDate ?? null,
@@ -266,9 +267,11 @@ export async function createDispensingBill(
     });
 
     // 3. Recompute the invoice from the repriced lines, through the same
-    //    engine the screen used, so the stored totals and the figures filed
-    //    with IRD agree with the lines actually billed.
-    const totals = appointmentBillingService.calculateInvoiceTotals(
+    //    mixed engine the screen uses — a medicine line's price is the MRP
+    //    (VAT already inside it), a service/lab line's price is
+    //    tax-exclusive (VAT added on top) — so the stored totals and the
+    //    figures filed with IRD agree with the lines actually billed.
+    const totals = appointmentBillingService.calculateMixedInvoiceTotals(
       repricedItems,
       billingData.discountType || "flat",
       billingData.discountValue || 0,

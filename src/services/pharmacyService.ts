@@ -296,6 +296,7 @@ export const pharmacyService = {
               isSchemeStock: alloc.isSchemeStock,
               salePrice: alloc.price,
               unitPrice: alloc.price,
+              costPrice: alloc.costPrice,
               totalAmount: alloc.price * alloc.qty,
               batchNumber: alloc.batchNumber,
               expiryDate: alloc.expiryDate,

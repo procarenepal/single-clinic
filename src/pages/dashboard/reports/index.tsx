@@ -53,6 +53,7 @@ import { OutstandingBalancesReport } from "./OutstandingBalancesReport";
 import { IrdSyncFailuresReport } from "./IrdSyncFailuresReport";
 import { Schedule5Report } from "./Schedule5Report";
 import { BillingAuditLogReport } from "./BillingAuditLogReport";
+import { DiscountGovernanceReport } from "./DiscountGovernanceReport";
 import { LedgerReconciliationReport } from "./LedgerReconciliationReport";
 import { PackageExpiryReport } from "./PackageExpiryReport";
 
@@ -2167,6 +2168,35 @@ export default function ReportsPage() {
                   Export Excel
                 </Button>
               </div>
+              {(() => {
+                const unsynced = filteredPharmacyPurchases.filter(
+                  (p) => p.irdSynced !== true,
+                );
+
+                if (unsynced.length === 0) return null;
+
+                return (
+                  <div className="mb-3 p-3 rounded-lg bg-warning-50 border border-warning-200 text-warning-800 text-[13px] flex items-center justify-between gap-3">
+                    <span>
+                      <strong>{unsynced.length}</strong> sale
+                      {unsynced.length > 1 ? "s" : ""} in this period{" "}
+                      {unsynced.length > 1 ? "are" : "is"} not confirmed
+                      filed with IRD yet — this report&apos;s figures come
+                      from Firestore only, not the authoritative MySQL
+                      ledger. A sync that failed silently would not show
+                      here.
+                    </span>
+                    <Button
+                      color="warning"
+                      size="sm"
+                      variant="flat"
+                      onPress={() => setSelectedTab("ledger-reconciliation")}
+                    >
+                      Check Ledger Reconciliation
+                    </Button>
+                  </div>
+                );
+              })()}
               <div className="clarity-card p-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="clarity-stat text-center">
@@ -3165,6 +3195,18 @@ export default function ReportsPage() {
             }
           >
             <BillingAuditLogReport />
+          </Tab>
+
+          <Tab
+            key="discount-governance"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Discount Governance
+              </span>
+            }
+          >
+            <DiscountGovernanceReport />
           </Tab>
 
           <Tab

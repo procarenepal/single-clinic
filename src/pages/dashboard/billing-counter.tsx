@@ -7,12 +7,14 @@
  * This counter issues ONE invoice for the lot.
  *
  * It deliberately adds no billing logic of its own. Line items are assembled
- * here and then handed to the same `calculateInvoiceTotals` and `createBilling`
- * every other screen already uses, so item-level tax and discount, the IRD
- * payload, the gapless invoice number, the MySQL ledger row and the commission
- * engine all behave identically to an appointment invoice. The only thing new
- * is that the lines may come from three different catalogues, which each item
- * records in `lineKind`.
+ * here and then handed to the same `createBilling` every other screen already
+ * uses, so the IRD payload, the gapless invoice number, the MySQL ledger row
+ * and the commission engine all behave identically to an appointment invoice.
+ * The only thing new is that the lines may come from three different
+ * catalogues, which each item records in `lineKind` — and a medicine line's
+ * price is the MRP (tax already inside it), unlike a service/lab line's
+ * tax-exclusive price, so totals go through `calculateMixedInvoiceTotals`
+ * rather than the plain exclusive engine the other screens use.
  */
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -45,6 +47,13 @@ import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { pathologyService } from "@/services/pathologyService";
 import { medicineService } from "@/services/medicineService";
 import { suggestedDispenseQuantity } from "@/services/core/prescriptionDoseCore";
+import {
+  canDoFrontOfficeAction,
+  discountCapForRole,
+  discountExceedsCap,
+} from "@/services/core/frontOfficePermissionCore";
+import { DISCOUNT_REASON_OPTIONS } from "@/services/core/visitSettleCore";
+import { auditLogService } from "@/services/auditLogService";
 import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   AppointmentBilling,
@@ -90,7 +99,7 @@ export default function BillingCounterPage() {
   // prescription id rather than opening its own sale form, so the medicines go
   // on the same invoice as anything else the visit is being charged for.
   const prescriptionId = searchParams.get("prescriptionId");
-  const { currentUser, clinicId } = useAuthContext();
+  const { currentUser, clinicId, userData } = useAuthContext();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -131,7 +140,21 @@ export default function BillingCounterPage() {
   const [items, setItems] = useState<AppointmentBillingItem[]>([]);
   const [discountType, setDiscountType] = useState<"flat" | "percent">("flat");
   const [discountValue, setDiscountValue] = useState(0);
+  const [discountReason, setDiscountReason] = useState("");
+  // The dropdown's own selection — tracked separately from discountReason
+  // so picking "Other" doesn't lose its selected state the moment the
+  // free-text box is empty (discountReason itself would be "" then).
+  const [discountReasonPreset, setDiscountReasonPreset] = useState("");
   const [applyTax, setApplyTax] = useState(false);
+  const canDiscount = canDoFrontOfficeAction(
+    userData?.role,
+    "discount",
+    settings?.frontOffice,
+  );
+  const discountCapPercent = discountCapForRole(
+    userData?.role,
+    settings?.frontOffice,
+  );
   const [paymentMethod, setPaymentMethod] = useState("cash");
 
   // Which catalogue the "add line" row is currently picking from
@@ -280,7 +303,7 @@ export default function BillingCounterPage() {
 
   const totals = useMemo(
     () =>
-      appointmentBillingService.calculateInvoiceTotals(
+      appointmentBillingService.calculateMixedInvoiceTotals(
         items,
         discountType,
         discountValue,
@@ -533,6 +556,34 @@ export default function BillingCounterPage() {
       return;
     }
 
+    if (discountValue > 0) {
+      if (!canDiscount) {
+        addToast({
+          title: "Not permitted",
+          description: "Your role may not give a discount on an invoice.",
+          color: "danger",
+        });
+
+        return;
+      }
+      if (
+        discountExceedsCap(
+          discountType,
+          discountValue,
+          totals.subtotal,
+          discountCapPercent,
+        )
+      ) {
+        addToast({
+          title: "Over your discount limit",
+          description: `This discount is over your role's ${discountCapPercent}% limit.`,
+          color: "danger",
+        });
+
+        return;
+      }
+    }
+
     // This counter had no awareness of front office at all. Front office
     // now accumulates a visit's charges on the appointment and files ONE
     // invoice at checkout — and for that whole window the appointment
@@ -620,6 +671,9 @@ export default function BillingCounterPage() {
         discountType,
         discountValue,
         discountAmount: totals.totalDiscount,
+        ...(discountValue > 0 && discountReason.trim()
+          ? { discountReason: discountReason.trim() }
+          : {}),
         itemDiscountAmount: totals.itemDiscountAmount,
         mainDiscountAmount: totals.mainDiscountAmount,
         taxPercentage,
@@ -649,6 +703,29 @@ export default function BillingCounterPage() {
 
       const queued =
         (rest as { filedImmediately?: boolean }).filedImmediately === false;
+
+      // createBilling (the non-dispensing path) already logs a discount
+      // internally; createDispensingBill does not, so that branch needs an
+      // explicit entry here or a discount on a dispensing bill goes unlogged.
+      if (dispensing && discountValue > 0) {
+        auditLogService
+          .logDiscountTaxChange({
+            performedBy: currentUser.uid,
+            performedByName: userData?.displayName,
+            clinicId,
+            billingId: id,
+            invoiceNumber,
+            source: "settle",
+            after: {
+              discountType,
+              discountValue,
+              reason: discountReason.trim() || undefined,
+            },
+          })
+          .catch((err) =>
+            console.error("Error logging billing-counter discount audit event:", err),
+          );
+      }
 
       // Close out the prescription this sale fulfilled. Dispensing moved
       // from the pharmacy screen to this counter, but the step that marked
@@ -1230,6 +1307,7 @@ export default function BillingCounterPage() {
           <CardBody className="space-y-3">
             <div className="flex items-end gap-2">
               <Input
+                isDisabled={!canDiscount}
                 label="Discount on the whole bill"
                 min={0}
                 type="number"
@@ -1237,7 +1315,8 @@ export default function BillingCounterPage() {
                 onValueChange={(v) => setDiscountValue(Number(v) || 0)}
               />
               <select
-                className="h-10 rounded border border-border-base bg-surface px-2 text-sm"
+                className="h-10 rounded border border-border-base bg-surface px-2 text-sm disabled:opacity-50"
+                disabled={!canDiscount}
                 value={discountType}
                 onChange={(e) =>
                   setDiscountType(e.target.value as "flat" | "percent")
@@ -1247,6 +1326,62 @@ export default function BillingCounterPage() {
                 <option value="percent">%</option>
               </select>
             </div>
+            {!canDiscount && discountValue > 0 && (
+              <p className="text-xs text-danger">
+                Your role may not give a discount — ask a permitted role.
+              </p>
+            )}
+            {canDiscount && discountValue > 0 && (
+              <div className="space-y-1">
+                <select
+                  className="h-9 w-full rounded border border-border-base bg-surface px-2 text-sm"
+                  value={discountReasonPreset}
+                  onChange={(e) => {
+                    const preset = e.target.value;
+
+                    setDiscountReasonPreset(preset);
+                    setDiscountReason(preset === "Other" ? "" : preset);
+                  }}
+                >
+                  <option value="">Reason (optional)</option>
+                  {DISCOUNT_REASON_OPTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                {discountReasonPreset === "Other" && (
+                  <Input
+                    label="Specify the reason"
+                    value={discountReason}
+                    onValueChange={(v) => setDiscountReason(v)}
+                  />
+                )}
+                {discountCapPercent !== null && (
+                  <p
+                    className={`text-xs ${
+                      discountExceedsCap(
+                        discountType,
+                        discountValue,
+                        totals.subtotal,
+                        discountCapPercent,
+                      )
+                        ? "text-danger font-medium"
+                        : "text-text-muted"
+                    }`}
+                  >
+                    {discountExceedsCap(
+                      discountType,
+                      discountValue,
+                      totals.subtotal,
+                      discountCapPercent,
+                    )
+                      ? `Over your limit of ${discountCapPercent}%.`
+                      : `Up to ${discountCapPercent}% without a higher-capped role.`}
+                  </p>
+                )}
+              </div>
+            )}
             <label className="flex items-center gap-2 text-sm">
               <input
                 checked={applyTax}

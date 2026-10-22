@@ -1257,8 +1257,17 @@ export const medicineService = {
 
       if (transactionData.type === "purchase") {
         newStock = currentStock + transactionData.quantity;
-      } else if (transactionData.type === "sale") {
-        newStock = currentStock - transactionData.quantity;
+      } else if (
+        transactionData.type === "sale" ||
+        transactionData.type === "expired" ||
+        transactionData.type === "damaged"
+      ) {
+        // Same direction as a sale: this quantity has left the sellable
+        // pool. Without this, selecting "Expired"/"Damaged" here wrote a
+        // transaction record claiming stock was written off while
+        // currentStock stayed completely unchanged — the expired batch
+        // stayed fully sellable.
+        newStock = Math.max(0, currentStock - transactionData.quantity);
       } else if (transactionData.type === "adjustment") {
         newStock = transactionData.quantity;
       }

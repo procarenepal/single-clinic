@@ -411,17 +411,21 @@ export const auditLogService = {
     branchId?: string;
     billingId: string;
     invoiceNumber?: string;
+    /** Where the discount was decided — absent means the invoice itself (Settle). */
+    source?: "intake" | "settle" | "pharmacy";
     before?: {
       discountType?: string;
       discountValue?: number;
       applyTax?: boolean;
       taxPercentage?: number;
+      reason?: string;
     };
     after: {
       discountType?: string;
       discountValue?: number;
       applyTax?: boolean;
       taxPercentage?: number;
+      reason?: string;
     };
   }): Promise<string> {
     return this.createLog({
@@ -435,6 +439,44 @@ export const auditLogService = {
       details: {
         billingId: data.billingId,
         invoiceNumber: data.invoiceNumber,
+        source: data.source,
+        before: data.before,
+        after: data.after,
+      },
+    });
+  },
+
+  /**
+   * Helper to log a batch's cost/sale price being changed — pharmacy had no
+   * audit trail for this at all before; a price silently edited from 50 to
+   * 5 left no forensic record.
+   */
+  async logPharmacyPriceChange(data: {
+    performedBy: string;
+    performedByName?: string;
+    performedByEmail?: string;
+    clinicId: string;
+    branchId?: string;
+    medicineId: string;
+    medicineName?: string;
+    batchNumber?: string;
+    reason?: string;
+    before: { salePrice?: number; costPrice?: number };
+    after: { salePrice?: number; costPrice?: number };
+  }): Promise<string> {
+    return this.createLog({
+      eventType: "pharmacy_price_changed",
+      performedBy: data.performedBy,
+      performedByName: data.performedByName,
+      performedByEmail: data.performedByEmail,
+      clinicId: data.clinicId,
+      branchId: data.branchId,
+      status: "success",
+      details: {
+        medicineId: data.medicineId,
+        medicineName: data.medicineName,
+        batchNumber: data.batchNumber,
+        reason: data.reason,
         before: data.before,
         after: data.after,
       },

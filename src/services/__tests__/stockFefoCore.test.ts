@@ -171,6 +171,38 @@ describe("planStockDeduction", () => {
     expect(plan.totalAmount).toBe(85);
   });
 
+  it("carries each batch's own cost price onto its allocation, for real COGS at sale time", () => {
+    const batches = [
+      batch("late", {
+        currentStock: 10,
+        salePrice: 20,
+        costPrice: 14,
+        expiryDate: day("2027-01-01T00:00:00Z"),
+      }),
+      batch("soon", {
+        currentStock: 3,
+        salePrice: 15,
+        costPrice: 9,
+        expiryDate: day("2026-07-01T00:00:00Z"),
+      }),
+    ];
+    const plan = planStockDeduction(req(5), batches, NOW);
+
+    expect(
+      plan.allocations.map((a) => [a.stockDocId, a.costPrice]),
+    ).toEqual([
+      ["soon", 9],
+      ["late", 14],
+    ]);
+  });
+
+  it("a batch with no recorded cost price allocates costPrice 0, never the sale price", () => {
+    const batches = [batch("a", { currentStock: 5, salePrice: 12, costPrice: undefined })];
+    const plan = planStockDeduction(req(2), batches, NOW);
+
+    expect(plan.allocations[0].costPrice).toBe(0);
+  });
+
   it("falls back to the cart price only when a batch has none", () => {
     const batches = [batch("a", { currentStock: 5, salePrice: undefined })];
     const plan = planStockDeduction(req(2, { fallbackPrice: 7 }), batches, NOW);

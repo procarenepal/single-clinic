@@ -23,12 +23,20 @@ import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { medicineService } from "@/services/medicineService";
+import { pharmacyService } from "@/services/pharmacyService";
+import { auditLogService } from "@/services/auditLogService";
+import {
+  canDoPharmacyAction,
+  pharmacyPriceChangeCapForRole,
+  priceChangeExceedsCap,
+} from "@/services/core/pharmacyPermissionCore";
 import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
   Medicine,
   MedicineBrand,
   MedicineCategory,
   ClinicSettings,
+  PharmacySettings,
   Supplier,
 } from "@/types/models";
 
@@ -134,6 +142,34 @@ export default function MedicinesTab({
   effectiveBranchId,
 }: MedicinesTabProps) {
   const { userData, clinicId } = useAuthContext();
+  const [pharmacySettings, setPharmacySettings] =
+    useState<PharmacySettings | null>(null);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    pharmacyService
+      .getPharmacySettings(clinicId)
+      .then(setPharmacySettings)
+      .catch((err) => console.error("Error loading pharmacy settings:", err));
+  }, [clinicId]);
+
+  const canEditPrice = canDoPharmacyAction(
+    userData?.role,
+    "editPrice",
+    pharmacySettings,
+  );
+  const canDeactivateMedicine = canDoPharmacyAction(
+    userData?.role,
+    "deactivateMedicine",
+    pharmacySettings,
+  );
+  const priceChangeCapPercent = pharmacyPriceChangeCapForRole(
+    userData?.role,
+    pharmacySettings,
+  );
+  const [priceChangeReason, setPriceChangeReason] = useState("");
+  const [priceChangeReasonPreset, setPriceChangeReasonPreset] = useState("");
+
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [masterMedicines, setMasterMedicines] = useState<Medicine[]>([]);
   const [medicineStocks, setMedicineStocks] = useState<Record<string, number>>(
@@ -1150,6 +1186,14 @@ export default function MedicinesTab({
   };
 
   const handleToggleStatus = async (medicine: Medicine) => {
+    if (!canDeactivateMedicine) {
+      addToast({
+        title: "Not permitted",
+        description: "Your role may not activate or deactivate medicines.",
+      });
+
+      return;
+    }
     setIsLoading(true);
     try {
       await medicineService.updateMedicine(medicine.id, {
@@ -1241,6 +1285,47 @@ export default function MedicinesTab({
     try {
       const isAdd = refillFormData.transactionType === "add";
       const num = (value: string) => (value ? parseFloat(value) : undefined);
+      // Defense in depth: the price inputs are disabled in the UI for a role
+      // without editPrice, but a submit should never trust that alone —
+      // force the catalog's current price through regardless of whatever
+      // sits in form state.
+      const submittedCostPrice = canEditPrice
+        ? num(refillFormData.regularCostPrice)
+        : medicineForRefill.costPrice;
+      const submittedSalePrice = canEditPrice
+        ? num(refillFormData.regularSalePrice)
+        : medicineForRefill.price;
+      const submittedSchemePrice = canEditPrice
+        ? num(refillFormData.schemePrice)
+        : undefined;
+      const submittedSchemeCostPrice = canEditPrice
+        ? num(refillFormData.schemeCostPrice)
+        : undefined;
+
+      if (
+        canEditPrice &&
+        ((submittedSalePrice !== undefined &&
+          priceChangeExceedsCap(
+            medicineForRefill.price,
+            submittedSalePrice,
+            priceChangeCapPercent,
+          )) ||
+          (submittedCostPrice !== undefined &&
+            priceChangeExceedsCap(
+              medicineForRefill.costPrice,
+              submittedCostPrice,
+              priceChangeCapPercent,
+            )))
+      ) {
+        addToast({
+          title: "Over your price-change limit",
+          description: `This price change is over your role's ${priceChangeCapPercent}% limit. Ask a role with a higher or no cap to apply it.`,
+          color: "danger",
+        });
+        setIsLoading(false);
+
+        return;
+      }
 
       // One transaction applies the stock change and logs the movement.
       const { newRegularStock, newSchemeStock } =
@@ -1256,28 +1341,54 @@ export default function MedicinesTab({
           expiryDate: refillFormData.expiryDate
             ? parseLocalDate(refillFormData.expiryDate)
             : undefined,
-          costPrice: num(refillFormData.regularCostPrice),
-          salePrice: num(refillFormData.regularSalePrice),
+          costPrice: submittedCostPrice,
+          salePrice: submittedSalePrice,
           supplierId: refillFormData.supplierId || undefined,
           invoiceNumber: refillFormData.invoiceNumber || undefined,
           unitPrice: num(refillFormData.unitPrice),
-          schemePrice: num(refillFormData.schemePrice),
-          schemeCostPrice: num(refillFormData.schemeCostPrice),
+          schemePrice: submittedSchemePrice,
+          schemeCostPrice: submittedSchemeCostPrice,
         });
+
+      if (
+        canEditPrice &&
+        (submittedSalePrice !== undefined || submittedCostPrice !== undefined) &&
+        (submittedSalePrice !== medicineForRefill.price ||
+          submittedCostPrice !== medicineForRefill.costPrice)
+      ) {
+        auditLogService
+          .logPharmacyPriceChange({
+            performedBy: userData.id,
+            performedByName: userData.displayName,
+            clinicId,
+            branchId: branchScopeId || undefined,
+            medicineId: medicineForRefill.id,
+            medicineName: medicineForRefill.name,
+            batchNumber: refillFormData.batchNumber || "DEFAULT",
+            reason: priceChangeReason.trim() || undefined,
+            before: {
+              salePrice: medicineForRefill.price,
+              costPrice: medicineForRefill.costPrice,
+            },
+            after: {
+              salePrice: submittedSalePrice,
+              costPrice: submittedCostPrice,
+            },
+          })
+          .catch((err) =>
+            console.error("Error logging pharmacy price change:", err),
+          );
+      }
 
       // Update core medicine details with latest batch info if it's a purchase/addition
       if (isAdd) {
         const medicineUpdateData: Partial<Medicine> = {};
 
-        if (refillFormData.regularSalePrice) {
-          medicineUpdateData.price = parseFloat(
-            refillFormData.regularSalePrice,
-          );
+        if (submittedSalePrice !== undefined) {
+          medicineUpdateData.price = submittedSalePrice;
         }
-        if (refillFormData.regularCostPrice) {
-          medicineUpdateData.costPrice = parseFloat(
-            refillFormData.regularCostPrice,
-          );
+        if (submittedCostPrice !== undefined) {
+          medicineUpdateData.costPrice = submittedCostPrice;
         }
         if (refillFormData.batchNumber) {
           medicineUpdateData.batchNumber = refillFormData.batchNumber;
@@ -2046,6 +2157,8 @@ export default function MedicinesTab({
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
                             onClick={async () => {
                               setMedicineForRefill(medicine);
+                              setPriceChangeReason("");
+                              setPriceChangeReasonPreset("");
                               setIsLoading(true);
 
                               let resolvedBatchNumber =
@@ -2225,12 +2338,17 @@ export default function MedicinesTab({
                             <span>Edit</span>
                           </button>
                           <button
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold transition-colors ${medicine.isActive
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${medicine.isActive
                               ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
                               : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
                               }`}
+                            disabled={!canDeactivateMedicine}
                             title={
-                              medicine.isActive ? "Deactivate" : "Activate"
+                              canDeactivateMedicine
+                                ? medicine.isActive
+                                  ? "Deactivate"
+                                  : "Activate"
+                                : "Not permitted for your role"
                             }
                             onClick={() => handleToggleStatus(medicine)}
                           >
@@ -2776,6 +2894,23 @@ export default function MedicinesTab({
                         value={formDataList[0].price}
                         onChange={(e) => handleChange(0, e)}
                       />
+                      {formDataList[0].isVatApplied &&
+                        formDataList[0].price &&
+                        (() => {
+                          const mrp = parseFloat(formDataList[0].price) || 0;
+                          const rate =
+                            parseFloat(formDataList[0].vatPercentage) || 0;
+                          const taxable = rate > 0 ? mrp / (1 + rate / 100) : mrp;
+                          const vat = mrp - taxable;
+
+                          return (
+                            <p className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                              Already incl. VAT — taxable NPR{" "}
+                              {taxable.toFixed(2)} + VAT ({rate}%) NPR{" "}
+                              {vat.toFixed(2)}
+                            </p>
+                          );
+                        })()}
                     </div>
 
                     <div className="space-y-1.5">
@@ -3147,8 +3282,11 @@ export default function MedicinesTab({
                             onChange={(e) => handleChange(index, e)}
                           />
                           {formData.isVatApplied && formData.costPrice && (
-                            <p className="text-[10px] text-primary font-medium mt-1">
-                              Total:{" "}
+                            <p
+                              className="text-[10px] text-primary font-medium mt-1"
+                              title="Cost price with VAT added on top — what you pay the supplier per unit, not the patient-facing MRP."
+                            >
+                              Cost incl. VAT:{" "}
                               {(
                                 parseFloat(formData.costPrice) *
                                 (1 + parseFloat(formData.vatPercentage) / 100)
@@ -3365,6 +3503,12 @@ export default function MedicinesTab({
             {!currentMedicine && (
               <div className="mt-4 flex justify-end">
                 <div className="w-full md:w-80 space-y-3 bg-[rgb(var(--color-surface-2))] p-4 rounded-lg border border-[rgb(var(--color-border))] shadow-sm">
+                  <p className="text-[11px] text-[rgb(var(--color-text-muted))] leading-relaxed">
+                    This is the purchase invoice — based on Cost Price (what
+                    you pay the supplier). MRP / Sale Price doesn&apos;t
+                    affect these figures; it only sets what you&apos;ll
+                    charge later.
+                  </p>
                   <div className="flex justify-between items-center text-[13px]">
                     <span className="text-[rgb(var(--color-text-muted))]">
                       Subtotal
@@ -3572,6 +3716,87 @@ export default function MedicinesTab({
               </button>
             </div>
 
+            {!canEditPrice && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[12px]">
+                Your role may not change prices — quantity can still be
+                adjusted, but the price fields below are read-only.
+              </div>
+            )}
+
+            {canEditPrice &&
+              (() => {
+                const newSale = parseFloat(refillFormData.regularSalePrice);
+                const newCost = parseFloat(refillFormData.regularCostPrice);
+                const saleChanged =
+                  !isNaN(newSale) && newSale !== medicineForRefill?.price;
+                const costChanged =
+                  !isNaN(newCost) && newCost !== medicineForRefill?.costPrice;
+
+                if (!saleChanged && !costChanged) return null;
+
+                const overCap =
+                  (saleChanged &&
+                    priceChangeExceedsCap(
+                      medicineForRefill?.price,
+                      newSale,
+                      priceChangeCapPercent,
+                    )) ||
+                  (costChanged &&
+                    priceChangeExceedsCap(
+                      medicineForRefill?.costPrice,
+                      newCost,
+                      priceChangeCapPercent,
+                    ));
+
+                return (
+                  <div className="space-y-1.5">
+                    <select
+                      className="h-8 w-full px-2 text-[12px] border border-[rgb(var(--color-border))] rounded bg-[rgb(var(--color-surface))]"
+                      value={priceChangeReasonPreset}
+                      onChange={(e) => {
+                        const preset = e.target.value;
+
+                        setPriceChangeReasonPreset(preset);
+                        setPriceChangeReason(preset === "Other" ? "" : preset);
+                      }}
+                    >
+                      <option value="">
+                        Reason for the price change (optional)
+                      </option>
+                      {[
+                        "Supplier cost increase",
+                        "Market price adjustment",
+                        "Promotional pricing",
+                        "Cost correction",
+                        "Other",
+                      ].map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                    {priceChangeReasonPreset === "Other" && (
+                      <input
+                        className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                        placeholder="Specify the reason"
+                        type="text"
+                        value={priceChangeReason}
+                        onChange={(e) => setPriceChangeReason(e.target.value)}
+                      />
+                    )}
+                    {priceChangeCapPercent !== null && (
+                      <p
+                        className={`text-[11px] ${overCap ? "text-danger font-medium" : "text-[rgb(var(--color-text-muted))]"}`}
+                      >
+                        {overCap
+                          ? `Over your limit of ${priceChangeCapPercent}% per edit — ask a role with a higher or no cap.`
+                          : `You may change a price by up to ${priceChangeCapPercent}% per edit.`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
             {/* Regular Stock Section */}
             <div>
               <h4 className="text-md font-semibold text-[rgb(var(--color-text))] mb-3">
@@ -3606,17 +3831,18 @@ export default function MedicinesTab({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                      Regular Sale Price (NPR)
+                      Regular Sale Price — MRP, incl. VAT (NPR)
                     </label>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
                         NPR
                       </span>
                       <input
-                        className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                        className={`clarity-input with-prefix h-8 w-full text-[13px] pr-2 ${!canEditPrice ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
+                        disabled={!canEditPrice}
                         min={0}
                         name="regularSalePrice"
-                        placeholder="Enter sale price"
+                        placeholder="Enter MRP (incl. VAT)"
                         step="any"
                         type="number"
                         value={refillFormData.regularSalePrice}
@@ -3633,6 +3859,22 @@ export default function MedicinesTab({
                         }}
                       />
                     </div>
+                    {medicineForRefill?.isVatApplied &&
+                      refillFormData.regularSalePrice &&
+                      (() => {
+                        const mrp = parseFloat(refillFormData.regularSalePrice) || 0;
+                        const rate = medicineForRefill.vatPercentage ?? 0;
+                        const taxable = rate > 0 ? mrp / (1 + rate / 100) : mrp;
+                        const vat = mrp - taxable;
+
+                        return (
+                          <p className="mt-1 text-[11px] text-[rgb(var(--color-text-muted))]">
+                            This price is already tax-inclusive — taxable NPR{" "}
+                            {taxable.toFixed(2)} + VAT ({rate}%) NPR{" "}
+                            {vat.toFixed(2)}
+                          </p>
+                        );
+                      })()}
                   </div>
 
                   <div>
@@ -3644,7 +3886,8 @@ export default function MedicinesTab({
                         NPR
                       </span>
                       <input
-                        className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                        className={`clarity-input with-prefix h-8 w-full text-[13px] pr-2 ${!canEditPrice ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
+                        disabled={!canEditPrice}
                         min={0}
                         name="regularCostPrice"
                         placeholder="Enter cost price"
@@ -3702,17 +3945,18 @@ export default function MedicinesTab({
 
                 <div>
                   <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Scheme Price (NPR)
+                    Scheme Price — MRP, incl. VAT (NPR)
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
                       NPR
                     </span>
                     <input
-                      className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                      className={`clarity-input with-prefix h-8 w-full text-[13px] pr-2 ${!canEditPrice ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
+                      disabled={!canEditPrice}
                       min={0}
                       name="schemePrice"
-                      placeholder="Enter scheme stock sale price"
+                      placeholder="Enter scheme stock MRP (incl. VAT)"
                       step="any"
                       type="number"
                       value={refillFormData.schemePrice}
@@ -3729,6 +3973,22 @@ export default function MedicinesTab({
                       }}
                     />
                   </div>
+                  {medicineForRefill?.isVatApplied &&
+                    refillFormData.schemePrice &&
+                    (() => {
+                      const mrp = parseFloat(refillFormData.schemePrice) || 0;
+                      const rate = medicineForRefill.vatPercentage ?? 0;
+                      const taxable = rate > 0 ? mrp / (1 + rate / 100) : mrp;
+                      const vat = mrp - taxable;
+
+                      return (
+                        <p className="mt-1 text-[11px] text-[rgb(var(--color-text-muted))]">
+                          This price is already tax-inclusive — taxable NPR{" "}
+                          {taxable.toFixed(2)} + VAT ({rate}%) NPR{" "}
+                          {vat.toFixed(2)}
+                        </p>
+                      );
+                    })()}
                 </div>
 
                 <div>
@@ -3740,7 +4000,8 @@ export default function MedicinesTab({
                       NPR
                     </span>
                     <input
-                      className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                      className={`clarity-input with-prefix h-8 w-full text-[13px] pr-2 ${!canEditPrice ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
+                      disabled={!canEditPrice}
                       min={0}
                       name="schemeCostPrice"
                       placeholder="Enter cost price"
