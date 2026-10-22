@@ -613,6 +613,74 @@ export default function EditInvoicePage() {
       return;
     }
 
+    // Block (don't just warn) if this invoice's items now re-bill the SAME
+    // appointment type as another visit today — this page has no awareness
+    // of appointments at all otherwise, so editing in a new line here is
+    // the one place that could silently create a duplicate charge for a
+    // visit already covered elsewhere. Excludes appointments this very
+    // invoice is already linked to (billingId/consultationBillingId ===
+    // invoice.id) — those are this invoice's own charge, not a duplicate of
+    // it. See findDuplicateChargeVisit, the one shared guard every invoice-
+    // writing screen uses.
+    if (formData.patientId) {
+      try {
+        const { appointmentService } = await import(
+          "@/services/appointmentService"
+        );
+        const { findDuplicateChargeVisit } = await import(
+          "@/services/core/visitChargeCore"
+        );
+        const todaysAppointments = (
+          await appointmentService.getAppointmentsByPatient(formData.patientId)
+        ).filter((a) => {
+          const isToday =
+            a.appointmentDate.toDateString() === new Date().toDateString();
+          const isThisInvoice =
+            (a as any).billingId === invoice.id ||
+            (a as any).consultationBillingId === invoice.id;
+
+          return isToday && (a as any).status !== "cancelled" && !isThisInvoice;
+        });
+
+        const duplicateAppt = findDuplicateChargeVisit(
+          todaysAppointments,
+          formData.items.map((item) => item.appointmentTypeId),
+        );
+
+        if (duplicateAppt) {
+          const existingBillId = duplicateAppt.existingBillId;
+
+          if (existingBillId) {
+            const existingBilling =
+              await appointmentBillingService.getBillingById(existingBillId);
+            const existingInvoiceNumber =
+              existingBilling?.invoiceNumber || existingBillId;
+
+            addToast({
+              title: "Duplicate invoice blocked",
+              description: `${formData.patientName} already has invoice ${existingInvoiceNumber} covering this same visit today. Edit that invoice instead.`,
+              color: "danger",
+            });
+          } else {
+            addToast({
+              title: "Duplicate invoice blocked",
+              description: `${formData.patientName} has an in-progress visit at the front desk that already includes this charge. Settle it from the Billing Counter instead of adding it here.`,
+              color: "danger",
+            });
+          }
+
+          return;
+        }
+      } catch (checkError) {
+        // Best-effort check only — never block saving because this lookup
+        // itself failed.
+        console.error(
+          "Error checking for existing today's invoice:",
+          checkError,
+        );
+      }
+    }
+
     try {
       setSaving(true);
 
