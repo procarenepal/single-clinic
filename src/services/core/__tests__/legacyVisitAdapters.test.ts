@@ -4,8 +4,23 @@ import {
   legacyLineOrigin,
   findBookedLine,
   mergeVisitLines,
+  legacyRecommendationToItems,
   type LegacyLineShape,
 } from "../legacyVisitAdapters";
+
+const NOW = new Date("2026-10-22T09:00:00Z");
+const doctorVisit = {
+  doctorId: "doc_1",
+  doctorName: "Dr. A",
+  assignedExpertId: null,
+  expertName: null,
+};
+const expertVisit = {
+  doctorId: "doc_1",
+  doctorName: "Dr. A",
+  assignedExpertId: "exp_1",
+  expertName: "Expert B",
+};
 
 describe("legacyLineOrigin", () => {
   it("trusts an explicit origin first", () => {
@@ -97,5 +112,120 @@ describe("mergeVisitLines — why appendBookedLines must guard with findBookedLi
 
     expect(result.added).toHaveLength(0);
     expect(result.skipped).toHaveLength(1);
+  });
+});
+
+describe("legacyRecommendationToItems", () => {
+  it("returns nothing for a non-object recommendation", () => {
+    expect(legacyRecommendationToItems(null, doctorVisit, NOW)).toEqual([]);
+    expect(legacyRecommendationToItems(undefined, doctorVisit, NOW)).toEqual(
+      [],
+    );
+    expect(legacyRecommendationToItems("legacy", doctorVisit, NOW)).toEqual(
+      [],
+    );
+  });
+
+  it("returns nothing when there are no items and no single-fee name", () => {
+    expect(legacyRecommendationToItems({}, doctorVisit, NOW)).toEqual([]);
+  });
+
+  it("maps a legacy single-fee recommendation (no items array) into one item", () => {
+    const result = legacyRecommendationToItems(
+      { name: "Laser Session", fee: 1500 },
+      doctorVisit,
+      NOW,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      name: "Laser Session",
+      quantity: 1,
+      doToday: true,
+      status: "recommended",
+      decidedAt: NOW,
+    });
+  });
+
+  it("maps every entry of a multi-item recommendation, filtering out empty ones", () => {
+    const result = legacyRecommendationToItems(
+      {
+        items: [
+          { id: "t1", name: "Consult", quantity: 2 },
+          { name: "" }, // neither id nor name — filtered out
+          { id: "", name: "" }, // same
+          { id: "t2", name: "Follow-up" },
+        ],
+      },
+      doctorVisit,
+      NOW,
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.map((i) => i.appointmentTypeId)).toEqual(["t1", "t2"]);
+    expect(result[0].quantity).toBe(2);
+  });
+
+  it("attributes to the assigned expert when one is on the visit", () => {
+    const result = legacyRecommendationToItems(
+      { name: "Facial", fee: 800 },
+      expertVisit,
+      NOW,
+    );
+
+    expect(result[0].performedBy).toEqual({
+      id: "exp_1",
+      kind: "expert",
+      name: "Expert B",
+    });
+  });
+
+  it("falls back to the doctor when assignedExpertId is 'unassigned'", () => {
+    const result = legacyRecommendationToItems(
+      { name: "Facial", fee: 800 },
+      { ...expertVisit, assignedExpertId: "unassigned" },
+      NOW,
+    );
+
+    expect(result[0].performedBy).toEqual({
+      id: "doc_1",
+      kind: "doctor",
+      name: "Dr. A",
+    });
+  });
+
+  it("resolves a name-only item's appointmentTypeId via the lookup callback", () => {
+    const resolveTypeId = (name: string) =>
+      name === "Known Service" ? "type_known" : undefined;
+
+    const result = legacyRecommendationToItems(
+      { items: [{ name: "Known Service" }, { name: "Unknown Service" }] },
+      doctorVisit,
+      NOW,
+      resolveTypeId,
+    );
+
+    expect(result[0].appointmentTypeId).toBe("type_known");
+    expect(result[1].appointmentTypeId).toBe("");
+  });
+
+  it("clamps a zero or fractional quantity up to a whole 1", () => {
+    const result = legacyRecommendationToItems(
+      { items: [{ id: "t1", name: "X", quantity: 0 }] },
+      doctorVisit,
+      NOW,
+    );
+
+    expect(result[0].quantity).toBe(1);
+  });
+
+  it("uses the recommendation's own recommendedBy over the visit's doctor", () => {
+    const result = legacyRecommendationToItems(
+      { name: "X", fee: 100, recommendedBy: "dr_other" },
+      doctorVisit,
+      NOW,
+    );
+
+    expect(result[0].recommendedBy).toBe("dr_other");
   });
 });

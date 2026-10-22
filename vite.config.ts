@@ -84,5 +84,31 @@ export default defineConfig(({ mode }) => ({
     // tests/** holds the Firestore security-rules suite, which needs the
     // Firestore emulator and is run by `npm run test:rules`, not vitest.
     exclude: [...configDefaults.exclude, ".claude/**", "tests/**"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html", "lcov"],
+      // Reported for every service file (visibility into the 56/69 gap a
+      // 2026-10-18 audit found — this had to be counted by hand before,
+      // with no tool configured at all), but the threshold below is
+      // enforced only on core/: pure calculation, no Firestore calls, and
+      // already fully covered. Widening the threshold to the wider
+      // service layer is tracked separately (tier 3) — enforcing it now
+      // would fail CI on the pre-existing gap immediately rather than on
+      // a regression.
+      include: ["src/services/**/*.ts"],
+      exclude: [
+        "src/services/**/__tests__/**",
+        "src/services/**/*.test.ts",
+        "src/services/**/*.test.tsx",
+      ],
+      thresholds: {
+        "src/services/core/**/*.ts": {
+          statements: 90,
+          branches: 85,
+          functions: 90,
+          lines: 90,
+        },
+      },
+    },
   },
 }));

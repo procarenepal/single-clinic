@@ -34,8 +34,14 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
-      - name: Unit tests
-        run: npx vitest run
+      # --coverage additionally enforces vite.config.ts's coverage.thresholds
+      # (src/services/core/** only, the pure-logic layer — a 2026-10-18 audit
+      # found this at 100% file coverage with no tool ever measuring it, next
+      # to a service layer that's 56/69 files untested, which the threshold
+      # deliberately does NOT gate yet rather than failing CI on a pre-existing
+      # gap on day one).
+      - name: Unit tests (with coverage threshold on the pure-logic layer)
+        run: npx vitest run --coverage
 
       - name: Production build
         run: npx vite build --mode production
