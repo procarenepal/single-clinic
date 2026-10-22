@@ -72,6 +72,16 @@ vi.mock("@/config/firebase", () => ({ db: {}, auth: { currentUser: { uid: "teste
 vi.mock("../../config/firebase", () => ({ db: {}, auth: { currentUser: { uid: "tester" } } }));
 vi.mock("../config/firebase", () => ({ db: {}, auth: { currentUser: { uid: "tester" } } }));
 
+// Commission create/pay/cancel/reduce now each write an audit-log entry
+// after their real write succeeds — stubbed here so it doesn't add an
+// unaccounted-for addDoc call to the assertions below (which predate this
+// and assert exact addDoc call counts).
+vi.mock("../auditLogService", () => ({
+  auditLogService: {
+    logCommissionEvent: vi.fn().mockResolvedValue("log_id"),
+  },
+}));
+
 function fakeDocSnap(id: string, data: Record<string, any>) {
   return {
     id,

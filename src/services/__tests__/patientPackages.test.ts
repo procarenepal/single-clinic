@@ -73,6 +73,23 @@ vi.mock("@/config/firebase", () => ({ db: {} }));
 vi.mock("../../config/firebase", () => ({ db: {} }));
 vi.mock("../config/firebase", () => ({ db: {} }));
 
+// consumeSession/refundUnusedSessions/createPatientPackage now write an
+// audit-log entry after the real write succeeds — stubbed here so it
+// doesn't add unaccounted-for addDoc calls to the assertions below (which
+// predate this and assert exact counts/absence of addDoc). Individual
+// tests override with mockResolvedValueOnce where they want to assert on it.
+const logPackageSessionEventMock = vi.fn().mockResolvedValue("log_id");
+const logWalletTransactionMock = vi.fn().mockResolvedValue("log_id");
+
+vi.mock("../auditLogService", () => ({
+  auditLogService: {
+    logPackageSessionEvent: (...args: any[]) =>
+      logPackageSessionEventMock(...args),
+    logWalletTransaction: (...args: any[]) =>
+      logWalletTransactionMock(...args),
+  },
+}));
+
 function makePackage(overrides: Record<string, any> = {}) {
   return {
     id: "pkg_1",
@@ -116,8 +133,10 @@ describe("consumeSession — duplicate-consumption guard (bug fix)", () => {
       appointmentId: "appt_1",
     });
 
-    // No usedSessions increment, no wallet deduction attempt
+    // No usedSessions increment, no wallet deduction attempt, and no audit
+    // entry for a consumption that didn't actually happen.
     expect(updateDocMock).not.toHaveBeenCalled();
+    expect(logPackageSessionEventMock).not.toHaveBeenCalled();
   });
 
   it("allows consumption for a genuinely new appointment", async () => {
@@ -155,6 +174,13 @@ describe("consumeSession — duplicate-consumption guard (bug fix)", () => {
     const updates = updateDocMock.mock.calls[0][1];
 
     expect(updates.usedSessions).toEqual({ __increment: 1 });
+
+    // A real consumption now leaves an audit trail — previously this and
+    // every other wallet/package/commission write failed silently with no
+    // record of who did it.
+    expect(logPackageSessionEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({ packageId: "pkg_1", action: "session_consumed" }),
+    );
   });
 });
 
@@ -276,6 +302,15 @@ describe("refundUnusedSessions — happy path", () => {
     expect(pkgUpdate.refundedAmount).toBe(1200);
     expect(pkgUpdate.refundedSessions).toBe(6);
     expect(pkgUpdate.refundReason).toBe("Patient relocating");
+
+    // Both the wallet-side refund (via refundFunds) and the package's own
+    // "refunded" event leave an audit trail.
+    expect(logWalletTransactionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "refund", amount: 1200 }),
+    );
+    expect(logPackageSessionEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({ packageId: "pkg_1", action: "refunded" }),
+    );
   });
 });
 
@@ -348,6 +383,14 @@ describe("walletService.refundFunds", () => {
     expect(updateDocMock.mock.calls[1][1].walletBalance).toEqual({
       __increment: 800,
     });
+
+    expect(logWalletTransactionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "refund",
+        amount: 800,
+        patientId: "pat_1",
+      }),
+    );
   });
 
   it("refuses to credit a patient that does not exist", async () => {

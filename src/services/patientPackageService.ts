@@ -16,6 +16,7 @@ import {
 import { db } from "../config/firebase";
 import { PatientPackage } from "../types/models";
 import { resolveClinicId } from "./currentClinic";
+import { auditLogService } from "./auditLogService";
 
 const PATIENT_PACKAGES_COLLECTION = "patientPackages";
 
@@ -174,6 +175,17 @@ export const patientPackageService = {
         collection(db, PATIENT_PACKAGES_COLLECTION),
         data,
       );
+
+      await auditLogService.logPackageSessionEvent({
+        performedBy: pkgData.createdBy,
+        clinicId: pkgData.clinicId,
+        branchId: pkgData.branchId,
+        packageId: docRef.id,
+        packageName: pkgData.packageName,
+        patientId: pkgData.patientId,
+        action: "created",
+        details: { totalSessions: pkgData.totalSessions },
+      });
 
       return docRef.id;
     } catch (error) {
@@ -438,6 +450,21 @@ export const patientPackageService = {
           }
 
           transaction.update(docRef, updates);
+        });
+
+        await auditLogService.logPackageSessionEvent({
+          performedBy: auditData?.clinicianId || "system",
+          clinicId: data.clinicId,
+          branchId: data.branchId,
+          packageId: id,
+          packageName: data.packageName,
+          patientId: data.patientId,
+          action: "session_consumed",
+          details: {
+            appointmentId: auditData?.appointmentId,
+            clinicianName: auditData?.clinicianName,
+            walletDeducted: deductedSessionCost,
+          },
         });
       } catch (consumeErr) {
         if (deductedSessionCost > 0) {
@@ -756,6 +783,17 @@ export const patientPackageService = {
         refundReason: reason,
         refundedSessions: unusedSessions,
         updatedAt: Timestamp.now(),
+      });
+
+      await auditLogService.logPackageSessionEvent({
+        performedBy: createdBy,
+        clinicId: data.clinicId,
+        branchId: data.branchId,
+        packageId: id,
+        packageName: data.packageName,
+        patientId: data.patientId,
+        action: "refunded",
+        details: { refundAmount, refundedSessions: unusedSessions, reason },
       });
     } catch (error) {
       console.error("Error refunding unused sessions:", error);

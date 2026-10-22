@@ -2314,7 +2314,10 @@ export interface AuditLog {
   | "doctor_profile_created"
   | "doctor_profile_updated"
   | "expert_profile_created"
-  | "expert_profile_updated";
+  | "expert_profile_updated"
+  | "wallet_transaction"
+  | "package_session_event"
+  | "commission_event";
   performedBy: string; // User ID who performed the action
   performedByEmail?: string; // User email for display
   performedByName?: string; // User name for display

@@ -24,6 +24,7 @@ import {
   commissionDocId,
   registrationAnchorId,
 } from "./core/commissionIdempotencyCore";
+import { auditLogService } from "./auditLogService";
 
 class StaffCommissionService {
   private collectionName = "staffCommissions";
@@ -110,6 +111,21 @@ class StaffCommissionService {
         });
         created = true;
       });
+
+      if (created) {
+        await auditLogService.logCommissionEvent({
+          performedBy: createdBy,
+          clinicId,
+          branchId: clinicId,
+          commissionId: docId,
+          clinicianType: "staff",
+          clinicianId: staffId,
+          clinicianName: staffName,
+          action: "created",
+          amount: commissionAmount,
+          billingId: anchorId,
+        });
+      }
 
       return created ? docId : null;
     } catch (error) {
@@ -264,6 +280,19 @@ class StaffCommissionService {
       });
 
       if (cancelling) {
+        await auditLogService.logCommissionEvent({
+          performedBy: auth.currentUser?.uid || "system",
+          clinicId: commissionData.clinicId,
+          branchId: commissionData.branchId,
+          commissionId,
+          clinicianType: "staff",
+          clinicianId: commissionData.staffId,
+          clinicianName: commissionData.staffName,
+          action: "cancelled",
+          amount: commissionData.commissionAmount,
+          billingId: commissionData.billingId,
+        });
+
         await this.recordClawback(commissionData, commissionId);
       }
     } catch (error) {
@@ -315,6 +344,19 @@ class StaffCommissionService {
         paidAmount: plan.newPaidAmount,
         status: plan.newStatus,
         updatedAt: Timestamp.fromDate(new Date()),
+      });
+
+      await auditLogService.logCommissionEvent({
+        performedBy: auth.currentUser?.uid || "system",
+        clinicId: commissionData.clinicId,
+        branchId: commissionData.branchId,
+        commissionId,
+        clinicianType: "staff",
+        clinicianId: commissionData.staffId,
+        clinicianName: commissionData.staffName,
+        action: "clawed_back",
+        amount: reduceByAmount,
+        billingId: commissionData.billingId,
       });
 
       // The reversed share that had already been paid out is owed back.
@@ -369,6 +411,7 @@ class StaffCommissionService {
   ): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, commissionId);
+      let committed: StaffCommission | null = null;
 
       // Read-validate-write inside one transaction — see the identical fix
       // in doctorCommissionService.payCommission for the race it prevents.
@@ -410,6 +453,20 @@ class StaffCommissionService {
           totalCommissionBalance: increment(applied.balanceDelta),
           updatedAt: Timestamp.now(),
         });
+        committed = currentCommission;
+      });
+
+      await auditLogService.logCommissionEvent({
+        performedBy: paidBy || auth.currentUser?.uid || "system",
+        clinicId: committed?.clinicId,
+        branchId: committed?.branchId,
+        commissionId,
+        clinicianType: "staff",
+        clinicianId: committed?.staffId,
+        clinicianName: committed?.staffName,
+        action: "paid",
+        amount: paidAmount,
+        billingId: committed?.billingId,
       });
     } catch (error) {
       console.error("Error paying staff commission:", error);

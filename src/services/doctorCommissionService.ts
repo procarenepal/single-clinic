@@ -34,6 +34,7 @@ import {
   isClawback,
   summarizeCommissions,
 } from "./core/commissionAggregatesCore";
+import { auditLogService } from "./auditLogService";
 
 const DOCTOR_CONFIG: ClinicianCommissionConfig = {
   entityType: "doctor",
@@ -197,7 +198,21 @@ class DoctorCommissionService {
           created = true;
         });
 
-        if (created) commissionIds.push(docId);
+        if (created) {
+          commissionIds.push(docId);
+          await auditLogService.logCommissionEvent({
+            performedBy: createdBy,
+            clinicId: billing.clinicId,
+            branchId: billing.branchId,
+            commissionId: docId,
+            clinicianType: "doctor",
+            clinicianId: refDoc.doctorId,
+            clinicianName: refDoc.doctorName,
+            action: "created",
+            amount: refDoc.calculatedAmount,
+            billingId: billing.id,
+          });
+        }
       }
 
       return commissionIds;

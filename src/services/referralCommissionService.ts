@@ -34,6 +34,7 @@ import {
   isClawback,
   summarizeCommissions,
 } from "./core/commissionAggregatesCore";
+import { auditLogService } from "./auditLogService";
 
 /**
  * Service for managing referral commissions in Firestore
@@ -132,6 +133,21 @@ class ReferralCommissionService {
         created = true;
       });
 
+      if (created) {
+        await auditLogService.logCommissionEvent({
+          performedBy: createdBy,
+          clinicId: billing.clinicId,
+          branchId: billing.branchId,
+          commissionId: docId,
+          clinicianType: "referral-partner",
+          clinicianId: partner.id!,
+          clinicianName: partner.name,
+          action: "created",
+          amount: commissionAmount,
+          billingId: billing.id,
+        });
+      }
+
       return created ? docId : null;
     } catch (error) {
       console.error("Error creating referral commission:", error);
@@ -212,6 +228,21 @@ class ReferralCommissionService {
         });
         created = true;
       });
+
+      if (created) {
+        await auditLogService.logCommissionEvent({
+          performedBy: createdBy,
+          clinicId,
+          branchId: clinicId,
+          commissionId: docId,
+          clinicianType: "referral-partner",
+          clinicianId: partner.id!,
+          clinicianName: partner.name,
+          action: "created",
+          amount: commissionAmount,
+          billingId: anchorId,
+        });
+      }
 
       return created ? docId : null;
     } catch (error) {
@@ -335,6 +366,7 @@ class ReferralCommissionService {
   ): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, commissionId);
+      let committed: ReferralCommission | null = null;
 
       // Read-validate-write inside one transaction — see the identical fix
       // in doctorCommissionService.payCommission for the race it prevents.
@@ -380,6 +412,20 @@ class ReferralCommissionService {
           totalCommissionBalance: increment(applied.balanceDelta),
           updatedAt: Timestamp.now(),
         });
+        committed = currentCommission;
+      });
+
+      await auditLogService.logCommissionEvent({
+        performedBy: paidBy || auth.currentUser?.uid || "system",
+        clinicId: committed?.clinicId,
+        branchId: committed?.branchId,
+        commissionId,
+        clinicianType: "referral-partner",
+        clinicianId: committed?.partnerId,
+        clinicianName: committed?.partnerName,
+        action: "paid",
+        amount: paidAmount,
+        billingId: committed?.billingId,
       });
     } catch (error) {
       console.error("Error paying referral commission:", error);
@@ -540,6 +586,19 @@ class ReferralCommissionService {
       });
 
       if (cancelling) {
+        await auditLogService.logCommissionEvent({
+          performedBy: auth.currentUser?.uid || "system",
+          clinicId: commissionData.clinicId,
+          branchId: commissionData.branchId,
+          commissionId,
+          clinicianType: "referral-partner",
+          clinicianId: commissionData.partnerId,
+          clinicianName: commissionData.partnerName,
+          action: "cancelled",
+          amount: commissionData.commissionAmount,
+          billingId: commissionData.billingId,
+        });
+
         await this.recordClawback(commissionData, commissionId);
       }
     } catch (error) {
@@ -591,6 +650,19 @@ class ReferralCommissionService {
         paidAmount: plan.newPaidAmount,
         status: plan.newStatus,
         updatedAt: Timestamp.fromDate(new Date()),
+      });
+
+      await auditLogService.logCommissionEvent({
+        performedBy: auth.currentUser?.uid || "system",
+        clinicId: commissionData.clinicId,
+        branchId: commissionData.branchId,
+        commissionId,
+        clinicianType: "referral-partner",
+        clinicianId: commissionData.partnerId,
+        clinicianName: commissionData.partnerName,
+        action: "clawed_back",
+        amount: reduceByAmount,
+        billingId: commissionData.billingId,
       });
 
       // The reversed share that had already been paid out is owed back.

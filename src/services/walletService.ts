@@ -14,6 +14,7 @@ import {
 
 import { db } from "../config/firebase";
 import { WalletTransaction } from "../types/models";
+import { auditLogService } from "./auditLogService";
 
 /**
  * Exported so a billing service can deduct from the wallet INSIDE its own
@@ -92,7 +93,7 @@ export const walletService = {
       // then record the deposit twice. The body is addFundsInTransaction so
       // the front desk can take a check-in deposit inside the same
       // transaction that records it on the visit.
-      return await runTransaction(db, async (dbTransaction) => {
+      const txnId = await runTransaction(db, async (dbTransaction) => {
         const patientSnap = await dbTransaction.get(patientRef);
 
         return walletService.addFundsInTransaction(dbTransaction, patientSnap, {
@@ -108,6 +109,21 @@ export const walletService = {
           now: new Date(),
         });
       });
+
+      // Best-effort, after the money actually moved — a failed log must
+      // never look like a failed deposit.
+      await auditLogService.logWalletTransaction({
+        performedBy: createdBy,
+        clinicId,
+        patientId,
+        type: "deposit",
+        amount,
+        notes,
+        referenceId,
+        referenceType,
+      });
+
+      return txnId;
     } catch (error) {
       console.error("Error adding funds to wallet:", error);
       throw error;
@@ -211,7 +227,7 @@ export const walletService = {
       // apply increment(-amount), driving the balance negative. The body is
       // deductFundsInTransaction so a billing service can run the very same
       // deduction inside ITS transaction instead of after it.
-      return await runTransaction(db, async (dbTransaction) => {
+      const txnId = await runTransaction(db, async (dbTransaction) => {
         const patientSnap = await dbTransaction.get(patientRef);
 
         return walletService.deductFundsInTransaction(dbTransaction, patientSnap, {
@@ -225,6 +241,19 @@ export const walletService = {
           now: new Date(),
         });
       });
+
+      await auditLogService.logWalletTransaction({
+        performedBy: createdBy,
+        clinicId,
+        patientId,
+        type: "deduction",
+        amount,
+        notes,
+        referenceId: invoiceId,
+        referenceType,
+      });
+
+      return txnId;
     } catch (error) {
       console.error("Error deducting funds from wallet:", error);
       throw error;
@@ -341,6 +370,16 @@ export const walletService = {
           lastWalletTxnId: transactionRef.id,
           updatedAt: Timestamp.now(),
         });
+      });
+
+      await auditLogService.logWalletTransaction({
+        performedBy: createdBy,
+        clinicId,
+        patientId,
+        type: "refund",
+        amount,
+        notes,
+        referenceId,
       });
 
       return transactionRef.id;

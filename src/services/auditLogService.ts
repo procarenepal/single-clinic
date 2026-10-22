@@ -447,6 +447,131 @@ export const auditLogService = {
   },
 
   /**
+   * Helper to log a wallet money movement — deposit, spend (deduction), or
+   * refund. Collecting a deposit and spending wallet credit were previously
+   * the one class of front-office money event with no audit trail at all:
+   * every call site in walletService wrote the transaction row and balance
+   * change with nothing recording who did it or why, unlike payments and
+   * discounts elsewhere in the app.
+   */
+  async logWalletTransaction(data: {
+    performedBy: string;
+    performedByName?: string;
+    performedByEmail?: string;
+    clinicId: string;
+    branchId?: string;
+    patientId: string;
+    patientName?: string;
+    type: "deposit" | "deduction" | "refund";
+    amount: number;
+    notes?: string;
+    referenceId?: string;
+    referenceType?: string;
+  }): Promise<string> {
+    return this.createLog({
+      eventType: "wallet_transaction",
+      performedBy: data.performedBy,
+      performedByName: data.performedByName,
+      performedByEmail: data.performedByEmail,
+      clinicId: data.clinicId,
+      branchId: data.branchId,
+      status: "success",
+      details: {
+        patientId: data.patientId,
+        patientName: data.patientName,
+        type: data.type,
+        amount: data.amount,
+        notes: data.notes,
+        referenceId: data.referenceId,
+        referenceType: data.referenceType,
+      },
+    });
+  },
+
+  /**
+   * Helper to log a patient package session lifecycle event — sold,
+   * started, released back, consumed, or refunded. consumeSession in
+   * particular both spends a prepaid session and deducts the matching
+   * wallet credit with nothing recording it, the second-most-common
+   * front-office money event after payments themselves.
+   */
+  async logPackageSessionEvent(data: {
+    performedBy: string;
+    performedByName?: string;
+    performedByEmail?: string;
+    clinicId: string;
+    branchId?: string;
+    packageId: string;
+    packageName?: string;
+    patientId?: string;
+    action:
+    | "created"
+    | "session_started"
+    | "session_released"
+    | "session_consumed"
+    | "refunded";
+    details?: Record<string, any>;
+  }): Promise<string> {
+    return this.createLog({
+      eventType: "package_session_event",
+      performedBy: data.performedBy,
+      performedByName: data.performedByName,
+      performedByEmail: data.performedByEmail,
+      clinicId: data.clinicId,
+      branchId: data.branchId,
+      status: "success",
+      details: {
+        packageId: data.packageId,
+        packageName: data.packageName,
+        patientId: data.patientId,
+        action: data.action,
+        ...data.details,
+      },
+    });
+  },
+
+  /**
+   * Helper to log a commission lifecycle event — created, paid, cancelled,
+   * or clawed back (amount reduced). One shared helper for all four
+   * commission services (doctor/expert via their shared core, staff,
+   * referral) rather than four separate ones, since the event shape is
+   * identical across them — only clinicianType tells them apart.
+   */
+  async logCommissionEvent(data: {
+    performedBy: string;
+    performedByName?: string;
+    performedByEmail?: string;
+    clinicId: string;
+    branchId?: string;
+    commissionId: string;
+    clinicianType: "doctor" | "expert" | "staff" | "referral-partner";
+    clinicianId?: string;
+    clinicianName?: string;
+    action: "created" | "paid" | "cancelled" | "clawed_back";
+    amount?: number;
+    billingId?: string;
+  }): Promise<string> {
+    return this.createLog({
+      eventType: "commission_event",
+      performedBy: data.performedBy,
+      performedByName: data.performedByName,
+      performedByEmail: data.performedByEmail,
+      clinicId: data.clinicId,
+      branchId: data.branchId,
+      status: "success",
+      details: {
+        commissionId: data.commissionId,
+        clinicianType: data.clinicianType,
+        clinicianId: data.clinicianId,
+        clinicianName: data.clinicianName,
+        action: data.action,
+        amount: data.amount,
+        billingId: data.billingId,
+      },
+    });
+  },
+
+  /**
    * Helper to log a batch's cost/sale price being changed — pharmacy had no
    * audit trail for this at all before; a price silently edited from 50 to
    * 5 left no forensic record.

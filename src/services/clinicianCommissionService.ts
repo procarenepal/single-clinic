@@ -24,6 +24,14 @@ import {
   commissionDocId,
   registrationAnchorId,
 } from "./core/commissionIdempotencyCore";
+// Static, not the dynamic-import-per-call-site pattern used elsewhere in
+// this codebase: createCommissionGrouped fires several of these audit calls
+// concurrently (one per clinician, inside a Promise.all), and concurrent
+// first-time dynamic imports of the same specifier raced Vitest's module
+// mock resolution — one call's import got the mock, the other didn't,
+// silently hitting the real Firestore write. No circular-import risk here;
+// auditLogService imports nothing that reaches back to commission services.
+import { auditLogService } from "./auditLogService";
 
 /**
  * Shared core behind doctorCommissionService / expertCommissionService.
@@ -227,6 +235,21 @@ export async function createCommissionGrouped(
         created = true;
       });
 
+      if (created) {
+        await auditLogService.logCommissionEvent({
+          performedBy: createdBy,
+          clinicId: billing.clinicId,
+          branchId: billing.branchId,
+          commissionId: docId,
+          clinicianType: config.entityType,
+          clinicianId: entityId,
+          clinicianName: group.name,
+          action: "created",
+          amount: groupCommissionAmount,
+          billingId: billing.id,
+        });
+      }
+
       return created ? docId : null;
     });
 
@@ -315,6 +338,21 @@ export async function createCommissionFromItems(
       created = true;
     });
 
+    if (created) {
+      await auditLogService.logCommissionEvent({
+        performedBy: createdBy,
+        clinicId: billing.clinicId,
+        branchId: billing.branchId,
+        commissionId: docId,
+        clinicianType: config.entityType,
+        clinicianId: entityId,
+        clinicianName: entityName,
+        action: "created",
+        amount: commissionAmount,
+        billingId: billing.id,
+      });
+    }
+
     return created ? docId : null;
   } catch (error) {
     console.error(`Error creating ${config.entityType} commission:`, error);
@@ -393,6 +431,21 @@ export async function createRegistrationCommission(
       created = true;
     });
 
+    if (created) {
+      await auditLogService.logCommissionEvent({
+        performedBy: createdBy,
+        clinicId,
+        branchId: clinicId,
+        commissionId: docId,
+        clinicianType: config.entityType,
+        clinicianId: entityId,
+        clinicianName: entityName,
+        action: "created",
+        amount: commissionAmount,
+        billingId: anchorId,
+      });
+    }
+
     return created ? docId : null;
   } catch (error) {
     console.error(`Error creating registration ${config.entityType} commission:`, error);
@@ -436,6 +489,7 @@ export async function payCommission(
 ): Promise<void> {
   try {
     const docRef = doc(db, config.collectionName, commissionId);
+    let committed: Record<string, any> | null = null;
 
     await runTransaction(db, async (transaction) => {
       const commissionDoc = await transaction.get(docRef);
@@ -478,6 +532,20 @@ export async function payCommission(
         totalCommissionBalance: increment(applied.balanceDelta),
         updatedAt: Timestamp.now(),
       });
+      committed = data;
+    });
+
+    await auditLogService.logCommissionEvent({
+      performedBy: paidBy || auth.currentUser?.uid || "system",
+      clinicId: committed?.clinicId,
+      branchId: committed?.branchId,
+      commissionId,
+      clinicianType: config.entityType,
+      clinicianId: committed?.[config.idField],
+      clinicianName: committed?.[config.nameField],
+      action: "paid",
+      amount: paidAmount,
+      billingId: committed?.billingId,
     });
   } catch (error) {
     console.error(`Error paying ${config.entityType} commission:`, error);
@@ -521,6 +589,21 @@ export async function updateCommissionStatus(
       status,
       updatedAt: Timestamp.fromDate(new Date()),
     });
+
+    if (cancelling) {
+      await auditLogService.logCommissionEvent({
+        performedBy: auth.currentUser?.uid || "system",
+        clinicId: data.clinicId,
+        branchId: data.branchId,
+        commissionId,
+        clinicianType: config.entityType,
+        clinicianId: data[config.idField],
+        clinicianName: data[config.nameField],
+        action: "cancelled",
+        amount: data.commissionAmount,
+        billingId: data.billingId,
+      });
+    }
 
     // Money that already left the clinic is owed back. Record that as a
     // negative pending commission naming this one, so the next payout nets
@@ -594,6 +677,19 @@ export async function reduceCommissionAmount(
       paidAmount: plan.newPaidAmount,
       status: plan.newStatus,
       updatedAt: Timestamp.fromDate(new Date()),
+    });
+
+    await auditLogService.logCommissionEvent({
+      performedBy: auth.currentUser?.uid || "system",
+      clinicId: data.clinicId,
+      branchId: data.branchId,
+      commissionId,
+      clinicianType: config.entityType,
+      clinicianId: data[config.idField],
+      clinicianName: data[config.nameField],
+      action: "clawed_back",
+      amount: reduceByAmount,
+      billingId: data.billingId,
     });
 
     // The reversed share that had already been paid out is owed back.
