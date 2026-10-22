@@ -617,11 +617,13 @@ export default function EditInvoicePage() {
     // appointment type as another visit today — this page has no awareness
     // of appointments at all otherwise, so editing in a new line here is
     // the one place that could silently create a duplicate charge for a
-    // visit already covered elsewhere. Excludes appointments this very
-    // invoice is already linked to (billingId/consultationBillingId ===
-    // invoice.id) — those are this invoice's own charge, not a duplicate of
-    // it. See findDuplicateChargeVisit, the one shared guard every invoice-
-    // writing screen uses.
+    // visit already covered elsewhere. Excludes the appointment this very
+    // invoice already settles — that's this invoice's own charge, not a
+    // duplicate of it. invoice.appointmentId (set by front-office checkout)
+    // is the direct, reliable way to know that; billingId/
+    // consultationBillingId === invoice.id is the fallback for invoices
+    // from a creation path that never set it. See findDuplicateChargeVisit,
+    // the one shared guard every invoice-writing screen uses.
     if (formData.patientId) {
       try {
         const { appointmentService } = await import(
@@ -636,6 +638,7 @@ export default function EditInvoicePage() {
           const isToday =
             a.appointmentDate.toDateString() === new Date().toDateString();
           const isThisInvoice =
+            a.id === invoice.appointmentId ||
             (a as any).billingId === invoice.id ||
             (a as any).consultationBillingId === invoice.id;
 

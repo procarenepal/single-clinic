@@ -2071,8 +2071,17 @@ export interface AppointmentBilling {
   /** How the invoice was funded, row by row; paymentMethod is the single method when all agree, else "mixed". */
   fundingMethods?: Array<{ method: string; amount: number }>;
   invoiceRevision?: number;
-  /** The visit this invoice settled. */
-  sourceAppointmentId?: string;
+  /**
+   * The visit this invoice settled — set by front-office checkout
+   * (handleSettleBilling), the one place a single appointment unambiguously
+   * maps to the whole invoice. Absent on invoices from other creation
+   * paths (package sales, ad-hoc tab billing, the counter) where there is
+   * no single "the" visit, and on invoices filed before this field
+   * existed. This was previously declared as `sourceAppointmentId`, never
+   * actually written anywhere — renamed to match the field front-office
+   * was already writing under this name, rather than adding a second one.
+   */
+  appointmentId?: string;
   invoiceNumber: string; // Generated invoice number (prefix + sequence)
   clinicId: string;
   branchId: string; // Associated branch
