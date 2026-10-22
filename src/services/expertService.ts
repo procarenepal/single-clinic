@@ -36,6 +36,33 @@ export const expertService = {
         updatedAt: serverTimestamp(),
       });
 
+      // The clinical-profile fields set here (commission rate, license
+      // number) weren't in the audit trail at all before — only the login
+      // side (userService.createUser's "user_created") was logged.
+      try {
+        const { auditLogService } = await import("./auditLogService");
+
+        await auditLogService.logEvent(
+          "expert_profile_created",
+          expertData.clinicId || "",
+          {
+            expertId: docRef.id,
+            name: expertData.name,
+            speciality: expertData.speciality,
+            licenseNumber: expertData.licenseNumber,
+            defaultCommission: expertData.defaultCommission,
+            email: expertData.email,
+          },
+          "success",
+          undefined,
+          {
+            branchId: expertData.branchId,
+          },
+        );
+      } catch (logError) {
+        console.error("Failed to log expert profile creation event:", logError);
+      }
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating expert:", error);
@@ -87,11 +114,38 @@ export const expertService = {
   async updateExpert(id: string, updateData: Partial<Expert>): Promise<void> {
     try {
       const docRef = doc(db, EXPERTS_COLLECTION, id);
+      const existingSnap = await getDoc(docRef);
+      const existingData = existingSnap.exists() ? existingSnap.data() : null;
 
       await updateDoc(docRef, {
         ...updateData,
         updatedAt: serverTimestamp(),
       });
+
+      try {
+        const { auditLogService } = await import("./auditLogService");
+
+        await auditLogService.logEvent(
+          "expert_profile_updated",
+          updateData.clinicId || existingData?.clinicId || "",
+          {
+            expertId: id,
+            previousData: existingData
+              ? {
+                  name: existingData.name,
+                  email: existingData.email,
+                  speciality: existingData.speciality,
+                  licenseNumber: existingData.licenseNumber,
+                  defaultCommission: existingData.defaultCommission,
+                }
+              : undefined,
+            updatedData: updateData,
+          },
+          "success",
+        );
+      } catch (logError) {
+        console.error("Failed to log expert profile update event:", logError);
+      }
     } catch (error) {
       console.error("Error updating expert:", error);
       throw error;
@@ -211,7 +265,30 @@ export const expertService = {
    */
   async toggleExpertStatus(id: string, isActive: boolean): Promise<void> {
     try {
+      const expert = await this.getExpertById(id);
+
       await this.updateExpert(id, { isActive });
+
+      // The reverse of userService's own sync (deactivating a login also
+      // deactivates its matching clinical profile) — without this,
+      // deactivating an expert from the Experts list left their login
+      // fully functional, able to sign in and see their full dashboard as
+      // if nothing had changed.
+      if (expert?.email) {
+        try {
+          const { userService } = await import("./userService");
+          const loginUser = await userService.getUserByEmail(expert.email);
+
+          if (loginUser && loginUser.isActive !== isActive) {
+            await userService.setUserActive(loginUser.id, isActive);
+          }
+        } catch (syncError) {
+          console.error(
+            `toggleExpertStatus: failed to sync login status for ${expert.email}`,
+            syncError,
+          );
+        }
+      }
     } catch (error) {
       console.error("Error toggling expert status:", error);
       throw error;

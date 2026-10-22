@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { specialityService } from "@/services/specialityService";
+import { userService } from "@/services/userService";
+import { rbacService } from "@/services/rbacService";
+import {
+  normalizeEmail,
+  detectEmailCollision,
+  emailCollisionMessage,
+} from "@/services/core/staffCreationCore";
 import { addToast } from "@/components/ui/toast";
 import { db } from "@/config/firebase";
 
@@ -143,6 +150,7 @@ export default function NewDoctorPage() {
     nmcNumber: "",
     consultationCharge: "",
   });
+  const [createLogin, setCreateLogin] = useState(false);
 
   useEffect(() => {
     if (!clinicId) return;
@@ -248,6 +256,39 @@ export default function NewDoctorPage() {
       }
     }
 
+    if (createLogin && !doctorProfile.email) {
+      addToast({
+        title: "Email required",
+        description: "Enter an email address to create a login account.",
+        color: "danger",
+      });
+
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(doctorProfile.email);
+
+    if (normalizedEmail) {
+      const [existingLogin, existingDoctor] = await Promise.all([
+        userService.getUserByEmail(normalizedEmail),
+        doctorService.getDoctorByEmail(normalizedEmail, clinicId),
+      ]);
+      const collision = detectEmailCollision(
+        !!existingLogin,
+        !!existingDoctor,
+      );
+
+      if (collision) {
+        addToast({
+          title: "Email already in use",
+          description: emailCollisionMessage(collision),
+          color: "danger",
+        });
+
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       let finalSpecialityKey = doctorProfile.speciality;
@@ -283,7 +324,7 @@ export default function NewDoctorPage() {
         defaultCommission: parseFloat(doctorProfile.defaultCommission) || 0,
         speciality: finalSpecialityKey,
         phone: doctorProfile.phone,
-        email: doctorProfile.email || "",
+        email: normalizedEmail,
         nmcNumber: doctorProfile.nmcNumber,
         consultationCharge: parseFloat(doctorProfile.consultationCharge) || 0,
         clinicId,
@@ -292,16 +333,64 @@ export default function NewDoctorPage() {
       };
 
       await doctorService.createDoctor(doctorData);
-      addToast({
-        title: "Success",
-        description: "Doctor registered successfully.",
-        color: "success",
-      });
+
+      if (createLogin) {
+        try {
+          const newUserId = await userService.createUser(
+            normalizedEmail,
+            undefined,
+            {
+              displayName: doctorProfile.name,
+              role: "doctor",
+              clinicId,
+              ...(defaultBranchId ? { branchId: defaultBranchId } : {}),
+              phone: doctorProfile.phone,
+            },
+            undefined,
+            "add-new-doctor",
+          );
+
+          try {
+            await rbacService.ensureDefaultClinicalRoleAssigned(
+              clinicId,
+              newUserId,
+              "doctor",
+            );
+            addToast({
+              title: "Success",
+              description:
+                "Doctor registered and login access granted. A password reset link has been emailed to them.",
+              color: "success",
+            });
+          } catch (rbacError: any) {
+            addToast({
+              title: "Login created, access setup incomplete",
+              description:
+                "The login was created, but their dashboard permissions could not be set automatically. Assign a role from Settings > RBAC > User Management.",
+              color: "warning",
+            });
+          }
+        } catch (loginError: any) {
+          addToast({
+            title: "Doctor saved, login failed",
+            description:
+              loginError?.message ||
+              "The doctor profile was created, but the login account could not be created. Grant login access later from the doctor's edit page.",
+            color: "warning",
+          });
+        }
+      } else {
+        addToast({
+          title: "Success",
+          description: "Doctor registered successfully.",
+          color: "success",
+        });
+      }
       navigate("/dashboard/doctors");
-    } catch (error) {
+    } catch (error: any) {
       addToast({
         title: "Error",
-        description: "Failed to create doctor.",
+        description: error?.message || "Failed to create doctor.",
         color: "danger",
       });
       setLoading(false);
@@ -446,11 +535,15 @@ export default function NewDoctorPage() {
                 onChange={handleDoctorProfileChange}
               />
               <CustomInput
+                description={
+                  createLogin ? "Required to create a login account." : undefined
+                }
                 errorMessage={emailError}
                 isInvalid={!!emailError}
                 label="Email"
                 name="email"
                 placeholder="Enter email address"
+                required={createLogin}
                 type="email"
                 value={doctorProfile.email}
                 onChange={handleDoctorProfileChange}
@@ -464,6 +557,31 @@ export default function NewDoctorPage() {
                 onChange={handleDoctorProfileChange}
               />
             </div>
+          </div>
+        </div>
+
+        <div className="bg-surface border border-border-base rounded-xl overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base bg-surface-2/30">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
+              Login Access
+            </h4>
+          </div>
+          <div className="p-6 flex flex-col gap-2">
+            <label className="flex items-center gap-2.5 text-[13.5px] text-text-main cursor-pointer select-none">
+              <input
+                checked={createLogin}
+                className="w-4 h-4 accent-primary"
+                type="checkbox"
+                onChange={(e) => setCreateLogin(e.target.checked)}
+              />
+              Create a login account for this doctor
+            </label>
+            {createLogin && (
+              <p className="text-[12px] text-text-muted pl-6.5">
+                They'll receive an email to set their own password — no
+                password is set here.
+              </p>
+            )}
           </div>
         </div>
 

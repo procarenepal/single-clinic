@@ -1591,6 +1591,80 @@ export const rbacService = {
   },
 
   /**
+   * Ensure a clinic has a "Doctor"/"Expert" RBAC role (reusing one by that
+   * exact name if it already exists, creating it with the same permission
+   * set createDefaultClinicRoles defines otherwise), and assign it to a
+   * newly-created clinical login.
+   *
+   * Without this, a brand-new doctor/expert login has zero RBAC role
+   * assignments — getAccessiblePagesForUserDirect returns an empty page
+   * list for anyone who isn't clinic-admin, so the person's own dashboard
+   * (which IS shown, via hardcoded role routing) links to Patients,
+   * Appointments and Prescriptions that are all RBAC-blocked by default.
+   * This closes that gap at the moment the login is created, rather than
+   * leaving it as a manual follow-up step in Settings > RBAC.
+   *
+   * Deliberately narrower than createDefaultClinicRoles: that function also
+   * creates a "Clinic Super Admin" role with every available page, which
+   * would be a surprising, unrelated side effect of simply adding a doctor.
+   */
+  async ensureDefaultClinicalRoleAssigned(
+    clinicId: string,
+    userId: string,
+    clinicalRole: "doctor" | "expert",
+  ): Promise<void> {
+    const roleName = clinicalRole === "doctor" ? "Doctor" : "Expert";
+    const existingRoles = await this.getClinicRoles(clinicId);
+    let role = existingRoles.find((r) => r.name === roleName);
+
+    if (!role) {
+      const availablePages = await this.getAvailablePagesForClinic(clinicId);
+      const pageMap = new Map(
+        availablePages.map((page) => [page.path, page.id]),
+      );
+      const getPageIds = (paths: string[]) =>
+        paths
+          .map((path) => pageMap.get(path))
+          .filter((id): id is string => !!id);
+      const permissions =
+        clinicalRole === "doctor"
+          ? getPageIds([
+              "/dashboard",
+              "/dashboard/patients",
+              "/dashboard/appointments",
+              "/dashboard/prescriptions",
+              "/dashboard/pathology",
+              "/dashboard/front-office",
+            ])
+          : getPageIds([
+              "/dashboard",
+              "/dashboard/patients",
+              "/dashboard/appointments",
+              "/dashboard/prescriptions",
+              "/dashboard/front-office",
+            ]);
+
+      const roleId = await this.createRole({
+        name: roleName,
+        description:
+          clinicalRole === "doctor"
+            ? "Access to view assigned appointments, patient medical records, pathology results, and write prescriptions."
+            : "Access to view assigned appointments, patient medical records, and write session notes.",
+        clinicId,
+        permissions,
+        isDefault: true,
+        isBranchSpecific: false,
+        linkedToDoctor: clinicalRole === "doctor",
+        linkedToExpert: clinicalRole === "expert",
+      });
+
+      role = { id: roleId } as Role;
+    }
+
+    await this.assignRolesToUser(userId, [role.id], clinicId);
+  },
+
+  /**
    * Create default clinic super admin role for multi-branch clinics
    */
   async createDefaultSystemOwnerRole(clinicId: string): Promise<string> {

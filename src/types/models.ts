@@ -457,13 +457,15 @@ export interface Appointment {
   /** Referral commissions accumulated mid-visit alongside pendingVisitItems, merged at checkout. */
   pendingVisitReferrals?: AppointmentBilling["referrals"];
   /**
-   * Legacy: a visit-level discount the old desk let staff enter at check-in
-   * or when finalising a procedure. Nothing writes it any more; Settle still
-   * honours it on in-flight visits until the permissioned discount of the
-   * settle sheet replaces it.
+   * A visit-level discount, settable wherever a permitted role is asked for
+   * one — Quick Intake (gates the wallet deposit down before it's taken) and
+   * the settle sheet (the final say, pre-filled from whatever's here). Every
+   * change is recorded in pendingVisitDiscountHistory.
    */
   pendingVisitDiscountType?: "flat" | "percent";
   pendingVisitDiscountValue?: number;
+  /** Why the current pendingVisitDiscountType/Value was given — the latest entry's reason once it's in pendingVisitDiscountHistory too. */
+  pendingVisitDiscountReason?: string | null;
   /**
    * Set on the sibling appointments Quick Intake creates for extra
    * clinicians on a multi-clinician visit. Their charges are all appended
@@ -1019,6 +1021,10 @@ export interface MedicinePurchaseItem {
   medicineId: string;
   medicineName: string;
   expiryDate: string;
+  /** The MRP (tax-INCLUSIVE) — Nepal pharmacy convention. There is no
+   * separate tax-exclusive price field: taxableAmount/vat for this line are
+   * always back-calculated from this value using taxRate
+   * (taxable = salePrice / (1 + rate/100)), never added on top. */
   salePrice: number;
   quantity: number;
   amount: number;
@@ -1026,11 +1032,6 @@ export interface MedicinePurchaseItem {
   type?: "medicine" | "item"; // Support both medicines and items
   discountType?: "flat" | "percentage";
   discountValue?: number;
-  /** MRP (tax-INCLUSIVE) as entered by staff for this line — Nepal pharmacy
-   * convention. When set, salePrice/taxableAmount/vat for this line are
-   * back-calculated from mrp using taxRate (taxable = mrp / (1 + rate/100)),
-   * rather than tax being added on top of a tax-exclusive salePrice. */
-  mrp?: number;
   /** Per-line VAT rate, e.g. 13 — auto-filled from the selected Medicine's
    * catalog taxRate, editable per line. Falls back to the purchase-level
    * taxPercentage when the medicine has no catalog rate configured. */
@@ -1123,6 +1124,8 @@ export interface MedicinePurchase {
   items: MedicinePurchaseItem[];
   total: number;
   discount: number;
+  /** Why the invoice-level discount was given — optional, mirrors front-office's discount governance. */
+  discountReason?: string;
   taxPercentage: number;
   taxAmount: number;
   /**
@@ -1555,6 +1558,21 @@ export interface PharmacySettings {
   nextInvoiceNumber: number; // Next invoice number sequence
   currentFiscalYear?: string; // Current fiscal year for sequence reset
 
+  /** Who may edit a batch's cost/sale price (the Refill/Restock modal). */
+  editPriceRoles?: UserRole[];
+  /** Who may deactivate a medicine from the catalogue. */
+  deactivateMedicineRoles?: UserRole[];
+  /** Who may issue a pharmacy return/credit note. */
+  issueReturnRoles?: UserRole[];
+  /** Who may give a discount on a pharmacy sale. */
+  discountRoles?: UserRole[];
+  /** Who may write off expired/damaged stock. */
+  writeOffStockRoles?: UserRole[];
+  /** Max discount % a role may give without a higher-capped role — absent means unlimited. */
+  discountCapPercent?: Partial<Record<UserRole, number>>;
+  /** Max % a role may change a batch's sale/cost price by in one edit (vs. the current price) — absent means unlimited. */
+  priceChangeCapPercent?: Partial<Record<UserRole, number>>;
+
   createdAt: Date;
   updatedAt: Date;
   updatedBy: string;
@@ -1926,6 +1944,8 @@ export interface FrontOfficeSettings {
   settleRoles: UserRole[];
   refundRoles: UserRole[];
   sellPackageRoles: UserRole[];
+  /** Max discount % a role may give without a second approver — a role absent here is unlimited. Flat discounts are checked as a % of the subtotal they're given against. */
+  discountCapPercent?: Partial<Record<UserRole, number>>;
   triageForExpertVisits: boolean;
   collectProcedureBeforePerforming: boolean;
   /** Transitional: the new settle sheet. Removed once the old path is deleted. */
@@ -2087,6 +2107,7 @@ export interface AppointmentBilling {
   discountType: "flat" | "percent";
   discountValue: number; // Discount amount or percentage
   discountAmount: number; // Total calculated discount amount (item + main)
+  discountReason?: string; // Why the invoice-level discount was given
   taxPercentage: number; // Tax percentage applied
   taxAmount: number; // Calculated tax amount in NPR
   totalAmount: number; // Final amount after discount and tax
@@ -2279,7 +2300,12 @@ export interface AuditLog {
   | "refund_issued"
   | "billing_discount_tax_changed"
   | "visit_marked_no_show"
-  | "visit_cancelled";
+  | "visit_cancelled"
+  | "pharmacy_price_changed"
+  | "doctor_profile_created"
+  | "doctor_profile_updated"
+  | "expert_profile_created"
+  | "expert_profile_updated";
   performedBy: string; // User ID who performed the action
   performedByEmail?: string; // User email for display
   performedByName?: string; // User name for display

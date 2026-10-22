@@ -8,8 +8,11 @@ import { IoArrowBackOutline } from "react-icons/io5";
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { ClinicalProfileLoginAccess } from "@/components/ClinicalProfileLoginAccess";
 import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
+import { userService } from "@/services/userService";
+import { normalizeEmail } from "@/services/core/staffCreationCore";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { withFrontOfficeDefaults } from "@/services/core/frontOfficePermissionCore";
 import { specialityService } from "@/services/specialityService";
@@ -27,6 +30,7 @@ export default function EditExpertPage() {
   const [specialities, setSpecialities] = useState<any[]>([]);
   const [expertProfile, setExpertProfile] = useState<Partial<Expert>>({});
   const [rooms, setRooms] = useState<Array<{ id: string; name: string }>>([]);
+  const [originalEmail, setOriginalEmail] = useState<string>("");
 
   useEffect(() => {
     if (!clinicId) return;
@@ -52,6 +56,7 @@ export default function EditExpertPage() {
 
       if (!data) return navigate("/dashboard/experts");
       setExpertProfile(data);
+      setOriginalEmail(normalizeEmail(data.email));
       setSpecialities(
         specs.map((s: any) => ({ value: s.key, label: s.label })),
       );
@@ -62,9 +67,32 @@ export default function EditExpertPage() {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const newEmail = normalizeEmail(expertProfile.email);
+
+    if (newEmail && newEmail !== originalEmail && originalEmail) {
+      // See doctors/[doctorId]/edit.tsx's matching check — a login is
+      // matched to this profile by email alone, so saving a changed email
+      // with no warning would silently strand whatever login exists under
+      // the OLD address.
+      const existingLogin = await userService.getUserByEmail(originalEmail);
+
+      if (
+        existingLogin &&
+        !confirm(
+          `A login account exists for the current email (${originalEmail}). Changing this profile's email will NOT update that login — they would need to be re-linked separately from Staff & User Management, or their login left at the old address.\n\nContinue saving with the new email anyway?`,
+        )
+      ) {
+        return;
+      }
+    }
+
     try {
       setSaving(true);
-      await expertService.updateExpert(expertId!, expertProfile);
+      await expertService.updateExpert(expertId!, {
+        ...expertProfile,
+        email: newEmail,
+      });
       addToast({
         title: "Success",
         description: "Expert updated.",
@@ -216,6 +244,19 @@ export default function EditExpertPage() {
             </SelectItem>
           ))}
         </Select>
+        {clinicId && (
+          <div className="col-span-2">
+            <ClinicalProfileLoginAccess
+              branchId={expertProfile.branchId || undefined}
+              clinicId={clinicId}
+              displayName={expertProfile.name || ""}
+              email={originalEmail}
+              phone={expertProfile.phone}
+              role="expert"
+            />
+          </div>
+        )}
+
         <div className="col-span-2 flex justify-end gap-3">
           <Button variant="bordered" onClick={() => navigate(-1)}>
             Cancel

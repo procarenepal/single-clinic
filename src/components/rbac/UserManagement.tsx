@@ -78,8 +78,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
   const [formData, setFormData] = useState({
     email: "",
     displayName: "",
-    password: "",
-    adminPassword: "",
     selectedRoles: [] as string[],
     linkedProfileId: "", // New field for doctor/expert selection
   });
@@ -125,8 +123,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
     setFormData({
       email: "",
       displayName: "",
-      password: "",
-      adminPassword: "",
       selectedRoles: [],
       linkedProfileId: "",
     });
@@ -139,8 +135,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
     setFormData({
       email: user.email,
       displayName: user.displayName,
-      password: "", // Don't pre-fill password for editing
-      adminPassword: "", // Not needed for editing
       selectedRoles: user.roles.map((role: Role) => role.id),
       linkedProfileId: "",
     });
@@ -210,36 +204,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       addToast({
         title: "Missing information",
         description: "Email and display name are required",
-        color: "danger",
-      });
-
-      return;
-    }
-
-    if (modalMode === "create" && !formData.password.trim()) {
-      addToast({
-        title: "Invalid password",
-        description: "Password is required for new users",
-        color: "danger",
-      });
-
-      return;
-    }
-
-    if (modalMode === "create" && formData.password.length < 6) {
-      addToast({
-        title: "Weak password",
-        description: "Password must be at least 6 characters long",
-        color: "danger",
-      });
-
-      return;
-    }
-
-    if (modalMode === "create" && !formData.adminPassword.trim()) {
-      addToast({
-        title: "Admin password required",
-        description: "Your admin password is required to create new users",
         color: "danger",
       });
 
@@ -385,12 +349,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
         let userId: string;
 
         try {
-          // Create new user with provided password (using complex approach to maintain admin session)
+          // No password is collected from the admin — userService.createUser
+          // generates and discards a random one internally, and the new
+          // user sets their own via the emailed reset link. (The admin
+          // session is preserved via createUser's own secondary-app
+          // approach, not by re-entering a password here.)
           userId = await userService.createUser(
             formData.email,
-            formData.password,
+            undefined,
             newUserData,
-            formData.adminPassword, // Pass admin password to maintain session
+            undefined,
+            "rbac-user-management",
           );
         } catch (userCreationError) {
           const errorMessage =
@@ -478,7 +447,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
 
         addToast({
           title: "User created",
-          description: "User created successfully with the provided password.",
+          description:
+            "User created. They'll be emailed a link to set their own password.",
           color: "success",
         });
       } else {
@@ -1009,38 +979,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
             />
 
             {modalMode === "create" && (
-              <>
-                <Input
-                  isRequired
-                  description="Minimum 6 characters"
-                  label="Password"
-                  placeholder="Enter password for new user"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      password: e.target.value,
-                    }))
-                  }
-                />
-
-                <Input
-                  isRequired
-                  color="warning"
-                  description="Required to maintain your admin session while creating the user"
-                  label="Your Admin Password"
-                  placeholder="Enter your current admin password"
-                  type="password"
-                  value={formData.adminPassword}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      adminPassword: e.target.value,
-                    }))
-                  }
-                />
-              </>
+              <p className="text-sm text-default-500">
+                No password is set here — they'll receive an email to set
+                their own.
+              </p>
             )}
           </ModalBody>
           <ModalFooter>

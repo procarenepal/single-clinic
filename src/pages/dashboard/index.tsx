@@ -18,6 +18,7 @@ import {
   IoTimeOutline,
   IoReceiptOutline,
   IoDownloadOutline,
+  IoLockClosedOutline,
 } from "react-icons/io5";
 
 import DoctorDashboard from "./components/DoctorDashboard";
@@ -466,12 +467,49 @@ function SectionHeader({ title, href }: { title: string; href: string }) {
 export default function DashboardIndexPage() {
   const { isDark } = useTheme();
   const navigate = useNavigate();
-  const { clinicId, userData, currentUser } = useAuthContext();
+  const { clinicId, userData, currentUser, getAccessiblePages } =
+    useAuthContext();
   const isClinicAdmin = userData?.role === "clinic-admin";
 
   const isDoctor = userData?.role === "doctor";
   const isExpert = userData?.role === "expert";
   const isHR = userData?.role === "hr";
+
+  // This is the one dashboard route with no RbacProtectedRoute pagePath
+  // gate (see App.tsx) — every sibling route is. clinic-admin/doctor/
+  // expert/hr all get a dedicated render below regardless of RBAC
+  // assignments, by design; every OTHER role (plain "staff", for instance)
+  // falls through to the generic branch further down, which previously
+  // rendered full live patient/appointment/billing data and an export
+  // button for anyone landing here — including an account with literally
+  // zero RBAC page assignments, the exact state Staff Management now
+  // produces by default. null = still checking, so the generic branch
+  // doesn't flash before this resolves.
+  const [hasRbacAccess, setHasRbacAccess] = useState<boolean | null>(null);
+  const isHardcodedBypassRole = isClinicAdmin || isDoctor || isExpert || isHR;
+
+  useEffect(() => {
+    if (isHardcodedBypassRole) {
+      setHasRbacAccess(true);
+
+      return;
+    }
+    if (!currentUser || !clinicId) return;
+
+    let cancelled = false;
+
+    getAccessiblePages()
+      .then((pages) => {
+        if (!cancelled) setHasRbacAccess(pages.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setHasRbacAccess(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isHardcodedBypassRole, currentUser, clinicId]);
 
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0,
@@ -567,6 +605,17 @@ export default function DashboardIndexPage() {
   // ── Data fetch (all in parallel to avoid waterfall) ────────────────────────
   useEffect(() => {
     if (!clinicId) return;
+    // Covered by their own dedicated dashboards (fetched inside
+    // DoctorDashboard/ExpertDashboard/HRDashboard themselves) or, for any
+    // other role, has no RBAC access yet — don't fetch clinic-wide
+    // patient/billing data for an account that can't see any page it
+    // would normally come from.
+    if (hasRbacAccess === false) {
+      setIsLoading(false);
+
+      return;
+    }
+    if (hasRbacAccess === null && !isHardcodedBypassRole) return;
     setIsLoading(true);
     setError(null);
 
@@ -657,7 +706,7 @@ export default function DashboardIndexPage() {
         setIsLoading(false);
       }
     })();
-  }, [clinicId]);
+  }, [clinicId, hasRbacAccess, isHardcodedBypassRole]);
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const getChartData = (): ChartDataType => {
@@ -955,6 +1004,27 @@ export default function DashboardIndexPage() {
   // HR get their own tailored dashboard
   if (isHR) {
     return <HRDashboard />;
+  }
+
+  // Every role past this point is "whatever's left" — in practice, mostly
+  // plain "staff" logins. The generic branch below shows real clinic-wide
+  // patient/appointment/billing figures and a report-export action; an
+  // account with zero RBAC page assignments (the actual default a brand
+  // new Staff Management login starts with, until an admin assigns one)
+  // should see neither, matching what every other route in this app
+  // already enforces via RbacProtectedRoute — this index route is the one
+  // exception, so it needs its own check rather than inheriting one.
+  if (!isClinicAdmin && hasRbacAccess === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[320px] gap-3 text-center">
+        <IoLockClosedOutline className="w-8 h-8 text-default-400" />
+        <p className="text-sm text-text-muted max-w-sm">
+          You don't have any dashboard pages assigned yet. Ask a clinic
+          admin to assign you a role in Settings &gt; RBAC &gt; User
+          Management.
+        </p>
+      </div>
+    );
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

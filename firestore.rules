@@ -1530,32 +1530,47 @@ match /doctors/{doctorId} {
            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
   }
-  
+
+  // Only a clinic admin may create/edit/delete a clinical profile — this
+  // collection's "write" rules used to check clinic membership only, with
+  // no role condition at all, so ANY clinic login (front-desk, nurse,
+  // another doctor) could create a fabricated bookable doctor profile or
+  // silently flip isActive on a real one via a direct SDK call. Read stays
+  // broad (every clinic member legitimately needs the doctor directory for
+  // booking/front-office), only write is restricted.
+  function isClinicAdminForClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-admin' ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-super-admin') &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
   // Allow clinic users to read their own clinic's doctors
-  allow read: if isAuthenticated() && 
-              (isSuperAdmin() || 
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
-  
-  // Allow clinic users to create doctors for their own clinic
-  allow create: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (request.resource.data.clinicId != null && 
-                  belongsToClinic(request.resource.data.clinicId) &&
+
+  // Only a clinic admin may create a doctor for their own clinic
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  isClinicAdminForClinic(request.resource.data.clinicId) &&
                   request.resource.data.createdBy == request.auth.uid &&
                   request.resource.data.keys().hasAll(['name', 'doctorType', 'speciality', 'phone', 'nmcNumber', 'clinicId', 'createdBy', 'isActive'])));
-  
-  // Allow clinic users to update their own clinic's doctors
-  allow update: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId) &&
+
+  // Only a clinic admin may update their own clinic's doctors
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
+                  isClinicAdminForClinic(resource.data.clinicId) &&
                   request.resource.data.clinicId == resource.data.clinicId));
-  
-  // Allow clinic users to delete their own clinic's doctors
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId)));
+
+  // Only a clinic admin may delete their own clinic's doctors
+  allow delete: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
+                  isClinicAdminForClinic(resource.data.clinicId)));
 }
 
 // Doctors collection-level rules for queries
@@ -1581,6 +1596,17 @@ match /experts/{expertId} {
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
   }
 
+  // See the matching comment on /doctors — write access here had the same
+  // role-free gap (clinic membership only), letting any clinic login create
+  // or edit a clinical profile. Read stays broad, write is admin-only.
+  function isClinicAdminForClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-admin' ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-super-admin') &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
   allow read: if isAuthenticated() &&
               (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
@@ -1588,20 +1614,20 @@ match /experts/{expertId} {
   allow create: if isAuthenticated() &&
                 (isSuperAdmin() ||
                  (request.resource.data.clinicId != null &&
-                  belongsToClinic(request.resource.data.clinicId) &&
+                  isClinicAdminForClinic(request.resource.data.clinicId) &&
                   request.resource.data.createdBy == request.auth.uid &&
                   request.resource.data.keys().hasAll(['name', 'expertType', 'speciality', 'phone', 'licenseNumber', 'clinicId', 'createdBy', 'isActive'])));
 
   allow update: if isAuthenticated() &&
                 (isSuperAdmin() ||
                  (resource.data.clinicId != null &&
-                  belongsToClinic(resource.data.clinicId) &&
+                  isClinicAdminForClinic(resource.data.clinicId) &&
                   request.resource.data.clinicId == resource.data.clinicId));
 
   allow delete: if isAuthenticated() &&
                 (isSuperAdmin() ||
                  (resource.data.clinicId != null &&
-                  belongsToClinic(resource.data.clinicId)));
+                  isClinicAdminForClinic(resource.data.clinicId)));
 }
 
 // Experts collection-level rules for queries

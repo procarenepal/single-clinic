@@ -22,6 +22,11 @@ import { SMSService, db } from "./smsService";
 // Nightly Firestore export — IRD procedure §6(ग)/§8(घ). See firestoreBackup.ts.
 export { firestoreBackup } from "./firestoreBackup";
 
+// Disables/revokes a deactivated staff login's Firebase Auth account —
+// the server-side enforcement point Staff & User Management's "Deactivate"
+// action didn't have. See userAccountControl.ts.
+export { setUserAccountDisabled } from "./userAccountControl";
+
 const ALLOWED_IRD_HOSTS = ["https://cbapi.ird.gov.np"];
 
 export const irdProxy = onRequest({ cors: true }, async (req, res) => {

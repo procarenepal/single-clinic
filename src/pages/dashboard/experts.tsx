@@ -23,6 +23,8 @@ import {
 import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
+import { userService } from "@/services/userService";
+import { normalizeEmail } from "@/services/core/staffCreationCore";
 import { Expert } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { Chip } from "@/components/ui/chip";
@@ -96,12 +98,34 @@ export default function ExpertsPage() {
   const [specialities, setSpecialities] = useState<
     Array<{ key: string; label: string }>
   >([]);
+  // See doctors.tsx's matching state — same aggregate-discoverability gap
+  // for experts whose login-creation step failed or who predate login
+  // access existing at all.
+  const [loginEmails, setLoginEmails] = useState<Set<string>>(new Set());
   const itemsPerPage = 8;
 
   useEffect(() => {
     loadExperts();
     loadSpecialities();
+    loadLoginEmails();
   }, [clinicId]);
+
+  const loadLoginEmails = async () => {
+    if (!clinicId) return;
+    try {
+      const users = await userService.getUsersByClinic(clinicId);
+
+      setLoginEmails(
+        new Set(
+          users
+            .map((u) => normalizeEmail(u.email))
+            .filter((email) => !!email),
+        ),
+      );
+    } catch (error) {
+      console.error("Error loading login accounts:", error);
+    }
+  };
 
   const loadSpecialities = async () => {
     if (!clinicId) return;
@@ -384,8 +408,16 @@ export default function ExpertsPage() {
                         {expert.phone}
                       </div>
                       {expert.email && (
-                        <div className="text-[11.5px] text-text-muted mt-0.5">
+                        <div className="text-[11.5px] text-text-muted mt-0.5 flex items-center gap-1.5">
                           {expert.email}
+                          {!loginEmails.has(normalizeEmail(expert.email)) && (
+                            <span
+                              className="px-1.5 py-0.5 rounded bg-warning/10 text-warning text-[10px] font-medium"
+                              title="No login account yet — grant one from this expert's edit page."
+                            >
+                              No login
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>

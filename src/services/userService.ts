@@ -13,6 +13,7 @@ import {
 import { getApps, initializeApp } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   getAuth,
   sendPasswordResetEmail,
   signOut,
@@ -20,8 +21,98 @@ import {
 
 import { app, db, auth } from "../config/firebase";
 import { User } from "../types/models";
+import { normalizeEmail, generateSecurePassword } from "./core/staffCreationCore";
 
 const USERS_COLLECTION = "users";
+
+/**
+ * Flipping `isActive` on the Firestore user doc (the only thing this file
+ * used to do on deactivate) doesn't touch the person's actual Firebase Auth
+ * account — their existing session keeps working indefinitely, and nothing
+ * stops them signing back in. This calls the setUserAccountDisabled Cloud
+ * Function, which disables the Auth account (blocks future sign-ins and
+ * token refreshes) and, when disabling, revokes its refresh tokens too.
+ *
+ * Deliberately best-effort: a failure here (e.g. the function not yet
+ * deployed) must not make the Firestore-flag toggle itself fail, since that
+ * flag is what every other screen in the app already reads to gate access —
+ * it's strictly an additional layer, not a replacement. Failures are
+ * logged loudly so they don't go unnoticed.
+ */
+async function setAuthAccountDisabled(
+  userId: string,
+  disabled: boolean,
+): Promise<void> {
+  if (!auth.currentUser) return;
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    const projectId = app.options.projectId;
+    const url = `https://us-central1-${projectId}.cloudfunctions.net/setUserAccountDisabled`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ userId, disabled }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}) as any);
+
+      throw new Error(
+        body.message || `Failed to update account status (${response.status})`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      `setAuthAccountDisabled(${userId}, ${disabled}) failed — the Firestore isActive flag was still updated, but the Firebase Auth account itself was not. An already-signed-in session for this account may still work.`,
+      error,
+    );
+  }
+}
+
+/**
+ * A doctor/expert's login (users collection) and their clinical profile
+ * (doctors/experts collection) each carry their own independent `isActive`
+ * flag, joined only by email — toggling one used to leave the other
+ * completely untouched, so a doctor deactivated here stayed fully bookable
+ * and commission-accruing at the front desk, or a profile deactivated from
+ * the Doctors list left a still-fully-functional login behind. Best-effort:
+ * a sync failure here must not fail the login-side toggle that is the
+ * primary, already-working action.
+ */
+async function syncClinicalProfileActiveStatus(
+  email: string | undefined,
+  role: string | undefined,
+  isActive: boolean,
+): Promise<void> {
+  if (!email || (role !== "doctor" && role !== "expert")) return;
+
+  try {
+    if (role === "doctor") {
+      const { doctorService } = await import("./doctorService");
+      const doctorProfile = await doctorService.getDoctorByEmail(email);
+
+      if (doctorProfile && doctorProfile.isActive !== isActive) {
+        await doctorService.updateDoctor(doctorProfile.id, { isActive });
+      }
+    } else {
+      const { expertService } = await import("./expertService");
+      const expertProfile = await expertService.getExpertByEmail(email);
+
+      if (expertProfile && expertProfile.isActive !== isActive) {
+        await expertService.updateExpert(expertProfile.id, { isActive });
+      }
+    }
+  } catch (error) {
+    console.error(
+      `syncClinicalProfileActiveStatus(${email}, ${role}, ${isActive}) failed — the login's own isActive flag was still updated, but its matching clinical profile was not.`,
+      error,
+    );
+  }
+}
+
 // Name of the secondary Firebase app used only to create staff accounts.
 const STAFF_CREATION_APP = "staff-creation";
 
@@ -32,20 +123,29 @@ export const userService = {
   /**
    * Create a new user with Firebase Authentication and Firestore record
    * @param {string} email - User email
-   * @param {string} password - Initial password
+   * @param {string} [password] - Initial password. Omit it (the
+   *   recommended default for any new caller) to have one generated and
+   *   discarded internally — see generateSecurePassword. Only passed
+   *   explicitly by callers that still collect a password from the admin
+   *   themselves.
    * @param {Partial<User>} userData - Additional user data
    * @param {string} adminPassword - Password of the current admin user for re-authentication
    * @returns {Promise<string>} - ID of the created user
    */
   async createUser(
     email: string,
-    password: string,
+    password: string | undefined,
     userData: Partial<User>,
     _adminPassword?: string,
+    source?: string,
   ): Promise<string> {
     if (!auth.currentUser) {
       throw new Error("No authenticated user found");
     }
+
+    const effectivePassword = password || generateSecurePassword();
+
+    const normalizedEmail = normalizeEmail(email);
 
     try {
       // The account is created on a second Firebase app instance, so the
@@ -63,26 +163,46 @@ export const userService = {
       try {
         const credential = await createUserWithEmailAndPassword(
           secondaryAuth,
-          email,
-          password,
+          normalizedEmail,
+          effectivePassword,
         );
 
         uid = credential.user.uid;
-        // The person sets their own password from the email; the one
-        // typed by the administrator is never the lasting one.
-        await sendPasswordResetEmail(secondaryAuth, email);
+        // The person sets their own password from the email; whatever was
+        // used to satisfy this call (generated or admin-typed) is never
+        // the lasting one.
+        await sendPasswordResetEmail(secondaryAuth, normalizedEmail);
+
+        try {
+          await setDoc(doc(db, USERS_COLLECTION, uid), {
+            ...userData,
+            email: normalizedEmail,
+            id: uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            isActive: true,
+          });
+        } catch (firestoreError) {
+          // The Auth account now exists with no Firestore record to go with
+          // it. Left alone, every future attempt to create a login for this
+          // email fails forever with auth/email-already-in-use, and nothing
+          // in the app can see or clean up a bare Auth account — delete it
+          // now, while the just-created credential is still in hand, rather
+          // than leaving a permanent orphan only fixable from the Firebase
+          // console.
+          try {
+            await deleteUser(credential.user);
+          } catch (cleanupError) {
+            console.error(
+              `createUser: Firestore write failed for ${normalizedEmail} AND rolling back its Auth account also failed — a stray, undeletable-from-this-app Auth account may remain.`,
+              cleanupError,
+            );
+          }
+          throw firestoreError;
+        }
       } finally {
         await signOut(secondaryAuth).catch(() => undefined);
       }
-
-      await setDoc(doc(db, USERS_COLLECTION, uid), {
-        ...userData,
-        email,
-        id: uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        isActive: true,
-      });
 
       try {
         const { auditLogService } = await import("./auditLogService");
@@ -92,11 +212,12 @@ export const userService = {
           userData.clinicId || "",
           {
             userId: uid,
-            email,
+            email: normalizedEmail,
             displayName: userData.displayName,
             role: userData.role,
             branchId: userData.branchId,
             isActive: true,
+            source: source || "unspecified",
           },
           "success",
           undefined,
@@ -124,7 +245,7 @@ export const userService = {
           userData.clinicId || "",
           {
             operation: "user_created",
-            email,
+            email: normalizedEmail,
             displayName: userData.displayName,
             userData: userData,
           },
@@ -305,12 +426,19 @@ export const userService = {
    */
   async setUserActive(id: string, isActive: boolean): Promise<void> {
     try {
+      const existingUser = await this.getUserById(id);
       const docRef = doc(db, USERS_COLLECTION, id);
 
       await updateDoc(docRef, {
         isActive,
         updatedAt: serverTimestamp(),
       });
+      await setAuthAccountDisabled(id, !isActive);
+      await syncClinicalProfileActiveStatus(
+        existingUser?.email,
+        existingUser?.role,
+        isActive,
+      );
     } catch (error) {
       console.error("Error updating user status:", error);
       throw error;
@@ -353,12 +481,41 @@ export const userService = {
    */
   async updateUserRole(userId: string, newRole: string): Promise<void> {
     try {
+      // Fetched before the write so the audit entry can capture what the
+      // role actually changed FROM — without this, a role change left no
+      // trace at all (updateUser, its nearest sibling, already does this;
+      // this function was the one path that didn't).
+      const existingUser = await this.getUserById(userId);
+
       const docRef = doc(db, USERS_COLLECTION, userId);
 
       await updateDoc(docRef, {
         role: newRole,
         updatedAt: serverTimestamp(),
       });
+
+      try {
+        const { auditLogService } = await import("./auditLogService");
+
+        await auditLogService.logEvent(
+          "user_updated",
+          existingUser?.clinicId || "",
+          {
+            userId,
+            userEmail: existingUser?.email,
+            previousData: { role: existingUser?.role },
+            updatedData: { role: newRole },
+          },
+          "success",
+          undefined,
+          {
+            branchId: existingUser?.branchId,
+            targetUserId: userId,
+          },
+        );
+      } catch (logError) {
+        console.error("Failed to log user role update event:", logError);
+      }
     } catch (error) {
       console.error("Error updating user role:", error);
       throw error;
@@ -385,6 +542,12 @@ export const userService = {
         isActive: false,
         updatedAt: serverTimestamp(),
       });
+      await setAuthAccountDisabled(userId, true);
+      await syncClinicalProfileActiveStatus(
+        existingUser.email,
+        existingUser.role,
+        false,
+      );
 
       // Log user deactivation event
       try {
@@ -467,6 +630,12 @@ export const userService = {
         isActive: true,
         updatedAt: serverTimestamp(),
       });
+      await setAuthAccountDisabled(userId, false);
+      await syncClinicalProfileActiveStatus(
+        existingUser.email,
+        existingUser.role,
+        true,
+      );
 
       // Log user activation event
       try {
@@ -559,8 +728,9 @@ export const userService = {
    */
   async getUserByEmail(email: string): Promise<User | null> {
     try {
+      const normalized = normalizeEmail(email);
       const usersRef = collection(db, USERS_COLLECTION);
-      const q = query(usersRef, where("email", "==", email));
+      const q = query(usersRef, where("email", "==", normalized));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
@@ -570,6 +740,20 @@ export const userService = {
           id: doc.id,
           ...doc.data(),
         } as User;
+      }
+
+      // Pre-normalization data (or a caller that bypassed this helper) may
+      // have stored a different case/whitespace variant — fall back to an
+      // in-memory scan rather than reporting "no login" for one that exists
+      // under a differently-cased email. Mirrors doctorService.getDoctorByEmail's
+      // own fallback, for the same reason.
+      const allSnapshot = await getDocs(usersRef);
+      const match = allSnapshot.docs.find(
+        (doc) => normalizeEmail(doc.data().email) === normalized,
+      );
+
+      if (match) {
+        return { id: match.id, ...match.data() } as User;
       }
 
       return null;

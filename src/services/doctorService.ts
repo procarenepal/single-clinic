@@ -43,6 +43,35 @@ export const doctorService = {
         cacheService.invalidateClinicDoctors(doctorData.clinicId);
       }
 
+      // The clinical-profile fields set here (commission rate, license
+      // number) weren't in the audit trail at all before — only the login
+      // side (userService.createUser's "user_created") was logged, so a
+      // commission dispute had no record of what was actually configured.
+      try {
+        const { auditLogService } = await import("./auditLogService");
+
+        await auditLogService.logEvent(
+          "doctor_profile_created",
+          doctorData.clinicId || "",
+          {
+            doctorId: docRef.id,
+            name: doctorData.name,
+            speciality: doctorData.speciality,
+            nmcNumber: doctorData.nmcNumber,
+            defaultCommission: doctorData.defaultCommission,
+            consultationCharge: doctorData.consultationCharge,
+            email: doctorData.email,
+          },
+          "success",
+          undefined,
+          {
+            branchId: doctorData.branchId,
+          },
+        );
+      } catch (logError) {
+        console.error("Failed to log doctor profile creation event:", logError);
+      }
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating doctor:", error);
@@ -94,16 +123,9 @@ export const doctorService = {
   async updateDoctor(id: string, updateData: Partial<Doctor>): Promise<void> {
     try {
       const docRef = doc(db, DOCTORS_COLLECTION, id);
-
-      let clinicId = updateData.clinicId;
-
-      if (!clinicId) {
-        const doctorSnap = await getDoc(docRef);
-
-        if (doctorSnap.exists()) {
-          clinicId = doctorSnap.data().clinicId;
-        }
-      }
+      const existingSnap = await getDoc(docRef);
+      const existingData = existingSnap.exists() ? existingSnap.data() : null;
+      const clinicId = updateData.clinicId || existingData?.clinicId;
 
       await updateDoc(docRef, {
         ...updateData,
@@ -112,6 +134,32 @@ export const doctorService = {
 
       if (clinicId) {
         cacheService.invalidateClinicDoctors(clinicId);
+      }
+
+      try {
+        const { auditLogService } = await import("./auditLogService");
+
+        await auditLogService.logEvent(
+          "doctor_profile_updated",
+          clinicId || "",
+          {
+            doctorId: id,
+            previousData: existingData
+              ? {
+                  name: existingData.name,
+                  email: existingData.email,
+                  speciality: existingData.speciality,
+                  nmcNumber: existingData.nmcNumber,
+                  defaultCommission: existingData.defaultCommission,
+                  consultationCharge: existingData.consultationCharge,
+                }
+              : undefined,
+            updatedData: updateData,
+          },
+          "success",
+        );
+      } catch (logError) {
+        console.error("Failed to log doctor profile update event:", logError);
       }
     } catch (error) {
       console.error("Error updating doctor:", error);
@@ -274,7 +322,30 @@ export const doctorService = {
    */
   async toggleDoctorStatus(id: string, isActive: boolean): Promise<void> {
     try {
+      const doctor = await this.getDoctorById(id);
+
       await this.updateDoctor(id, { isActive });
+
+      // The reverse of userService's own sync (deactivating a login also
+      // deactivates its matching clinical profile) — without this,
+      // deactivating a doctor from the Doctors list left their login fully
+      // functional, able to sign in and see their full dashboard as if
+      // nothing had changed.
+      if (doctor?.email) {
+        try {
+          const { userService } = await import("./userService");
+          const loginUser = await userService.getUserByEmail(doctor.email);
+
+          if (loginUser && loginUser.isActive !== isActive) {
+            await userService.setUserActive(loginUser.id, isActive);
+          }
+        } catch (syncError) {
+          console.error(
+            `toggleDoctorStatus: failed to sync login status for ${doctor.email}`,
+            syncError,
+          );
+        }
+      }
     } catch (error) {
       console.error("Error toggling doctor status:", error);
       throw error;

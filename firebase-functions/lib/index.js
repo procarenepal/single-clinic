@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.smsQuotaReset = exports.smsScheduler = exports.smsTester = exports.irdProxy = void 0;
+exports.smsQuotaReset = exports.smsScheduler = exports.smsTester = exports.irdProxy = exports.setUserAccountDisabled = exports.firestoreBackup = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
@@ -20,6 +20,14 @@ const smsService_1 = require("./smsService");
 // which accepted any `endpoint` from an unauthenticated caller (an open
 // SSRF proxy that would forward arbitrary payloads to any URL).
 // ==========================================
+// Nightly Firestore export — IRD procedure §6(ग)/§8(घ). See firestoreBackup.ts.
+var firestoreBackup_1 = require("./firestoreBackup");
+Object.defineProperty(exports, "firestoreBackup", { enumerable: true, get: function () { return firestoreBackup_1.firestoreBackup; } });
+// Disables/revokes a deactivated staff login's Firebase Auth account —
+// the server-side enforcement point Staff & User Management's "Deactivate"
+// action didn't have. See userAccountControl.ts.
+var userAccountControl_1 = require("./userAccountControl");
+Object.defineProperty(exports, "setUserAccountDisabled", { enumerable: true, get: function () { return userAccountControl_1.setUserAccountDisabled; } });
 const ALLOWED_IRD_HOSTS = ["https://cbapi.ird.gov.np"];
 exports.irdProxy = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
     try {

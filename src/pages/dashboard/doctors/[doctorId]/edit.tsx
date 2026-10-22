@@ -9,8 +9,11 @@ import { IoArrowBackOutline, IoSaveOutline } from "react-icons/io5";
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/ui/skeleton";
+import { ClinicalProfileLoginAccess } from "@/components/ClinicalProfileLoginAccess";
 import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
+import { userService } from "@/services/userService";
+import { normalizeEmail } from "@/services/core/staffCreationCore";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { withFrontOfficeDefaults } from "@/services/core/frontOfficePermissionCore";
@@ -131,6 +134,7 @@ export default function EditDoctorPage() {
   const [adminEmails, setAdminEmails] = useState<string[]>([]);
   const [emailError, setEmailError] = useState<string>("");
   const [originalEmail, setOriginalEmail] = useState<string>("");
+  const [doctorBranchId, setDoctorBranchId] = useState<string>("");
   const [doctorProfile, setDoctorProfile] = useState({
     name: "",
     doctorType: "",
@@ -237,6 +241,7 @@ export default function EditDoctorPage() {
       const doctorEmail = doctor.email || "";
 
       setOriginalEmail(doctorEmail.toLowerCase());
+      setDoctorBranchId(doctor.branchId || "");
       setDoctorProfile({
         name: doctor.name || "",
         doctorType: doctor.doctorType || "",
@@ -329,6 +334,25 @@ export default function EditDoctorPage() {
       return;
     }
 
+    const newEmail = normalizeEmail(doctorProfile.email);
+
+    if (newEmail && newEmail !== originalEmail && originalEmail) {
+      // A login is matched to this profile by email alone (see
+      // ClinicalProfileLoginAccess's doc comment) — saving a changed email
+      // with no warning would silently strand whatever login exists under
+      // the OLD address, with nothing in the app ever surfacing it.
+      const existingLogin = await userService.getUserByEmail(originalEmail);
+
+      if (
+        existingLogin &&
+        !confirm(
+          `A login account exists for the current email (${originalEmail}). Changing this profile's email will NOT update that login — they would need to be re-linked separately from Staff & User Management, or their login left at the old address.\n\nContinue saving with the new email anyway?`,
+        )
+      ) {
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const updateData = {
@@ -337,7 +361,7 @@ export default function EditDoctorPage() {
         defaultCommission: parseFloat(doctorProfile.defaultCommission) || 0,
         speciality: doctorProfile.speciality,
         phone: doctorProfile.phone,
-        email: doctorProfile.email || "",
+        email: newEmail,
         nmcNumber: doctorProfile.nmcNumber,
         consultationCharge: parseFloat(doctorProfile.consultationCharge) || 0,
         defaultRoomId: doctorProfile.defaultRoomId || null,
@@ -488,6 +512,24 @@ export default function EditDoctorPage() {
             </div>
           </div>
         </div>
+
+        {clinicId && (
+          <ClinicalProfileLoginAccess
+            branchId={doctorBranchId || undefined}
+            clinicId={clinicId}
+            displayName={doctorProfile.name}
+            // The persisted email, not the live (possibly unsaved) form
+            // field — otherwise typing a new address re-queries and can
+            // offer to create a login for an email that isn't actually
+            // saved yet, while a real login tied to the OLD email goes
+            // unnoticed. See handleDoctorProfileChange's email-change
+            // handling below for the other half of this: warning before an
+            // email edit silently orphans an existing login.
+            email={originalEmail}
+            phone={doctorProfile.phone}
+            role="doctor"
+          />
+        )}
 
         <div className="flex justify-end gap-3 mt-2">
           <Button

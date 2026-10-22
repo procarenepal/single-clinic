@@ -237,8 +237,6 @@ export default function HRPage() {
     defaultCommission: "0",
     // Login account fields
     createAccount: false,
-    password: "",
-    adminPassword: "",
     assignments: [] as StaffLeaveAssignment[],
   });
 
@@ -264,8 +262,6 @@ export default function HRPage() {
         shiftEndTime: "17:00",
         defaultCommission: "0",
         createAccount: false,
-        password: "",
-        adminPassword: "",
         assignments: [],
       });
     }
@@ -306,8 +302,6 @@ export default function HRPage() {
       shiftEndTime: staff.shiftEndTime || "17:00",
       defaultCommission: (staff.defaultCommission || 0).toString(),
       createAccount: false,
-      password: "",
-      adminPassword: "",
       assignments,
     });
     setIsStaffModalOpen(true);
@@ -983,30 +977,35 @@ export default function HRPage() {
           });
         }
 
-        // If createAccount is checked, also create a login user
+        // If createAccount is checked, also create a login user. No
+        // password is collected here — userService.createUser generates
+        // and discards a random one internally, and the person sets their
+        // own via the emailed reset link. The admin-typed password this
+        // used to collect (plus a "verify admin password" field that
+        // createUser's secondary-app flow has never actually used) stayed
+        // a fully valid, sign-in-capable credential — including for an
+        // Admin-role account — for as long as the recipient took to open
+        // that email, with no expiry and no strength requirement beyond
+        // Firebase's own 6-character floor.
         if (staffForm.createAccount) {
-          if (!staffForm.password || !staffForm.adminPassword) {
-            throw new Error(
-              "Password and Admin confirmation are required for account creation.",
-            );
-          }
-
           const { userService } = await import("@/services/userService");
 
           await userService.createUser(
             staffForm.email,
-            staffForm.password,
+            undefined,
             {
               displayName: staffForm.name,
               role: staffForm.role === "Admin" ? "clinic-admin" : "staff",
               clinicId: clinicId!,
               branchId: branchId || "",
             },
-            staffForm.adminPassword,
+            undefined,
+            "hr-staff-onboarding",
           );
           addToast({
             title: "Account Created",
-            description: "Login credentials have been set up.",
+            description:
+              "A login was created. They'll be emailed a link to set their own password.",
             color: "success",
           });
         }
@@ -1059,8 +1058,6 @@ export default function HRPage() {
         shiftEndTime: "17:00",
         defaultCommission: "0",
         createAccount: false,
-        password: "",
-        adminPassword: "",
         assignments: [],
       });
     } catch (error) {
@@ -3860,48 +3857,10 @@ export default function HRPage() {
                       </div>
 
                       {staffForm.createAccount && (
-                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                          <div className="col-span-2 md:col-span-1">
-                            <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                              Login Password
-                            </label>
-                            <Input
-                              placeholder="Set staff password"
-                              size="sm"
-                              type="password"
-                              value={staffForm.password}
-                              onChange={(e) =>
-                                setStaffForm({
-                                  ...staffForm,
-                                  password: e.target.value,
-                                })
-                              }
-                            />
-                            <p className="text-[9px] text-[rgb(var(--color-text-muted))] mt-1">
-                              Minimum 6 characters
-                            </p>
-                          </div>
-                          <div className="col-span-2 md:col-span-1">
-                            <label className="text-[11px] font-bold text-health-600 uppercase tracking-wider mb-1.5 block">
-                              Verify Admin Password
-                            </label>
-                            <Input
-                              placeholder="Your current password"
-                              size="sm"
-                              type="password"
-                              value={staffForm.adminPassword}
-                              onChange={(e) =>
-                                setStaffForm({
-                                  ...staffForm,
-                                  adminPassword: e.target.value,
-                                })
-                              }
-                            />
-                            <p className="text-[9px] text-health-600 mt-1">
-                              Required to confirm this action
-                            </p>
-                          </div>
-                        </div>
+                        <p className="text-[11px] text-[rgb(var(--color-text-muted))] animate-in fade-in slide-in-from-top-2 duration-300">
+                          No password is set here — they'll receive an
+                          email to set their own.
+                        </p>
                       )}
                     </div>
                   )}

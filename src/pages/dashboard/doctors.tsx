@@ -29,6 +29,8 @@ import {
 import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { specialityService } from "@/services/specialityService";
+import { userService } from "@/services/userService";
+import { normalizeEmail } from "@/services/core/staffCreationCore";
 import { Doctor } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 
@@ -101,6 +103,11 @@ export default function DoctorsPage() {
   const [specialities, setSpecialities] = useState<
     Array<{ key: string; label: string }>
   >([]);
+  // A doctor whose login-creation step failed (or who was added before
+  // login access existed at all) has no discoverable sign that they're
+  // missing one, anywhere, unless an admin happens to open their edit page
+  // and read the Login Access panel there. This is the aggregate view.
+  const [loginEmails, setLoginEmails] = useState<Set<string>>(new Set());
   const itemsPerPage = 8; // Adjust to preferred page size
 
   const isClinicWideAdmin = isClinicAdmin() || isSystemOwner();
@@ -108,7 +115,25 @@ export default function DoctorsPage() {
   useEffect(() => {
     loadDoctors();
     loadSpecialities();
+    loadLoginEmails();
   }, [clinicId]);
+
+  const loadLoginEmails = async () => {
+    if (!clinicId) return;
+    try {
+      const users = await userService.getUsersByClinic(clinicId);
+
+      setLoginEmails(
+        new Set(
+          users
+            .map((u) => normalizeEmail(u.email))
+            .filter((email) => !!email),
+        ),
+      );
+    } catch (error) {
+      console.error("Error loading login accounts:", error);
+    }
+  };
 
   const loadSpecialities = async () => {
     try {
@@ -437,8 +462,16 @@ export default function DoctorsPage() {
                         {doctor.phone}
                       </div>
                       {doctor.email && (
-                        <div className="text-[11.5px] text-text-muted mt-0.5">
+                        <div className="text-[11.5px] text-text-muted mt-0.5 flex items-center gap-1.5">
                           {doctor.email}
+                          {!loginEmails.has(normalizeEmail(doctor.email)) && (
+                            <span
+                              className="px-1.5 py-0.5 rounded bg-warning/10 text-warning text-[10px] font-medium"
+                              title="No login account yet — grant one from this doctor's edit page."
+                            >
+                              No login
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>

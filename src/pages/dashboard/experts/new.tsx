@@ -15,6 +15,13 @@ import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
+import { userService } from "@/services/userService";
+import { rbacService } from "@/services/rbacService";
+import {
+  normalizeEmail,
+  detectEmailCollision,
+  emailCollisionMessage,
+} from "@/services/core/staffCreationCore";
 import { addToast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -45,6 +52,7 @@ export default function NewExpertPage() {
     email: "",
     licenseNumber: "",
   });
+  const [createLogin, setCreateLogin] = useState(false);
 
   useEffect(() => {
     if (!clinicId) return;
@@ -109,6 +117,39 @@ export default function NewExpertPage() {
       return;
     }
 
+    if (createLogin && !expertProfile.email) {
+      addToast({
+        title: "Email required",
+        description: "Enter an email address to create a login account.",
+        color: "danger",
+      });
+
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(expertProfile.email);
+
+    if (normalizedEmail) {
+      const [existingLogin, existingExpert] = await Promise.all([
+        userService.getUserByEmail(normalizedEmail),
+        expertService.getExpertByEmail(normalizedEmail, clinicId),
+      ]);
+      const collision = detectEmailCollision(
+        !!existingLogin,
+        !!existingExpert,
+      );
+
+      if (collision) {
+        addToast({
+          title: "Email already in use",
+          description: emailCollisionMessage(collision),
+          color: "danger",
+        });
+
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       let finalSpecialityKey = expertProfile.speciality;
@@ -144,7 +185,7 @@ export default function NewExpertPage() {
         defaultCommission: parseFloat(expertProfile.defaultCommission) || 0,
         speciality: finalSpecialityKey,
         phone: expertProfile.phone,
-        email: expertProfile.email || "",
+        email: normalizedEmail,
         licenseNumber: expertProfile.licenseNumber,
         clinicId,
         branchId: defaultBranchId ?? clinicId ?? "",
@@ -152,16 +193,64 @@ export default function NewExpertPage() {
       };
 
       await expertService.createExpert(expertData);
-      addToast({
-        title: "Success",
-        description: "Expert registered successfully.",
-        color: "success",
-      });
+
+      if (createLogin) {
+        try {
+          const newUserId = await userService.createUser(
+            normalizedEmail,
+            undefined,
+            {
+              displayName: expertProfile.name,
+              role: "expert",
+              clinicId,
+              ...(defaultBranchId ? { branchId: defaultBranchId } : {}),
+              phone: expertProfile.phone,
+            },
+            undefined,
+            "add-new-expert",
+          );
+
+          try {
+            await rbacService.ensureDefaultClinicalRoleAssigned(
+              clinicId,
+              newUserId,
+              "expert",
+            );
+            addToast({
+              title: "Success",
+              description:
+                "Expert registered and login access granted. A password reset link has been emailed to them.",
+              color: "success",
+            });
+          } catch (rbacError: any) {
+            addToast({
+              title: "Login created, access setup incomplete",
+              description:
+                "The login was created, but their dashboard permissions could not be set automatically. Assign a role from Settings > RBAC > User Management.",
+              color: "warning",
+            });
+          }
+        } catch (loginError: any) {
+          addToast({
+            title: "Expert saved, login failed",
+            description:
+              loginError?.message ||
+              "The expert profile was created, but the login account could not be created. Grant login access later from the expert's edit page.",
+            color: "warning",
+          });
+        }
+      } else {
+        addToast({
+          title: "Success",
+          description: "Expert registered successfully.",
+          color: "success",
+        });
+      }
       navigate("/dashboard/experts");
-    } catch (error) {
+    } catch (error: any) {
       addToast({
         title: "Error",
-        description: "Failed to create expert.",
+        description: error?.message || "Failed to create expert.",
         color: "danger",
       });
       setLoading(false);
@@ -296,6 +385,12 @@ export default function NewExpertPage() {
                 onChange={handleExpertProfileChange}
               />
               <Input
+                description={
+                  createLogin
+                    ? "Required to create a login account."
+                    : undefined
+                }
+                isRequired={createLogin}
                 label="Email"
                 name="email"
                 placeholder="Enter email address"
@@ -314,6 +409,31 @@ export default function NewExpertPage() {
                 onChange={handleExpertProfileChange}
               />
             </div>
+          </CardBody>
+        </Card>
+
+        <Card isBlurred className="w-full shadow-sm">
+          <CardHeader>
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
+              Login Access
+            </h4>
+          </CardHeader>
+          <CardBody className="p-6 flex flex-col gap-2">
+            <label className="flex items-center gap-2.5 text-[13.5px] text-text-main cursor-pointer select-none">
+              <input
+                checked={createLogin}
+                className="w-4 h-4 accent-primary"
+                type="checkbox"
+                onChange={(e) => setCreateLogin(e.target.checked)}
+              />
+              Create a login account for this expert
+            </label>
+            {createLogin && (
+              <p className="text-[12px] text-text-muted pl-6.5">
+                They'll receive an email to set their own password — no
+                password is set here.
+              </p>
+            )}
           </CardBody>
         </Card>
 
