@@ -56,9 +56,17 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     dedupe: ["react", "react-dom"],
   },
-  // Make sure React is available globally in production
+  // Make sure React is available globally in production. Scoped to actual
+  // production builds (mode defaults to "production" for `vite build` and
+  // "development"/"test" for `vite dev`/`vitest` respectively, so this was
+  // already a no-op for the build output) — previously hardcoded
+  // unconditionally, which forced React's production bundle even under
+  // vitest and broke React Testing Library outright ("act(...) is not
+  // supported in production builds of React").
   define: {
-    "process.env.NODE_ENV": '"production"',
+    "process.env.NODE_ENV": JSON.stringify(
+      mode === "production" ? "production" : "development",
+    ),
   },
   // Ensure proper event handling in production
   esbuild: {
