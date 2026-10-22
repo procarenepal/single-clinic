@@ -42,6 +42,7 @@ import { AgingTag } from "@/components/billing/AgingTag";
 // Services
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { isCommissionOnlyLine } from "@/services/core/visitChargeCore";
+import { usePaymentIdempotencyKey } from "@/hooks/usePaymentIdempotencyKey";
 import { getPatientOutstandingSummary } from "@/utils/patientOutstanding";
 import { formatLocalDate, parseLocalDate } from "@/utils/localDate";
 import {
@@ -465,6 +466,7 @@ export default function AppointmentBillingPage() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [selectedBillingForPayment, setSelectedBillingForPayment] =
     useState<AppointmentBilling | null>(null);
+  const paymentKey = usePaymentIdempotencyKey();
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     method: getLastPaymentMethod("cash"),
@@ -1350,7 +1352,10 @@ export default function AppointmentBillingPage() {
         paymentForm.method,
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
+        0,
+        { idempotencyKey: paymentKey.next() },
       );
+      paymentKey.reset();
 
       // Commission generation has been safely migrated to the `recordPayment` flow in appointmentBillingService.ts
 
@@ -2423,6 +2428,7 @@ export default function AppointmentBillingPage() {
                                     <DropdownItem
                                       startContent={<IoCash />}
                                       onPress={() => {
+                                        paymentKey.reset();
                                         setSelectedBillingForPayment(b);
                                         setPaymentForm((p) => ({
                                           ...p,
@@ -2863,6 +2869,7 @@ export default function AppointmentBillingPage() {
                   color="primary"
                   size="sm"
                   onClick={() => {
+                    paymentKey.reset();
                     setShowInvoiceModal(false);
                     setSelectedBillingForPayment(selectedBilling);
                     setPaymentForm((p) => ({

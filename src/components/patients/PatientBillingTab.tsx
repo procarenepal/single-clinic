@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
+import { usePaymentIdempotencyKey } from "@/hooks/usePaymentIdempotencyKey";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { appointmentService } from "@/services/appointmentService";
 import { pathologyBillingService } from "@/services/pathologyBillingService";
@@ -406,6 +407,7 @@ export default function PatientBillingTab({
   const [selectedBilling, setSelectedBilling] =
     useState<AppointmentBilling | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const paymentKey = usePaymentIdempotencyKey();
 
   // Payment form
   const [paymentForm, setPaymentForm] = useState({
@@ -833,7 +835,10 @@ export default function PatientBillingTab({
         paymentForm.method,
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
+        0,
+        { idempotencyKey: paymentKey.next() },
       );
+      paymentKey.reset();
       setLastPaymentMethod(paymentForm.method);
       addToast({
         title: `Payment of ${fmtCur(amount)} recorded`,
@@ -865,6 +870,7 @@ export default function PatientBillingTab({
   };
 
   const openPayment = (b: AppointmentBilling) => {
+    paymentKey.reset();
     setSelectedBilling(b);
     setPaymentForm({
       amount: b.balanceAmount.toString(),

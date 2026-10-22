@@ -45,6 +45,7 @@ import {
 
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
+import { usePaymentIdempotencyKey } from "@/hooks/usePaymentIdempotencyKey";
 import { addToast } from "@/components/ui/toast";
 import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
 import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
@@ -397,6 +398,7 @@ export default function PathologyBillingTab({
 
   // Payment states
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const paymentKey = usePaymentIdempotencyKey();
   const [selectedBillingForPayment, setSelectedBillingForPayment] =
     useState<PathologyBilling | null>(null);
   const [paymentForm, setPaymentForm] = useState({
@@ -1448,6 +1450,7 @@ export default function PathologyBillingTab({
   };
 
   const handlePaymentOpen = (billing: PathologyBilling) => {
+    paymentKey.reset();
     setSelectedBillingForPayment(billing);
     setPaymentForm({
       amount: Math.round(billing.balanceAmount).toString(),
@@ -1501,7 +1504,10 @@ export default function PathologyBillingTab({
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
         currentUser.uid,
+        0,
+        { idempotencyKey: paymentKey.next() },
       );
+      paymentKey.reset();
 
       setLastPaymentMethod(paymentForm.method);
       addToast({

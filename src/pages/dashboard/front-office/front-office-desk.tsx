@@ -5537,7 +5537,13 @@ export default function FrontOfficeDesk() {
           undefined,
           "Visit deposit (wallet credit taken at check-in) applied at checkout",
           0,
-          { walletAlreadyDeducted: true },
+          {
+            walletAlreadyDeducted: true,
+            // Tied to this one invoice + step, not re-generated per call, so
+            // a retry of this whole checkout (same newBillingId) is a safe
+            // no-op here instead of double-applying the deposit.
+            idempotencyKey: `${newBillingId}:deposit-credit`,
+          },
         );
         creditApplied = creditPart;
       } catch (payErr) {
@@ -5553,6 +5559,8 @@ export default function FrontOfficeDesk() {
           "wallet",
           undefined,
           "Visit deposit applied at checkout",
+          0,
+          { idempotencyKey: `${newBillingId}:deposit-wallet` },
         );
         walletApplied = walletPart;
       } catch (payErr) {
@@ -5615,6 +5623,8 @@ export default function FrontOfficeDesk() {
           "wallet",
           undefined,
           "Standing wallet credit applied at Settle",
+          0,
+          { idempotencyKey: `${newBillingId}:standing-credit` },
         );
         standingCreditApplied = standingCreditToApply;
       } catch (payErr) {
@@ -5647,6 +5657,8 @@ export default function FrontOfficeDesk() {
           opts.residualCapture.method,
           opts.residualCapture.reference || undefined,
           "Collected at Settle",
+          0,
+          { idempotencyKey: `${newBillingId}:residual` },
         );
         residualCollected = dueAfterDepositAndCredit;
       } catch (payErr) {
@@ -5680,6 +5692,8 @@ export default function FrontOfficeDesk() {
           "package",
           undefined,
           "Package session — covered by pre-paid package, no additional charge.",
+          0,
+          { idempotencyKey: `${newBillingId}:zero-total` },
         );
       } catch (payErr) {
         console.error("Error closing out zero-total visit invoice:", payErr);

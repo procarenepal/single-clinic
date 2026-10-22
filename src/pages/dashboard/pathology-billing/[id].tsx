@@ -29,6 +29,7 @@ import { billingApi } from "@/services/api/billingApi";
 import { clinicService } from "@/services/clinicService";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
+import { usePaymentIdempotencyKey } from "@/hooks/usePaymentIdempotencyKey";
 import { adToBS } from "@/utils/dateConverter";
 import { parseLocalDate } from "@/utils/localDate";
 import { generateInvoiceHTML, PrintFormat } from "@/utils/invoicePrinting";
@@ -205,6 +206,7 @@ export default function PathologyInvoiceDetailPage() {
     notes: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const paymentKey = usePaymentIdempotencyKey();
 
   useEffect(() => {
     const load = async () => {
@@ -358,6 +360,7 @@ export default function PathologyInvoiceDetailPage() {
 
   const handlePaymentOpen = () => {
     if (!invoice) return;
+    paymentKey.reset();
     setPaymentForm({
       amount: Math.round(invoice.balanceAmount).toString(),
       method: getLastPaymentMethod("cash"),
@@ -405,7 +408,10 @@ export default function PathologyInvoiceDetailPage() {
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
         currentUser.uid,
+        0,
+        { idempotencyKey: paymentKey.next() },
       );
+      paymentKey.reset();
 
       setLastPaymentMethod(paymentForm.method);
       addToast({

@@ -26,6 +26,7 @@ import { appointmentService } from "@/services/appointmentService";
 import { ensureSessionLine } from "@/services/visitLineService";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
+import { usePaymentIdempotencyKey } from "@/hooks/usePaymentIdempotencyKey";
 
 interface SellPackageModalProps {
   isOpen: boolean;
@@ -80,8 +81,11 @@ export default function SellPackageModal({
   // The modal stays mounted between opens (the parent never unmounts it),
   // so without this its form silently carries over whatever was left from
   // the previous sale — including "Apply Tax" — into the next one.
+  const paymentKey = usePaymentIdempotencyKey();
+
   useEffect(() => {
     if (isOpen) {
+      paymentKey.reset();
       setSelectedPatientId("");
       setSelectedPackageId("");
       setPaymentMethod("cash");
@@ -238,8 +242,15 @@ export default function SellPackageModal({
         applyTax: pkg.isTaxable === true && Boolean(billingSettings?.enableTax),
         defaultTaxPercentage: billingSettings?.defaultTaxPercentage,
         createdBy: currentUser.uid,
-        // Identity for this one sale — see buildPackageSaleBillingData.
-        saleId: crypto.randomUUID(),
+        // Identity for this one sale attempt — the same value also used as
+        // recordPayment's idempotencyKey below, so a genuine retry (the
+        // modal stays open, "Sell" clicked again after a dropped response)
+        // reuses both: createBilling's own (clinicId, idempotencyKey)
+        // uniqueness returns the SAME invoice instead of minting a second
+        // one, and recordPayment then sees that invoice already paid. Only
+        // reset when the modal reopens (see the isOpen effect above), so
+        // two deliberately separate sales still get distinct ids.
+        saleId: paymentKey.next(),
       });
 
       const { id: billingId } =
@@ -256,6 +267,8 @@ export default function SellPackageModal({
           paymentMethod,
           reference,
           notes || `Purchased ${pkg.name}`,
+          0,
+          { idempotencyKey: paymentKey.next() },
         );
       }
 

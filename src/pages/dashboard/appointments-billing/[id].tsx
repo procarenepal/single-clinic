@@ -609,12 +609,19 @@ export default function InvoiceDetailPage() {
             currentInvoiceRemaining,
           );
 
+          // split.id is stable across a retry of this whole submit (it only
+          // changes when the splits form state itself is edited), so
+          // pairing it with the target invoice gives each sub-payment its
+          // own idempotencyKey without needing separate ref state here —
+          // see appointmentBillingService.recordPayment's identical option.
           await appointmentBillingService.recordPayment(
             invoice.id,
             applyAmount,
             split.method,
             split.reference || undefined,
             split.notes || undefined,
+            0,
+            { idempotencyKey: `${split.id}:${invoice.id}` },
           );
           splitAmountRemaining -= applyAmount;
           currentInvoiceRemaining -= applyAmount;
@@ -636,6 +643,8 @@ export default function InvoiceDetailPage() {
                 split.method,
                 split.reference || undefined,
                 combinedNotes,
+                0,
+                { idempotencyKey: `${split.id}:${oldInv.id}` },
               );
 
               splitAmountRemaining -= applyOld;
