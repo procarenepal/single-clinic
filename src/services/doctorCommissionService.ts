@@ -1,15 +1,14 @@
 import {
   collection,
-  addDoc,
   getDocs,
   doc,
-  updateDoc,
   query,
   where,
   orderBy,
   Timestamp,
   getDoc,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
@@ -29,7 +28,7 @@ import {
   reduceCommissionAmount as reduceCommissionAmountCore,
   getCommissionsByBillingId as getCommissionsByBillingIdCore,
 } from "@/services/clinicianCommissionService";
-import { resolveClinicId } from "./currentClinic";
+import { commissionDocId } from "./core/commissionIdempotencyCore";
 import {
   earnedAmount,
   isClawback,
@@ -141,28 +140,6 @@ class DoctorCommissionService {
       for (const refDoc of billing.referringDoctors) {
         if (refDoc.calculatedAmount <= 0) continue;
 
-        // Prevent duplicate commissions if finalizeInvoice is ever called
-        // twice for the same invoice (retry after a partial failure, a
-        // double click before the button disables, etc.) — mirrors the
-        // existing guard in referralCommissionService.createReferralCommission.
-        const existingQuery = query(
-          collection(db, this.collectionName),
-          where("billingId", "==", billing.id),
-          where("doctorId", "==", refDoc.doctorId),
-          // Required for Firestore to authorise the read (see currentClinic.ts).
-          // Without it this duplicate guard threw for every non-admin user,
-          // which would have let a second commission be written.
-          where("clinicId", "==", resolveClinicId(billing.clinicId)),
-        );
-        const existingDocs = await getDocs(existingQuery);
-
-        if (!existingDocs.empty) {
-          console.warn(
-            `Pathology commission already exists for doctor ${refDoc.doctorId} on billing ID ${billing.id}. Skipping.`,
-          );
-          continue;
-        }
-
         const commissionData: Omit<DoctorCommission, "id"> = {
           doctorId: refDoc.doctorId,
           doctorName: refDoc.doctorName,
@@ -185,23 +162,42 @@ class DoctorCommissionService {
           createdBy,
         };
 
-        const docRef = await addDoc(collection(db, this.collectionName), {
-          ...commissionData,
-          createdAt: Timestamp.fromDate(commissionData.createdAt),
-          updatedAt: Timestamp.fromDate(commissionData.updatedAt),
-          appointmentDate: Timestamp.fromDate(commissionData.appointmentDate),
-        });
-
-        // Update doctor's balance and lifetime earnings
+        // A deterministic id (not addDoc's auto-generated one) turns "does
+        // one already exist" into a single get-by-id inside a transaction,
+        // which Firestore's optimistic concurrency control makes
+        // race-proof — mirrors the identical fix in clinicianCommissionService
+        // and referralCommissionService.createReferralCommission.
+        const docId = commissionDocId(billing.id, refDoc.doctorId);
+        const docRef = doc(db, this.collectionName, docId);
         const doctorRef = doc(db, "doctors", refDoc.doctorId);
+        let created = false;
 
-        await updateDoc(doctorRef, {
-          totalCommissionEarned: increment(refDoc.calculatedAmount),
-          totalCommissionBalance: increment(refDoc.calculatedAmount),
-          updatedAt: Timestamp.now(),
+        await runTransaction(db, async (transaction) => {
+          const existing = await transaction.get(docRef);
+
+          if (existing.exists()) {
+            console.warn(
+              `Pathology commission already exists for doctor ${refDoc.doctorId} on billing ID ${billing.id}. Skipping.`,
+            );
+
+            return;
+          }
+
+          transaction.set(docRef, {
+            ...commissionData,
+            createdAt: Timestamp.fromDate(commissionData.createdAt),
+            updatedAt: Timestamp.fromDate(commissionData.updatedAt),
+            appointmentDate: Timestamp.fromDate(commissionData.appointmentDate),
+          });
+          transaction.update(doctorRef, {
+            totalCommissionEarned: increment(refDoc.calculatedAmount),
+            totalCommissionBalance: increment(refDoc.calculatedAmount),
+            updatedAt: Timestamp.now(),
+          });
+          created = true;
         });
 
-        commissionIds.push(docRef.id);
+        if (created) commissionIds.push(docId);
       }
 
       return commissionIds;

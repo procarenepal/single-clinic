@@ -20,7 +20,10 @@ import {
   partialReversalPlan,
 } from "./core/commissionClawbackCore";
 import { applyCommissionPayment } from "./core/commissionPaymentCore";
-import { resolveClinicId } from "./currentClinic";
+import {
+  commissionDocId,
+  registrationAnchorId,
+} from "./core/commissionIdempotencyCore";
 
 class StaffCommissionService {
   private collectionName = "staffCommissions";
@@ -39,45 +42,23 @@ class StaffCommissionService {
     commissionAmount: number,
     commissionPercentage: number,
     createdBy: string,
-    // The real invoice id this commission is earned on. Optional only for
-    // backward compatibility with any caller that hasn't been updated —
-    // omitting it disables the duplicate-guard below, since a synthesized
-    // per-call id can never collide. Every real call site should pass this.
+    // The real invoice id this commission is earned on, when one already
+    // exists (e.g. a referral bonus recorded at payment time). Omit it for
+    // a true registration-time commission, before any invoice exists —
+    // the patientId anchors the duplicate guard instead (see
+    // registrationAnchorId), rather than leaving that path unguarded.
     billingId?: string,
   ): Promise<string | null> {
     try {
       if (commissionAmount <= 0) return null;
 
-      // Prevent duplicate commissions if this is ever called twice for the
-      // same invoice (retry after a partial failure, a double click, etc.)
-      // — previously impossible to guard at all, since billingId was
-      // synthesized fresh (`reg_staff_${Date.now()}`) on every single call
-      // regardless of which real invoice it came from.
-      if (billingId) {
-        const existingQuery = query(
-          collection(db, this.collectionName),
-          where("billingId", "==", billingId),
-          where("staffId", "==", staffId),
-          // Required for Firestore to authorise the read (see currentClinic.ts).
-          where("clinicId", "==", resolveClinicId(clinicId)),
-        );
-        const existingDocs = await getDocs(existingQuery);
-
-        if (!existingDocs.empty) {
-          console.warn(
-            `Staff commission already exists for staff ${staffId} on billing ID ${billingId}. Skipping.`,
-          );
-
-          return null;
-        }
-      }
-
+      const anchorId = billingId || registrationAnchorId(patientId);
       const commissionData: Omit<StaffCommission, "id"> = {
         staffId,
         staffName,
         clinicId,
         branchId: clinicId,
-        billingId: billingId || `reg_staff_${Date.now()}`,
+        billingId: anchorId,
         billingType: "appointment",
         invoiceNumber: "REG-COMM-STAFF",
         appointmentDate: new Date(),
@@ -93,23 +74,44 @@ class StaffCommissionService {
         createdBy,
       };
 
-      const docRef = await addDoc(collection(db, this.collectionName), {
-        ...commissionData,
-        createdAt: Timestamp.fromDate(commissionData.createdAt),
-        updatedAt: Timestamp.fromDate(commissionData.updatedAt),
-        appointmentDate: Timestamp.fromDate(commissionData.appointmentDate),
-      });
-
-      // Update staff's balance and lifetime earnings
+      // A deterministic id (not addDoc's auto-generated one) turns "does
+      // one already exist" into a single get-by-id inside a transaction,
+      // which Firestore's optimistic concurrency control makes race-proof
+      // — two concurrent calls for the same anchor+staff can no longer
+      // both see "nothing yet" and both write. Previously this guard only
+      // existed (and only via a race-prone query) when billingId was
+      // passed; the true-registration path had none at all.
+      const docId = commissionDocId(anchorId, staffId);
+      const docRef = doc(db, this.collectionName, docId);
       const staffRef = doc(db, "staff", staffId);
+      let created = false;
 
-      await updateDoc(staffRef, {
-        totalCommissionEarned: increment(commissionAmount),
-        totalCommissionBalance: increment(commissionAmount),
-        updatedAt: Timestamp.now(),
+      await runTransaction(db, async (transaction) => {
+        const existing = await transaction.get(docRef);
+
+        if (existing.exists()) {
+          console.warn(
+            `Staff commission already exists for staff ${staffId} on anchor ${anchorId}. Skipping.`,
+          );
+
+          return;
+        }
+
+        transaction.set(docRef, {
+          ...commissionData,
+          createdAt: Timestamp.fromDate(commissionData.createdAt),
+          updatedAt: Timestamp.fromDate(commissionData.updatedAt),
+          appointmentDate: Timestamp.fromDate(commissionData.appointmentDate),
+        });
+        transaction.update(staffRef, {
+          totalCommissionEarned: increment(commissionAmount),
+          totalCommissionBalance: increment(commissionAmount),
+          updatedAt: Timestamp.now(),
+        });
+        created = true;
       });
 
-      return docRef.id;
+      return created ? docId : null;
     } catch (error) {
       console.error("Error creating registration staff commission:", error);
       throw error;

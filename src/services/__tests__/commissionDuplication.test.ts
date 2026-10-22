@@ -28,17 +28,22 @@ const getDocMock       = vi.fn();
 // individual tests can override with mockResolvedValueOnce for a real
 // duplicate doc if a test specifically wants to exercise that path.
 const getDoctorsMock   = vi.fn().mockResolvedValue({ empty: true, docs: [] });
-// payCommission wraps its read-validate-write in runTransaction (race-condition
-// fix — see doctorCommissionService.ts) — without mocking it, it falls through
-// to the real Firestore SDK, which rejects the fake `db` object. transaction.get/
-// update delegate to the same getDocMock/updateDocMock queues the plain-call
-// tests already use, so existing mockResolvedValueOnce/assertion patterns keep
-// working unchanged.
+// payCommission AND commission creation (createCommission/
+// createCommissionsFromBilling) both wrap their read-validate-write in
+// runTransaction now (the latter is the double-payout race-condition fix —
+// see clinicianCommissionService.ts) — without mocking it, it falls through
+// to the real Firestore SDK, which rejects the fake `db` object.
+// transaction.get delegates to getDocMock (same queue the payCommission/
+// updateCommissionStatus tests already use via mockResolvedValueOnce);
+// transaction.set — the new "create a commission" write, replacing addDoc —
+// delegates to addDocMock so the existing "calls addDoc..." assertions keep
+// working unchanged; transaction.update (the entity balance write) keeps
+// going to updateDocMock as before.
 const runTransactionMock = vi.fn(async (_db: any, updateFn: any) => {
   const transaction = {
     get: (...getArgs: any[]) => getDocMock(...getArgs),
     update: (...updateArgs: any[]) => updateDocMock(...updateArgs),
-    set: (...updateArgs: any[]) => updateDocMock(...updateArgs),
+    set: (...setArgs: any[]) => addDocMock(...setArgs),
   };
 
   return updateFn(transaction);
@@ -156,6 +161,13 @@ beforeEach(() => {
   // getDocMock explicitly so a value queued (and, pre-runTransaction-mock,
   // sometimes left unconsumed) by one test can never leak into the next.
   getDocMock.mockReset();
+  // Default: no pre-existing commission doc at the deterministic id
+  // (createCommission/createCommissionsFromBilling's duplicate-guard
+  // transaction.get) AND no pre-existing commission record for
+  // payCommission/updateCommissionStatus tests that don't queue their own
+  // mockResolvedValueOnce. Individual tests override this with a queued
+  // Once-value when they need specific commission data back.
+  getDocMock.mockResolvedValue({ exists: () => false });
   addDocMock.mockResolvedValue({ id: "comm_id_1" });
   updateDocMock.mockResolvedValue(undefined);
 });
@@ -511,27 +523,28 @@ describe("updateCommissionStatus — cancellation reverts balance", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 describe("Expert vs Doctor commission — correct collections", () => {
   it("doctorCommissionService writes to 'doctorCommissions' collection", async () => {
-    const { collection: collFn } = await import("firebase/firestore");
+    const { doc: docFn } = await import("firebase/firestore");
     const bill = makeBilling();
 
     await doctorCommissionService.createCommission(bill as any, 10, "system");
 
-    // Check that 'doctorCommissions' was used (first arg to collection mock)
-    const collectionCalls = (collFn as any).mock.calls;
-    const collectionNames = collectionCalls.map((c: any) => c[1]);
+    // The commission doc ref is built as doc(db, collectionName, docId) —
+    // second positional arg is the collection name.
+    const docCalls = (docFn as any).mock.calls;
+    const collectionNames = docCalls.map((c: any) => c[1]);
     expect(collectionNames).toContain("doctorCommissions");
     expect(collectionNames).not.toContain("expertCommissions");
   });
 
   it("expertCommissionService writes to 'expertCommissions' collection", async () => {
-    const { collection: collFn } = await import("firebase/firestore");
+    const { doc: docFn } = await import("firebase/firestore");
     const bill = makeBilling({ doctorId: "exp_1", doctorName: "Expert A" });
     bill.items[0].doctorId = "exp_1";
 
     await expertCommissionService.createCommissionsFromBilling(bill as any, 20, "system");
 
-    const collectionCalls = (collFn as any).mock.calls;
-    const collectionNames = collectionCalls.map((c: any) => c[1]);
+    const docCalls = (docFn as any).mock.calls;
+    const collectionNames = docCalls.map((c: any) => c[1]);
     expect(collectionNames).toContain("expertCommissions");
     expect(collectionNames).not.toContain("doctorCommissions");
   });

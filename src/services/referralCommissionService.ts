@@ -26,6 +26,10 @@ import {
 } from "./core/commissionClawbackCore";
 import { applyCommissionPayment } from "./core/commissionPaymentCore";
 import {
+  commissionDocId,
+  registrationAnchorId,
+} from "./core/commissionIdempotencyCore";
+import {
   earnedAmount,
   isClawback,
   summarizeCommissions,
@@ -66,19 +70,6 @@ class ReferralCommissionService {
     try {
       if (commissionAmount <= 0) return null;
 
-      // Prevent duplicate commissions by checking if any already exist for this billingId
-      const existingCommissionsQuery = query(
-        collection(db, this.collectionName),
-        where("billingId", "==", billing.id),
-        where("partnerId", "==", partner.id)
-      );
-      const existingDocs = await getDocs(existingCommissionsQuery);
-      
-      if (!existingDocs.empty) {
-        console.warn(`Referral commission already exists for partner ${partner.id} on billing ID ${billing.id}. Skipping.`);
-        return null;
-      }
-
       const commissionData: Omit<ReferralCommission, "id"> = {
         partnerId: partner.id!,
         partnerName: partner.name,
@@ -108,23 +99,40 @@ class ReferralCommissionService {
         createdBy,
       };
 
-      const docRef = await addDoc(collection(db, this.collectionName), {
-        ...commissionData,
-        createdAt: Timestamp.fromDate(commissionData.createdAt),
-        updatedAt: Timestamp.fromDate(commissionData.updatedAt),
-        invoiceDate: Timestamp.fromDate(commissionData.invoiceDate),
-      });
-
-      // Update partner's balance and lifetime earnings
+      // A deterministic id (not addDoc's auto-generated one) turns "does
+      // one already exist" into a single get-by-id inside a transaction,
+      // which Firestore's optimistic concurrency control makes race-proof.
+      const docId = commissionDocId(billing.id, partner.id!);
+      const docRef = doc(db, this.collectionName, docId);
       const partnerRef = doc(db, "referralPartners", partner.id!);
+      let created = false;
 
-      await updateDoc(partnerRef, {
-        totalCommissionEarned: increment(commissionAmount),
-        totalCommissionBalance: increment(commissionAmount),
-        updatedAt: Timestamp.now(),
+      await runTransaction(db, async (transaction) => {
+        const existing = await transaction.get(docRef);
+
+        if (existing.exists()) {
+          console.warn(
+            `Referral commission already exists for partner ${partner.id} on billing ID ${billing.id}. Skipping.`,
+          );
+
+          return;
+        }
+
+        transaction.set(docRef, {
+          ...commissionData,
+          createdAt: Timestamp.fromDate(commissionData.createdAt),
+          updatedAt: Timestamp.fromDate(commissionData.updatedAt),
+          invoiceDate: Timestamp.fromDate(commissionData.invoiceDate),
+        });
+        transaction.update(partnerRef, {
+          totalCommissionEarned: increment(commissionAmount),
+          totalCommissionBalance: increment(commissionAmount),
+          updatedAt: Timestamp.now(),
+        });
+        created = true;
       });
 
-      return docRef.id;
+      return created ? docId : null;
     } catch (error) {
       console.error("Error creating referral commission:", error);
       throw error;
@@ -148,12 +156,18 @@ class ReferralCommissionService {
     try {
       if (commissionAmount <= 0) return null;
 
+      // No real invoice exists yet at registration time — the patientId
+      // (minted once, right before this runs) anchors the duplicate guard
+      // instead. Previously `reg_${Date.now()}`, generated fresh on every
+      // call with no duplicate guard at all: a retried or double-submitted
+      // registration created two full commission payouts for one referral.
+      const anchorId = registrationAnchorId(patientId);
       const commissionData: Omit<ReferralCommission, "id"> = {
         partnerId: partner.id!,
         partnerName: partner.name,
         clinicId,
         branchId: clinicId,
-        billingId: `reg_${Date.now()}`, // Synthetic ID for registration-based commission
+        billingId: anchorId,
         invoiceNumber: "REG-COMM", // Placeholder for registration commission
         invoiceDate: new Date(),
         patientId,
@@ -169,23 +183,37 @@ class ReferralCommissionService {
         createdBy,
       };
 
-      const docRef = await addDoc(collection(db, this.collectionName), {
-        ...commissionData,
-        createdAt: Timestamp.fromDate(commissionData.createdAt),
-        updatedAt: Timestamp.fromDate(commissionData.updatedAt),
-        invoiceDate: Timestamp.fromDate(commissionData.invoiceDate),
-      });
-
-      // Update partner's balance and lifetime earnings
+      const docId = commissionDocId(anchorId, partner.id!);
+      const docRef = doc(db, this.collectionName, docId);
       const partnerRef = doc(db, "referralPartners", partner.id!);
+      let created = false;
 
-      await updateDoc(partnerRef, {
-        totalCommissionEarned: increment(commissionAmount),
-        totalCommissionBalance: increment(commissionAmount),
-        updatedAt: Timestamp.now(),
+      await runTransaction(db, async (transaction) => {
+        const existing = await transaction.get(docRef);
+
+        if (existing.exists()) {
+          console.warn(
+            `Registration referral commission already exists for partner ${partner.id} / patient ${patientId}. Skipping.`,
+          );
+
+          return;
+        }
+
+        transaction.set(docRef, {
+          ...commissionData,
+          createdAt: Timestamp.fromDate(commissionData.createdAt),
+          updatedAt: Timestamp.fromDate(commissionData.updatedAt),
+          invoiceDate: Timestamp.fromDate(commissionData.invoiceDate),
+        });
+        transaction.update(partnerRef, {
+          totalCommissionEarned: increment(commissionAmount),
+          totalCommissionBalance: increment(commissionAmount),
+          updatedAt: Timestamp.now(),
+        });
+        created = true;
       });
 
-      return docRef.id;
+      return created ? docId : null;
     } catch (error) {
       console.error("Error creating registration referral commission:", error);
       throw error;

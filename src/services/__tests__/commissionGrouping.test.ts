@@ -26,7 +26,24 @@ import { expertCommissionService } from "../expertCommissionService";
 // ─── Firebase mocks ─────────────────────────────────────────────────────────
 const addDocMock = vi.fn().mockResolvedValue({ id: "comm_id_1" });
 const updateDocMock = vi.fn().mockResolvedValue(undefined);
+const getDocMock = vi.fn();
 const getDocsMock = vi.fn().mockResolvedValue({ docs: [], empty: true });
+// Commission creation now writes via a transaction — a get-by-deterministic-id
+// duplicate check, then set+update — instead of a duplicate-check query
+// followed by addDoc/updateDoc (the race-condition fix in
+// clinicianCommissionService.ts). transaction.get routes to getDocMock,
+// transaction.set (the new "create") to addDocMock, transaction.update to
+// updateDocMock, so every existing addDoc/updateDoc assertion below keeps
+// working unchanged.
+const runTransactionMock = vi.fn(async (_db: any, updateFn: any) => {
+  const transaction = {
+    get: (...getArgs: any[]) => getDocMock(...getArgs),
+    update: (...updateArgs: any[]) => updateDocMock(...updateArgs),
+    set: (...setArgs: any[]) => addDocMock(...setArgs),
+  };
+
+  return updateFn(transaction);
+});
 
 vi.mock("firebase/firestore", async () => {
   const actual = await vi.importActual("firebase/firestore");
@@ -41,6 +58,7 @@ vi.mock("firebase/firestore", async () => {
     query: vi.fn(),
     where: vi.fn(),
     orderBy: vi.fn(),
+    runTransaction: (db: any, updateFn: any) => runTransactionMock(db, updateFn),
     increment: (n: number) => ({ __increment: n }),
     Timestamp: {
       fromDate: (d: Date) => ({ seconds: Math.floor(d.getTime() / 1000) }),
@@ -53,12 +71,13 @@ vi.mock("@/config/firebase", () => ({ db: {} }));
 vi.mock("../../config/firebase", () => ({ db: {} }));
 vi.mock("../config/firebase", () => ({ db: {} }));
 
-function fakeDocSnap(id: string, data: Record<string, any>) {
-  return { id, data: () => data };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
+  getDocMock.mockReset();
+  // Default: no pre-existing commission doc at the deterministic id (the
+  // duplicate-guard transaction.get) — individual tests override with
+  // mockResolvedValueOnce to simulate a real duplicate.
+  getDocMock.mockResolvedValue({ exists: () => false });
   addDocMock.mockResolvedValue({ id: "comm_id_1" });
   updateDocMock.mockResolvedValue(undefined);
   getDocsMock.mockResolvedValue({ docs: [], empty: true });
@@ -236,10 +255,7 @@ describe("doctorCommissionService.createCommission — per-item, category-driven
   });
 
   it("skips creating a duplicate commission for a doctor who already has one on this billing", async () => {
-    getDocsMock.mockResolvedValueOnce({
-      docs: [fakeDocSnap("existing", { billingId: "bill_1", doctorId: "doc_1" })],
-      empty: false,
-    });
+    getDocMock.mockResolvedValueOnce({ exists: () => true });
 
     const billing = baseBilling([
       {
@@ -413,10 +429,7 @@ describe("expertCommissionService.createCommissionsFromBilling — per-item, cat
   });
 
   it("skips creating a duplicate commission for an expert who already has one on this billing", async () => {
-    getDocsMock.mockResolvedValueOnce({
-      docs: [fakeDocSnap("existing", { billingId: "bill_1", expertId: "exp_1" })],
-      empty: false,
-    });
+    getDocMock.mockResolvedValueOnce({ exists: () => true });
 
     const billing = baseBilling([
       {

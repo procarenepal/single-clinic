@@ -20,7 +20,10 @@ import {
   partialReversalPlan,
 } from "./core/commissionClawbackCore";
 import { applyCommissionPayment } from "./core/commissionPaymentCore";
-import { resolveClinicId } from "./currentClinic";
+import {
+  commissionDocId,
+  registrationAnchorId,
+} from "./core/commissionIdempotencyCore";
 
 /**
  * Shared core behind doctorCommissionService / expertCommissionService.
@@ -165,26 +168,6 @@ export async function createCommissionGrouped(
 
       if (groupCommissionAmount <= 0) return null;
 
-      const existingQuery = query(
-        collection(db, config.collectionName),
-        where("billingId", "==", billing.id),
-        where(config.idField, "==", entityId),
-        // Required for Firestore to authorise the read — the same fix already
-        // applied to doctorCommissionService.createPathologyCommissions, which
-        // this shared core had not inherited. Without it the duplicate guard
-        // threw for every non-admin, so taking a payment as a receptionist
-        // recorded no clinician commission at all (the caller only logs).
-        where("clinicId", "==", resolveClinicId(billing.clinicId)),
-      );
-      const existingDocs = await getDocs(existingQuery);
-
-      if (!existingDocs.empty) {
-        console.warn(
-          `Commission already exists for ${config.entityType} ${entityId} on billing ID ${billing.id}. Skipping.`,
-        );
-        return null;
-      }
-
       const effectivePercentage =
         groupSubtotal > 0
           ? (groupCommissionAmount / groupSubtotal) * 100
@@ -214,17 +197,37 @@ export async function createCommissionGrouped(
         createdBy,
       };
 
-      const docRef = await addDoc(collection(db, config.collectionName), commissionData);
-
+      // A deterministic id — not addDoc's auto-generated one — turns "does
+      // one already exist" into a single get-by-id inside the transaction
+      // below, which Firestore's optimistic concurrency control makes
+      // race-proof: two concurrent calls for the same billing+clinician can
+      // no longer both see "nothing yet" and both write.
+      const docId = commissionDocId(billing.id, entityId);
+      const docRef = doc(db, config.collectionName, docId);
       const entityRef = doc(db, config.entityCollection, entityId);
+      let created = false;
 
-      await updateDoc(entityRef, {
-        totalCommissionEarned: increment(groupCommissionAmount),
-        totalCommissionBalance: increment(groupCommissionAmount),
-        updatedAt: Timestamp.now(),
+      await runTransaction(db, async (transaction) => {
+        const existing = await transaction.get(docRef);
+
+        if (existing.exists()) {
+          console.warn(
+            `Commission already exists for ${config.entityType} ${entityId} on billing ID ${billing.id}. Skipping.`,
+          );
+
+          return;
+        }
+
+        transaction.set(docRef, commissionData);
+        transaction.update(entityRef, {
+          totalCommissionEarned: increment(groupCommissionAmount),
+          totalCommissionBalance: increment(groupCommissionAmount),
+          updatedAt: Timestamp.now(),
+        });
+        created = true;
       });
 
-      return docRef.id;
+      return created ? docId : null;
     });
 
     const results = await Promise.all(promises);
@@ -252,20 +255,6 @@ export async function createCommissionFromItems(
   createdBy: string,
 ): Promise<string | null> {
   try {
-    const existingQuery = query(
-      collection(db, config.collectionName),
-      where("billingId", "==", billing.id),
-      where(config.idField, "==", entityId),
-    );
-    const existingDocs = await getDocs(existingQuery);
-
-    if (!existingDocs.empty) {
-      console.warn(
-        `Commission already exists for ${config.entityType} ${entityId} on billing ID ${billing.id}. Skipping.`,
-      );
-      return null;
-    }
-
     const totalItemAmounts = (billing.subtotal || 1) - (billing.itemDiscountAmount || 0);
     const validTotal = totalItemAmounts > 0 ? totalItemAmounts : 1;
     const mainDiscount = billing.mainDiscountAmount || 0;
@@ -301,17 +290,32 @@ export async function createCommissionFromItems(
       createdBy,
     };
 
-    const docRef = await addDoc(collection(db, config.collectionName), commissionData);
-
+    const docId = commissionDocId(billing.id, entityId);
+    const docRef = doc(db, config.collectionName, docId);
     const entityRef = doc(db, config.entityCollection, entityId);
+    let created = false;
 
-    await updateDoc(entityRef, {
-      totalCommissionEarned: increment(commissionAmount),
-      totalCommissionBalance: increment(commissionAmount),
-      updatedAt: Timestamp.now(),
+    await runTransaction(db, async (transaction) => {
+      const existing = await transaction.get(docRef);
+
+      if (existing.exists()) {
+        console.warn(
+          `Commission already exists for ${config.entityType} ${entityId} on billing ID ${billing.id}. Skipping.`,
+        );
+
+        return;
+      }
+
+      transaction.set(docRef, commissionData);
+      transaction.update(entityRef, {
+        totalCommissionEarned: increment(commissionAmount),
+        totalCommissionBalance: increment(commissionAmount),
+        updatedAt: Timestamp.now(),
+      });
+      created = true;
     });
 
-    return docRef.id;
+    return created ? docId : null;
   } catch (error) {
     console.error(`Error creating ${config.entityType} commission:`, error);
     throw error;
@@ -335,13 +339,20 @@ export async function createRegistrationCommission(
   try {
     if (commissionAmount <= 0) return null;
 
+    // No real invoice exists yet at registration time, so there is no
+    // billingId to key off of — the patientId (minted once, right before
+    // this runs) is the stable anchor instead. Previously this was
+    // `reg_${Date.now()}`, generated fresh on every call with no duplicate
+    // guard at all: a retried or double-submitted registration created two
+    // full commission payouts for the same referral.
+    const anchorId = registrationAnchorId(patientId);
     const now = new Date();
     const commissionData: Record<string, any> = {
       [config.idField]: entityId,
       [config.nameField]: entityName,
       clinicId,
       branchId: clinicId,
-      billingId: `reg_${Date.now()}`,
+      billingId: anchorId,
       billingType: "appointment",
       invoiceNumber: "REG-COMM",
       [config.dateField]: Timestamp.fromDate(now),
@@ -357,17 +368,32 @@ export async function createRegistrationCommission(
       createdBy,
     };
 
-    const docRef = await addDoc(collection(db, config.collectionName), commissionData);
-
+    const docId = commissionDocId(anchorId, entityId);
+    const docRef = doc(db, config.collectionName, docId);
     const entityRef = doc(db, config.entityCollection, entityId);
+    let created = false;
 
-    await updateDoc(entityRef, {
-      totalCommissionEarned: increment(commissionAmount),
-      totalCommissionBalance: increment(commissionAmount),
-      updatedAt: Timestamp.now(),
+    await runTransaction(db, async (transaction) => {
+      const existing = await transaction.get(docRef);
+
+      if (existing.exists()) {
+        console.warn(
+          `Registration commission already exists for ${config.entityType} ${entityId} / patient ${patientId}. Skipping.`,
+        );
+
+        return;
+      }
+
+      transaction.set(docRef, commissionData);
+      transaction.update(entityRef, {
+        totalCommissionEarned: increment(commissionAmount),
+        totalCommissionBalance: increment(commissionAmount),
+        updatedAt: Timestamp.now(),
+      });
+      created = true;
     });
 
-    return docRef.id;
+    return created ? docId : null;
   } catch (error) {
     console.error(`Error creating registration ${config.entityType} commission:`, error);
     throw error;
