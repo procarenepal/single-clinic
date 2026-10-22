@@ -27,7 +27,7 @@ import {
 
 import { walletService, PATIENTS_COLLECTION } from "./walletService";
 import { walletRefundableAmount, WALLET_METHOD } from "./core/cashLedgerCore";
-import { applyPayment } from "./core/paymentApplicationCore";
+import { applyPayment, type AppliedPayment } from "./core/paymentApplicationCore";
 import { isCommissionOnlyLine } from "./core/visitChargeCore";
 import { navigationService } from "./navigationService";
 import {
@@ -49,6 +49,17 @@ import type { FrontOfficeSettings } from "@/types/models";
 
 const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
+
+/**
+ * recordPayment in-flight calls, keyed by a fingerprint of their arguments.
+ * Two near-simultaneous calls for the exact same payment — a double-click
+ * before the UI's own submitting-guard takes effect, or two browser tabs —
+ * collapse into one actual attempt: the second caller awaits the first's
+ * own promise instead of opening a second transaction. This is separate
+ * from (and complements) recordPayment's idempotencyKey option, which
+ * guards a retry arriving after the first attempt has already finished.
+ */
+const recordPaymentInFlight = new Map<string, Promise<void>>();
 
 /**
  * Whether an appointment billing record is IRD-locked — financial and other
@@ -1316,8 +1327,34 @@ export const appointmentBillingService = {
        * payment is recorded as wallet-funded without deducting again.
        */
       walletAlreadyDeducted?: boolean;
+      /**
+       * A caller-supplied, stable identity for this one payment attempt —
+       * e.g. generated once when a payment form is opened and reused if the
+       * same click is retried after a dropped response. When the same key
+       * already appears in paymentHistory, this call is a retry of an
+       * attempt that already committed: it's treated as a safe no-op
+       * instead of double-counting paidAmount and, for a wallet payment,
+       * deducting the patient's balance a second time. Omitting it keeps
+       * the previous (non-idempotent) behavior for callers not yet updated.
+       */
+      idempotencyKey?: string;
     } = {},
   ): Promise<void> {
+    const fingerprint = JSON.stringify([
+      id,
+      paymentAmount,
+      paymentMethod,
+      paymentReference || "",
+      paymentNotes || "",
+      discountAmount,
+    ]);
+    const inFlight = recordPaymentInFlight.get(fingerprint);
+
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const attempt = (async (): Promise<void> => {
     try {
       const billing = await this.getBillingById(id);
 
@@ -1342,7 +1379,9 @@ export const appointmentBillingService = {
       // and the post-transaction wallet deduction whose "compensating
       // revert" left a phantom wallet event in paymentHistory. Both were
       // true of this method as well.
-      const applied = await runTransaction(db, async (transaction) => {
+      const applied = await runTransaction<
+        { kind: "duplicate" } | { kind: "applied"; result: AppliedPayment }
+      >(db, async (transaction) => {
         const snap = await transaction.get(billingRef);
 
         if (!snap.exists()) {
@@ -1354,6 +1393,20 @@ export const appointmentBillingService = {
           : null;
 
         const current = { id: snap.id, ...snap.data() } as AppointmentBilling;
+
+        // A retried call carries the same idempotencyKey as the attempt
+        // before it. If that key is already in paymentHistory, the earlier
+        // attempt already committed — Firestore's own optimistic
+        // concurrency control is what makes this check reliable even
+        // against two concurrent retries, the same way commissionDocId
+        // does for commission creation.
+        const existingEvent = options.idempotencyKey
+          ? current.paymentHistory?.find((e) => e.id === options.idempotencyKey)
+          : undefined;
+
+        if (existingEvent) {
+          return { kind: "duplicate" as const };
+        }
 
         // A checkout discount changes the total, which a filed invoice
         // cannot do. Judged on the transaction's own snapshot.
@@ -1370,7 +1423,7 @@ export const appointmentBillingService = {
           reference: paymentReference,
           notes: paymentNotes,
           recordedBy: actor,
-          eventId: crypto.randomUUID(),
+          eventId: options.idempotencyKey || crypto.randomUUID(),
           now: new Date(),
           trackMainDiscount: true,
         });
@@ -1398,10 +1451,17 @@ export const appointmentBillingService = {
           updatedAt: Timestamp.now(),
         });
 
-        return result;
+        return { kind: "applied" as const, result };
       });
 
-      const paymentStatus = applied.updateData.paymentStatus;
+      // A retried attempt that already committed — every downstream effect
+      // below (appointment status sync, follow-up, commissions) already ran
+      // on the attempt that actually applied it.
+      if (applied.kind === "duplicate") {
+        return;
+      }
+
+      const paymentStatus = applied.result.updateData.paymentStatus;
 
       // Also find and update the associated appointment in the appointments collection
       try {
@@ -1499,7 +1559,7 @@ export const appointmentBillingService = {
       // edge. becamePaid is decided from the snapshot the transaction read,
       // so a concurrent loser never reaches here claiming the edge — the
       // old comparison against the pre-transaction `billing` could.
-      if (applied.becamePaid) {
+      if (applied.result.becamePaid) {
         // 1. Follow-up Logic
         if (billing.patientId) {
           try {
@@ -1906,6 +1966,15 @@ export const appointmentBillingService = {
     } catch (error) {
       console.error("Error recording payment:", error);
       throw error;
+    }
+    })();
+
+    recordPaymentInFlight.set(fingerprint, attempt);
+
+    try {
+      return await attempt;
+    } finally {
+      recordPaymentInFlight.delete(fingerprint);
     }
   },
 

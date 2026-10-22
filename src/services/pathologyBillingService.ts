@@ -25,7 +25,7 @@ import { expertCommissionService } from "./expertCommissionService";
 import { staffCommissionService } from "./staffCommissionService";
 import { walletService, PATIENTS_COLLECTION } from "./walletService";
 import { walletRefundableAmount, WALLET_METHOD } from "./core/cashLedgerCore";
-import { applyPayment } from "./core/paymentApplicationCore";
+import { applyPayment, type AppliedPayment } from "./core/paymentApplicationCore";
 import {
   isRecordLocked,
   assertFinancialFieldsUnlocked,
@@ -39,6 +39,15 @@ import {
 
 const PATHOLOGY_BILLING_COLLECTION = "pathologyBilling";
 const PATHOLOGY_BILLING_SETTINGS_COLLECTION = "pathologyBillingSettings";
+
+/**
+ * recordPayment in-flight calls, keyed by a fingerprint of their arguments —
+ * see appointmentBillingService's identical guard for why: it collapses a
+ * double-click (or two tabs) into one actual attempt, complementing
+ * recordPayment's idempotencyKey option which guards a retry arriving after
+ * the first attempt already finished.
+ */
+const recordPaymentInFlight = new Map<string, Promise<void>>();
 
 /**
  * What may change on a finalized or IRD-synced pathology invoice. Shared
@@ -1037,7 +1046,32 @@ export const pathologyBillingService = {
     paymentNotes?: string,
     recordedBy?: string,
     discountAmount: number = 0,
+    options: {
+      /**
+       * A caller-supplied, stable identity for this one payment attempt —
+       * see appointmentBillingService.recordPayment's identical parameter.
+       * When this key already appears in paymentHistory, the call is a
+       * retry of an attempt that already committed and is a safe no-op.
+       */
+      idempotencyKey?: string;
+    } = {},
   ): Promise<void> {
+    const fingerprint = JSON.stringify([
+      id,
+      paymentAmount,
+      paymentMethod,
+      paymentReference || "",
+      paymentNotes || "",
+      recordedBy || "",
+      discountAmount,
+    ]);
+    const inFlight = recordPaymentInFlight.get(fingerprint);
+
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const attempt = (async (): Promise<void> => {
     try {
       const billing = await this.getBillingById(id);
 
@@ -1075,7 +1109,9 @@ export const pathologyBillingService = {
       //    happened, which a later cancellation would then refund.
       //
       // Firestore requires every read before any write, hence the order.
-      const applied = await runTransaction(db, async (transaction) => {
+      const applied = await runTransaction<
+        { kind: "duplicate" } | { kind: "applied"; result: AppliedPayment }
+      >(db, async (transaction) => {
         const snap = await transaction.get(billingRef);
 
         if (!snap.exists()) {
@@ -1088,6 +1124,17 @@ export const pathologyBillingService = {
 
         const current = { id: snap.id, ...snap.data() } as PathologyBilling;
 
+        // A retried call carries the same idempotencyKey as the attempt
+        // before it — see appointmentBillingService.recordPayment's
+        // identical guard.
+        const existingEvent = options.idempotencyKey
+          ? current.paymentHistory?.find((e) => e.id === options.idempotencyKey)
+          : undefined;
+
+        if (existingEvent) {
+          return { kind: "duplicate" as const };
+        }
+
         const result = applyPayment(current as any, {
           amount: paymentAmount,
           method: paymentMethod,
@@ -1095,7 +1142,7 @@ export const pathologyBillingService = {
           reference: paymentReference,
           notes: paymentNotes,
           recordedBy: actor,
-          eventId: crypto.randomUUID(),
+          eventId: options.idempotencyKey || crypto.randomUUID(),
           now: new Date(),
         });
 
@@ -1131,8 +1178,15 @@ export const pathologyBillingService = {
           updatedAt: Timestamp.now(),
         });
 
-        return result;
+        return { kind: "applied" as const, result };
       });
+
+      // A retried attempt that already committed — the commission and
+      // follow-up creation below already ran on the attempt that actually
+      // applied it.
+      if (applied.kind === "duplicate") {
+        return;
+      }
 
       // Create commissions for referring sources — strictly on the
       // unpaid/partial -> paid transition (never re-fires on an already-paid
@@ -1141,7 +1195,7 @@ export const pathologyBillingService = {
       // decided from the snapshot the transaction read, so a concurrent
       // loser never gets here claiming the edge.
       if (
-        applied.becamePaid &&
+        applied.result.becamePaid &&
         billing.referringDoctors &&
         billing.referringDoctors.length > 0
       ) {
@@ -1180,7 +1234,7 @@ export const pathologyBillingService = {
       // Auto-create follow-up on the same paid edge. The old condition
       // compared `billing.status` (the document lifecycle) against "paid",
       // a value it never holds — it was effectively "whenever paid".
-      if (applied.becamePaid && billing.patientId) {
+      if (applied.result.becamePaid && billing.patientId) {
         try {
           const { followupService } = await import("./followupService");
           const { patientService } = await import("./patientService");
@@ -1257,6 +1311,15 @@ export const pathologyBillingService = {
     } catch (error) {
       console.error("Error recording pathology payment:", error);
       throw error;
+    }
+    })();
+
+    recordPaymentInFlight.set(fingerprint, attempt);
+
+    try {
+      return await attempt;
+    } finally {
+      recordPaymentInFlight.delete(fingerprint);
     }
   },
 
