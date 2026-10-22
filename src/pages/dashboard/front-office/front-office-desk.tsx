@@ -42,6 +42,8 @@ import { ProcedureModal } from "./ProcedureModal";
 import {
   QuickIntakeModal,
   getClinicianTypeDefaults,
+  describeRowFee,
+  sharedTypeAdditionalRowIndices,
 } from "./QuickIntakeModal";
 import { QueueList } from "./QueueList";
 import { StageListModal } from "./StageListModal";
@@ -74,7 +76,11 @@ import {
   splitDepositApplication,
   type SettlePlan,
 } from "@/services/core/visitSettleCore";
-import { canDoFrontOfficeAction } from "@/services/core/frontOfficePermissionCore";
+import {
+  canDoFrontOfficeAction,
+  discountCapForRole,
+  discountExceedsCap,
+} from "@/services/core/frontOfficePermissionCore";
 import {
   getVisitPaymentGate,
   mergeVisitReferrals,
@@ -795,6 +801,7 @@ export default function FrontOfficeDesk() {
     plan: SettlePlan;
     discountType: "flat" | "percent";
     discountValue: number;
+    discountReason: string;
     initialDiscount: { type: "flat" | "percent"; value: number } | null;
     standingCreditAvailable: number;
     applyStandingCredit: boolean;
@@ -987,6 +994,9 @@ export default function FrontOfficeDesk() {
     paymentReference: "",
     startSessionInstantly: false,
     sendDirectlyToCabin: false,
+    discountType: "percent" as "flat" | "percent",
+    discountValue: 0,
+    discountReason: "",
     clinicians: [
       {
         id: crypto.randomUUID(),
@@ -1027,6 +1037,9 @@ export default function FrontOfficeDesk() {
       paymentReference: "",
       startSessionInstantly: false,
       sendDirectlyToCabin: false,
+      discountType: "percent",
+      discountValue: 0,
+      discountReason: "",
       clinicians: [
         {
           id: crypto.randomUUID(),
@@ -4524,6 +4537,97 @@ export default function FrontOfficeDesk() {
 
         const newApptId = await appointmentService.createAppointment(apptData);
 
+        // A discount decided at intake gates the wallet deposit down before
+        // it's taken, instead of collecting the full fee and refunding the
+        // difference as credit once Settle applies it. Settle still has the
+        // final say — resolveVisitDiscount picks this up as its starting
+        // point and a permitted role can change it there.
+        const quickIntakeSubtotal = (() => {
+          const firstRowIsPackage = String(
+            quickIntakeForm.clinicians?.[0]?.appointmentTypeId || "",
+          ).startsWith("pkg_");
+          const rows = validClinicianRows.map((c: any, index: number) => ({
+            c,
+            index,
+          }));
+          const shared = sharedTypeAdditionalRowIndices(
+            rows.map(({ c, index }: any) => ({
+              index,
+              appointmentTypeId: String(
+                c.appointmentTypeId || quickIntakeForm.appointmentTypeId || "",
+              ),
+            })),
+          );
+
+          return rows.reduce((sum: number, { c, index }: any) => {
+            const fee = describeRowFee(
+              { ...c, appointmentTypeId: c.appointmentTypeId || quickIntakeForm.appointmentTypeId },
+              { appointmentTypes, packages, doctors, experts },
+              {
+                taxPercentage: billingSettings?.defaultTaxPercentage || 0,
+                isTaxEnabled: Boolean(billingSettings?.enableTax),
+              },
+              {
+                index,
+                firstRowIsPackage,
+                startSessionInstantly: Boolean(quickIntakeForm.startSessionInstantly),
+              },
+            );
+
+            return fee.status === "charge" && shared.has(index)
+              ? sum
+              : sum + fee.collectNow;
+          }, 0);
+        })();
+
+        if (
+          quickIntakeForm.discountValue > 0 &&
+          canDoFrontOfficeAction(
+            userData?.role,
+            "discount",
+            billingSettings?.frontOffice,
+          ) &&
+          !discountExceedsCap(
+            quickIntakeForm.discountType,
+            quickIntakeForm.discountValue,
+            quickIntakeSubtotal,
+            discountCapForRole(userData?.role, billingSettings?.frontOffice),
+          )
+        ) {
+          const reason = quickIntakeForm.discountReason.trim() || undefined;
+          const entry = discountHistoryEntry(
+            null,
+            { type: quickIntakeForm.discountType, value: quickIntakeForm.discountValue },
+            currentUser?.uid || "system",
+            new Date(),
+            reason,
+          );
+
+          await appointmentService.updateAppointment(newApptId, {
+            pendingVisitDiscountType: quickIntakeForm.discountType,
+            pendingVisitDiscountValue: quickIntakeForm.discountValue,
+            pendingVisitDiscountReason: reason || null,
+            ...(entry ? { pendingVisitDiscountHistory: [entry] } : {}),
+          } as any);
+          try {
+            await auditLogService.logDiscountTaxChange({
+              performedBy: currentUser?.uid || "system",
+              performedByName: userData?.displayName,
+              clinicId: clinicId || "standalone",
+              branchId: branchId || clinicId || "standalone",
+              billingId: newApptId,
+              source: "intake",
+              after: {
+                discountType: quickIntakeForm.discountType,
+                discountValue: quickIntakeForm.discountValue,
+                reason,
+              },
+            });
+          } catch (auditErr) {
+            console.error("Error logging intake discount audit event:", auditErr);
+          }
+        }
+
         if (quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_")) {
           const patientPkgId = quickIntakeForm.appointmentTypeId.replace(
             "consume_pkg_",
@@ -4715,6 +4819,9 @@ export default function FrontOfficeDesk() {
         paymentReference: "",
         startSessionInstantly: false,
         sendDirectlyToCabin: false,
+        discountType: "percent",
+        discountValue: 0,
+        discountReason: "",
         clinicians: [
           {
             id: crypto.randomUUID(),
@@ -4742,6 +4849,15 @@ export default function FrontOfficeDesk() {
         activePatientPackages={activePatientPackages}
         addReferrerRow={addReferrerRow}
         appointmentTypes={appointmentTypes}
+        canDiscount={canDoFrontOfficeAction(
+          userData?.role,
+          "discount",
+          billingSettings?.frontOffice,
+        )}
+        discountCapPercent={discountCapForRole(
+          userData?.role,
+          billingSettings?.frontOffice,
+        )}
         defaultTaxPercentage={billingSettings?.defaultTaxPercentage || 0}
         enableTax={Boolean(billingSettings?.enableTax)}
         frontOffice={billingSettings?.frontOffice}
@@ -5229,6 +5345,7 @@ export default function FrontOfficeDesk() {
     opts: {
       discountType: "flat" | "percent";
       discountValue: number;
+      discountReason?: string;
       /** For the discount-history entry; null when there is nothing to compare against. */
       previousDiscount: { type: "flat" | "percent"; value: number } | null;
       /** Null to leave any due amount uncollected, matching V1. */
@@ -5325,6 +5442,7 @@ export default function FrontOfficeDesk() {
       discountType: opts.discountType,
       discountValue: opts.discountValue,
       discountAmount: settleTotals.totalDiscount,
+      discountReason: opts.discountValue > 0 ? opts.discountReason?.trim() : undefined,
       taxPercentage: settleTaxPercentage,
       taxAmount: settleTotals.taxAmount,
       taxableAmount: settleTotals.taxableAmount,
@@ -5347,6 +5465,7 @@ export default function FrontOfficeDesk() {
         : null,
       currentUser?.uid || "system",
       new Date(),
+      opts.discountReason?.trim(),
     );
 
     // Link the invoice to the appointment BEFORE recording any payment
@@ -5364,6 +5483,7 @@ export default function FrontOfficeDesk() {
       pendingVisitReferrals: [],
       pendingVisitDiscountType: null,
       pendingVisitDiscountValue: 0,
+      pendingVisitDiscountReason: null,
       ...(historyEntry
         ? { pendingVisitDiscountHistory: arrayUnion(historyEntry) }
         : {}),
@@ -5845,6 +5965,7 @@ export default function FrontOfficeDesk() {
         lines,
         discountType,
         discountValue,
+        discountReason: (liveVisit as any)?.pendingVisitDiscountReason || "",
         initialDiscount:
           discountValue > 0 ? { type: discountType, value: discountValue } : null,
         standingCreditAvailable,
@@ -5876,13 +5997,32 @@ export default function FrontOfficeDesk() {
 
   const settleSheetConfirm = async () => {
     if (!settleSheet) return;
+    const {
+      appt,
+      plan,
+      discountType,
+      discountValue,
+      discountReason,
+      initialDiscount,
+    } = settleSheet;
+
+    const cap = discountCapForRole(userData?.role, billingSettings?.frontOffice);
+
+    if (discountExceedsCap(discountType, discountValue, plan.totals.subtotal, cap)) {
+      setSettleSheet((prev) =>
+        prev
+          ? { ...prev, error: `This discount is over your role's ${cap}% limit.` }
+          : prev,
+      );
+
+      return;
+    }
     setSettleSaving(true);
     try {
-      const { appt, plan, discountType, discountValue, initialDiscount } =
-        settleSheet;
       const result = await executeSettle(appt, {
         discountType,
         discountValue,
+        discountReason,
         previousDiscount: initialDiscount,
         residualCapture: plan.dueNow > 0 ? settleSheet.capture : null,
         standingCreditToApply: plan.standingCreditToApply,
@@ -6862,6 +7002,11 @@ export default function FrontOfficeDesk() {
             billingSettings?.frontOffice,
           )}
           capture={settleSheet.capture}
+          discountCapPercent={discountCapForRole(
+            userData?.role,
+            billingSettings?.frontOffice,
+          )}
+          discountReason={settleSheet.discountReason}
           discountType={settleSheet.discountType}
           discountValue={settleSheet.discountValue}
           error={settleSheet.error}
@@ -6882,6 +7027,9 @@ export default function FrontOfficeDesk() {
           onConfirm={settleSheetConfirm}
           onDiscountChange={(type, value) =>
             updateSettleSheet({ discountType: type, discountValue: value })
+          }
+          onDiscountReasonChange={(reason) =>
+            updateSettleSheet({ discountReason: reason })
           }
           onDone={settleSheetDone}
           onPrint={() => {

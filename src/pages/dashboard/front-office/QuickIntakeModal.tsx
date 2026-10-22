@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { IoCloseOutline, IoSearchOutline } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
@@ -11,6 +11,8 @@ import {
   refusalMessage,
   type ChargeClinician,
 } from "@/services/core/visitChargeCore";
+import { discountExceedsCap } from "@/services/core/frontOfficePermissionCore";
+import { DISCOUNT_REASON_OPTIONS } from "@/services/core/visitSettleCore";
 import type { FrontOfficeSettings } from "@/types/models";
 
 /**
@@ -243,6 +245,10 @@ export interface QuickIntakeModalProps {
   enableTax?: boolean;
   /** Front-office defaults: the service a doctor or expert row starts with. */
   frontOffice?: Partial<FrontOfficeSettings> | null;
+  /** Whether this role may give a discount at intake (same role list as Settle). */
+  canDiscount?: boolean;
+  /** This role's discount ceiling as a %, or null when unlimited. */
+  discountCapPercent?: number | null;
 }
 
 export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
@@ -275,6 +281,8 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
   defaultTaxPercentage = 0,
   enableTax = false,
   frontOffice,
+  canDiscount = false,
+  discountCapPercent = null,
 }) => {
   // Escape-to-close and focus-on-open — matches the pattern already
   // established on the app's other modal shells (appointments-billing.tsx's
@@ -282,10 +290,14 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
   // had it, so pressing Escape (an instinctive habit) did nothing and left
   // the backdrop intercepting every subsequent click until a page reload.
   const panelRef = useRef<HTMLDivElement>(null);
+  // The discount reason dropdown's own selection — quickIntakeForm resets to
+  // a blank reason every time the modal opens, so this just follows suit.
+  const [reasonPreset, setReasonPreset] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
     panelRef.current?.focus();
+    setReasonPreset("");
   }, [isOpen]);
 
   useEffect(() => {
@@ -306,6 +318,52 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
   const handleQuickIntakeSubmit = onSubmit;
   const navigate = useNavigate();
 
+  // What check-in's fee rows sum to before any discount — the same
+  // computation the preview box below shows, hoisted here so the submit
+  // button can also refuse an over-cap or reason-less discount instead of
+  // silently checking the patient in at full price with no explanation.
+  const quickIntakeFeeRows: any[] = quickIntakeForm.clinicians || [];
+  const quickIntakeValidRows = quickIntakeFeeRows
+    .map((c: any, index: number) => ({ c, index }))
+    .filter(({ c }) => c.clinicianId && c.clinicianId !== "unassigned");
+  const quickIntakeFirstRowIsPackage = String(
+    quickIntakeFeeRows[0]?.appointmentTypeId || "",
+  ).startsWith("pkg_");
+  const quickIntakeSharedRows = sharedTypeAdditionalRowIndices(
+    quickIntakeValidRows.map(({ c, index }) => ({
+      index,
+      appointmentTypeId: String(
+        c.appointmentTypeId || quickIntakeForm.appointmentTypeId || "",
+      ),
+    })),
+  );
+  const quickIntakeSubtotal = quickIntakeValidRows.reduce(
+    (sum: number, { c, index }: any) => {
+      const fee = describeRowFee(
+        { ...c, appointmentTypeId: c.appointmentTypeId || quickIntakeForm.appointmentTypeId },
+        { appointmentTypes, packages, doctors, experts },
+        { taxPercentage: defaultTaxPercentage, isTaxEnabled: enableTax },
+        {
+          index,
+          firstRowIsPackage: quickIntakeFirstRowIsPackage,
+          startSessionInstantly: Boolean(quickIntakeForm.startSessionInstantly),
+        },
+      );
+
+      return fee.status === "charge" && quickIntakeSharedRows.has(index)
+        ? sum
+        : sum + fee.collectNow;
+    },
+    0,
+  );
+  const quickIntakeDiscountCapExceeded =
+    canDiscount &&
+    discountExceedsCap(
+      quickIntakeForm.discountType,
+      quickIntakeForm.discountValue || 0,
+      quickIntakeSubtotal,
+      discountCapPercent,
+    );
   const modalRoot = document.body;
 
   return createPortal(
@@ -998,10 +1056,14 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                     })()}
                   </div>
 
-                  {/* What check-in collects: the sum of the rows' fee lines.
-                      Tax and discount are not asked here — VAT comes from each
-                      service's flag, and a discount is a permissioned decision
-                      taken at Settle, where the whole visit is known. */}
+                  {/* What check-in collects: the sum of the rows' fee lines,
+                      minus a discount a permitted role chooses to give right
+                      now (it carries forward as the settle sheet's starting
+                      discount — a role there can still change it). VAT isn't
+                      modelled here — it comes from each service's flag and is
+                      only resolved exactly at Settle, where the whole visit
+                      is known; this discount is a simple subtract against the
+                      figure below, not the tax-aware proration Settle does. */}
                   {(() => {
                     const allRows: any[] = quickIntakeForm.clinicians || [];
                     const rows = allRows
@@ -1054,22 +1116,123 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                     });
 
                     if (fees.length === 0) return null;
-                    const collectNow = fees.reduce(
-                      (sum: number, f: RowFee) => sum + f.collectNow,
-                      0,
-                    );
+                    const subtotal = quickIntakeSubtotal;
                     const refused = fees.filter(
                       (f: RowFee) => f.status === "refused",
                     );
+                    const discountValue = quickIntakeForm.discountValue || 0;
+                    const discountAmount =
+                      canDiscount && discountValue > 0
+                        ? quickIntakeForm.discountType === "percent"
+                          ? Math.round(subtotal * (discountValue / 100) * 100) /
+                            100
+                          : Math.min(subtotal, discountValue)
+                        : 0;
+                    const collectNow = Math.max(0, subtotal - discountAmount);
+                    const capExceeded = quickIntakeDiscountCapExceeded;
 
                     return (
                       <div className="mt-1 p-2.5 rounded border border-border-base bg-surface-2/50 text-[12px] space-y-1">
+                        {canDiscount && (
+                          <div className="flex items-center justify-between gap-2 pb-1 mb-1 border-b border-border-base">
+                            <span className="text-text-muted">Discount</span>
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                className="h-7 px-1.5 text-[11.5px] border border-border-base rounded bg-surface"
+                                value={quickIntakeForm.discountType}
+                                onChange={(e) =>
+                                  setQuickIntakeForm((prev: any) => ({
+                                    ...prev,
+                                    discountType: e.target.value as
+                                      | "flat"
+                                      | "percent",
+                                  }))
+                                }
+                              >
+                                <option value="percent">%</option>
+                                <option value="flat">NPR</option>
+                              </select>
+                              <input
+                                className="h-7 w-20 px-2 text-[11.5px] border border-border-base rounded bg-surface text-right"
+                                min={0}
+                                type="number"
+                                value={quickIntakeForm.discountValue || ""}
+                                onChange={(e) => {
+                                  const parsed = parseFloat(e.target.value);
+
+                                  setQuickIntakeForm((prev: any) => ({
+                                    ...prev,
+                                    discountValue: isNaN(parsed)
+                                      ? 0
+                                      : Math.max(0, parsed),
+                                  }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {canDiscount && discountValue > 0 && (
+                          <div className="mb-1 space-y-1">
+                            <select
+                              className="h-7 w-full px-1.5 text-[11.5px] border border-border-base rounded bg-surface"
+                              value={reasonPreset}
+                              onChange={(e) => {
+                                const preset = e.target.value;
+
+                                setReasonPreset(preset);
+                                setQuickIntakeForm((prev: any) => ({
+                                  ...prev,
+                                  discountReason: preset === "Other" ? "" : preset,
+                                }));
+                              }}
+                            >
+                              <option value="">Reason (optional)</option>
+                              {DISCOUNT_REASON_OPTIONS.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </select>
+                            {reasonPreset === "Other" && (
+                              <input
+                                className="h-7 w-full px-2 text-[11.5px] border border-border-base rounded bg-surface"
+                                placeholder="Specify the reason"
+                                type="text"
+                                value={quickIntakeForm.discountReason}
+                                onChange={(e) =>
+                                  setQuickIntakeForm((prev: any) => ({
+                                    ...prev,
+                                    discountReason: e.target.value,
+                                  }))
+                                }
+                              />
+                            )}
+                          </div>
+                        )}
+                        {discountAmount > 0 && (
+                          <>
+                            <div className="flex justify-between text-text-muted">
+                              <span>Subtotal</span>
+                              <span>NPR {subtotal.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-danger">
+                              <span>Discount</span>
+                              <span>− NPR {discountAmount.toLocaleString()}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between font-bold text-text-main">
                           <span>Collected at check-in</span>
                           <span data-testid="intake-collect-now">
                             NPR {collectNow.toLocaleString()}
                           </span>
                         </div>
+                        {capExceeded && (
+                          <p className="text-[11px] text-danger font-medium">
+                            Over your limit of {discountCapPercent}% — ask a
+                            role with a higher or no cap to apply this.
+                          </p>
+                        )}
                         {refused.length > 0 && (
                           <p className="text-[11px] text-danger">
                             Check-in will not charge the flagged row
@@ -1523,7 +1686,12 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
               </button>
               <button
                 className="h-9 px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors w-full sm:w-auto"
-                disabled={quickIntakeSaving}
+                disabled={quickIntakeSaving || quickIntakeDiscountCapExceeded}
+                title={
+                  quickIntakeDiscountCapExceeded
+                    ? "This discount is over your role's limit."
+                    : undefined
+                }
                 type="submit"
               >
                 {quickIntakeSaving ? "Checking In..." : "Complete Check-In"}

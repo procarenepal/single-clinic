@@ -61,6 +61,7 @@ export function withFrontOfficeDefaults(
     refundRoles: settings?.refundRoles ?? DEFAULT_FRONT_OFFICE_ROLES.refund,
     sellPackageRoles:
       settings?.sellPackageRoles ?? DEFAULT_FRONT_OFFICE_ROLES.sellPackage,
+    discountCapPercent: settings?.discountCapPercent ?? {},
     triageForExpertVisits: settings?.triageForExpertVisits ?? false,
     collectProcedureBeforePerforming:
       settings?.collectProcedureBeforePerforming ?? false,
@@ -80,4 +81,40 @@ export function canDoFrontOfficeAction(
   ] as UserRole[];
 
   return Array.isArray(list) && list.includes(role as UserRole);
+}
+
+/** This role's discount ceiling, as a %; null means no cap (unlimited). */
+export function discountCapForRole(
+  role: UserRole | string | null | undefined,
+  settings?: Partial<FrontOfficeSettings> | null,
+): number | null {
+  if (!role) return 0;
+  const cap = withFrontOfficeDefaults(settings).discountCapPercent?.[
+    role as UserRole
+  ];
+
+  return typeof cap === "number" && cap >= 0 ? cap : null;
+}
+
+/**
+ * Whether a discount is over the role's cap. A flat discount is converted to
+ * the % of the subtotal it represents, so a fixed-NPR cap-dodge on a small
+ * bill is still caught; against a zero subtotal nothing can exceed a cap.
+ */
+export function discountExceedsCap(
+  discountType: "flat" | "percent",
+  discountValue: number,
+  subtotal: number,
+  capPercent: number | null,
+): boolean {
+  if (capPercent === null) return false;
+  if (!discountValue || discountValue <= 0) return false;
+  const effectivePercent =
+    discountType === "percent"
+      ? discountValue
+      : subtotal > 0
+        ? (discountValue / subtotal) * 100
+        : 0;
+
+  return effectivePercent > capPercent + 1e-9;
 }

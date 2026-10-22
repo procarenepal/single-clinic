@@ -425,4 +425,27 @@ describe("discountHistoryEntry", () => {
 
     expect(entry?.to).toBeNull();
   });
+
+  it("carries the reason when one is given", () => {
+    const entry = discountHistoryEntry(
+      null,
+      { type: "percent", value: 10 },
+      by,
+      at,
+      "Loyalty discount",
+    );
+
+    expect(entry?.reason).toBe("Loyalty discount");
+  });
+
+  it("omits the reason field entirely when none is given", () => {
+    const entry = discountHistoryEntry(
+      null,
+      { type: "percent", value: 10 },
+      by,
+      at,
+    );
+
+    expect(entry).not.toHaveProperty("reason");
+  });
 });

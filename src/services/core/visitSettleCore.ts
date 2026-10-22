@@ -414,11 +414,27 @@ export function buildSettlePlan(input: SettlePlanInput): SettlePlan {
   };
 }
 
+/**
+ * Common discount reasons, offered as a dropdown so a reason is quick to
+ * give without typing — "Other" reveals a free-text box instead. Optional:
+ * nothing here blocks confirming a discount with no reason picked at all.
+ */
+export const DISCOUNT_REASON_OPTIONS = [
+  "Loyalty / repeat patient",
+  "Staff or family discount",
+  "Promotional offer",
+  "Price match",
+  "Financial hardship",
+  "Referral / goodwill",
+  "Other",
+] as const;
+
 export interface DiscountHistoryEntry {
   from: { type: "flat" | "percent"; value: number } | null;
   to: { type: "flat" | "percent"; value: number } | null;
   by: string;
   at: Date;
+  reason?: string;
 }
 
 /**
@@ -431,6 +447,7 @@ export function discountHistoryEntry(
   to: { type: "flat" | "percent"; value: number } | null,
   by: string,
   at: Date,
+  reason?: string | null,
 ): DiscountHistoryEntry | null {
   const same =
     (from === null && (to === null || to.value === 0)) ||
@@ -442,7 +459,7 @@ export function discountHistoryEntry(
 
   if (same) return null;
 
-  return { from, to, by, at };
+  return { from, to, by, at, ...(reason ? { reason } : {}) };
 }
 
 /**

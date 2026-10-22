@@ -401,7 +401,9 @@ export default function FrontOfficeSettingsPage() {
           <h3 className="text-lg font-semibold">Who may do what</h3>
           <p className="text-xs text-text-muted">
             Money and clinical shortcuts are role decisions, not per-visit
-            checkboxes.
+            checkboxes. Checking a role for &quot;Give a discount&quot; reveals
+            a % cap for that role — blank means no limit; a flat discount is
+            judged as the % of the bill it represents.
           </p>
         </CardHeader>
         <CardBody className="overflow-x-auto">
@@ -435,6 +437,33 @@ export default function FrontOfficeSettingsPage() {
                         size="sm"
                         onValueChange={() => toggleRole(row.field, r.key)}
                       />
+                      {row.field === "discountRoles" &&
+                        form.discountRoles.includes(r.key) && (
+                          <input
+                            aria-label={`${r.label} discount cap %`}
+                            className="mt-1 w-14 h-6 px-1 text-[11px] text-center border border-border-base rounded bg-surface"
+                            min={0}
+                            placeholder="no limit"
+                            type="number"
+                            value={form.discountCapPercent?.[r.key] ?? ""}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+
+                              setForm((p) => {
+                                const next = { ...(p.discountCapPercent || {}) };
+
+                                if (raw === "") delete next[r.key];
+                                else {
+                                  const parsed = Math.max(0, Number(raw) || 0);
+
+                                  next[r.key] = parsed;
+                                }
+
+                                return { ...p, discountCapPercent: next };
+                              });
+                            }}
+                          />
+                        )}
                     </td>
                   ))}
                 </tr>

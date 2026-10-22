@@ -15,8 +15,10 @@ import {
 } from "@/components/billing/PaymentCapture";
 import {
   settlePrimaryLabel,
+  DISCOUNT_REASON_OPTIONS,
   type SettlePlan,
 } from "@/services/core/visitSettleCore";
+import { discountExceedsCap } from "@/services/core/frontOfficePermissionCore";
 
 /**
  * Stage 4 of the front-office redesign: file, pay and close a visit in one
@@ -60,6 +62,10 @@ export interface SettleSheetProps {
   discountType: "flat" | "percent";
   discountValue: number;
   onDiscountChange: (type: "flat" | "percent", value: number) => void;
+  discountReason: string;
+  onDiscountReasonChange: (reason: string) => void;
+  /** This role's discount ceiling as a %, or null when unlimited. */
+  discountCapPercent: number | null;
   /** Wallet credit beyond this visit's own deposit, when the patient has any. */
   standingCreditAvailable: number;
   applyStandingCredit: boolean;
@@ -86,6 +92,9 @@ export const SettleSheet: React.FC<SettleSheetProps> = ({
   discountType,
   discountValue,
   onDiscountChange,
+  discountReason,
+  onDiscountReasonChange,
+  discountCapPercent,
   standingCreditAvailable,
   applyStandingCredit,
   onApplyStandingCreditChange,
@@ -102,9 +111,23 @@ export const SettleSheet: React.FC<SettleSheetProps> = ({
   const [discountValueText, setDiscountValueText] = useState(
     discountValue ? String(discountValue) : "",
   );
+  // The dropdown's own selection — "Other" when the reason is free text (or
+  // nothing picked yet), a preset label when it matches one exactly.
+  const [reasonPreset, setReasonPreset] = useState(
+    discountReason && !(DISCOUNT_REASON_OPTIONS as readonly string[]).includes(discountReason)
+      ? "Other"
+      : discountReason,
+  );
 
   useEffect(() => {
-    if (isOpen) setDiscountValueText(discountValue ? String(discountValue) : "");
+    if (!isOpen) return;
+    setDiscountValueText(discountValue ? String(discountValue) : "");
+    setReasonPreset(
+      discountReason &&
+        !(DISCOUNT_REASON_OPTIONS as readonly string[]).includes(discountReason)
+        ? "Other"
+        : discountReason,
+    );
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -152,11 +175,21 @@ export const SettleSheet: React.FC<SettleSheetProps> = ({
   const takesMoney = plan.dueNow > 0;
   const problem = takesMoney ? paymentCaptureProblem(settings, capture) : null;
   const confirmLabel = `${settlePrimaryLabel(plan)}${takesMoney ? ` & Close Visit` : ""}`;
-
+  const capExceeded = discountExceedsCap(
+    discountType,
+    discountValue,
+    plan.totals.subtotal,
+    discountCapPercent,
+  );
   const commitDiscount = () => {
     const parsed = parseFloat(discountValueText);
 
     onDiscountChange(discountType, isNaN(parsed) ? 0 : Math.max(0, parsed));
+  };
+
+  const selectReasonPreset = (preset: string) => {
+    setReasonPreset(preset);
+    onDiscountReasonChange(preset === "Other" ? "" : preset);
   };
 
   return (
@@ -249,6 +282,42 @@ export const SettleSheet: React.FC<SettleSheetProps> = ({
                     </span>
                   )}
                 </div>
+                {canDiscount && discountValue > 0 && (
+                  <div className="space-y-1">
+                    <select
+                      className="h-7 w-full px-1.5 text-[11.5px] border border-border-base rounded bg-surface"
+                      disabled={saving}
+                      value={reasonPreset}
+                      onChange={(e) => selectReasonPreset(e.target.value)}
+                    >
+                      <option value="">Reason (optional)</option>
+                      {DISCOUNT_REASON_OPTIONS.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                    {reasonPreset === "Other" && (
+                      <input
+                        className="h-7 w-full px-2 text-[11.5px] border border-border-base rounded bg-surface"
+                        disabled={saving}
+                        placeholder="Specify the reason"
+                        type="text"
+                        value={discountReason}
+                        onChange={(e) => onDiscountReasonChange(e.target.value)}
+                      />
+                    )}
+                    {discountCapPercent !== null && (
+                      <p
+                        className={`text-[11px] ${capExceeded ? "text-danger font-medium" : "text-text-muted"}`}
+                      >
+                        {capExceeded
+                          ? `Over your limit of ${discountCapPercent}% — ask a role with a higher or no cap to apply this.`
+                          : `Up to ${discountCapPercent}% without a higher-capped role.`}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {plan.totals.discountAmount > 0 && (
                   <div className="flex justify-between text-[12.5px]">
                     <span className="text-text-muted/60 italic ml-2">
@@ -352,8 +421,11 @@ export const SettleSheet: React.FC<SettleSheetProps> = ({
           </button>
           <button
             className="h-9 px-4 rounded bg-primary text-white text-[12.5px] font-semibold hover:bg-primary/95 transition-colors disabled:opacity-50"
-            disabled={saving || Boolean(problem)}
-            title={problem || undefined}
+            disabled={saving || Boolean(problem) || capExceeded}
+            title={
+              problem ||
+              (capExceeded ? "This discount is over your role's limit." : undefined)
+            }
             type="button"
             onClick={() => onConfirm()}
           >
